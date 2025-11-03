@@ -309,7 +309,7 @@ fi
 ### If you do not have the X11 developer package on your system
 ### which provides X11/Xlib.h and the libX11, then change the "YES"
 ### below to "NO". It will disable blot and fastq
-USE_X11=${USE_X11:-YES}
+USE_X11=${X11:-YES}
 USE_X11=$(check_valid USE_X11) || exit
 
 ### Set to ON to enable the building of a thread-safe version of the Exodus and IOSS libraries.
