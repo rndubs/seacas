@@ -1,8 +1,7 @@
 //! Comprehensive tests for Phase 6: Variables and Time Steps (All Types)
 
 use exodus_rs::{
-    mode, Block, CreateMode, CreateOptions, EntitySet, EntityType, ExodusFile, InitParams,
-    NodeSet, Set, SideSet,
+    mode, Block, CreateMode, CreateOptions, EntityType, ExodusFile, InitParams, Set,
 };
 use tempfile::NamedTempFile;
 
@@ -217,12 +216,7 @@ fn test_side_set_variables() {
         };
         file.put_set(&set).unwrap();
 
-        let sideset = SideSet {
-            id: 20,
-            elem_list: vec![1, 1],
-            side_list: vec![1, 2],
-        };
-        file.put_side_set(&sideset, None).unwrap();
+        file.put_side_set(20, &[1, 1], &[1, 2], None).unwrap();
 
         file.define_variables(EntityType::SideSet, &["Pressure"])
             .unwrap();
@@ -289,12 +283,8 @@ fn test_elem_set_variables() {
         };
         file.put_set(&set).unwrap();
 
-        let elemset = EntitySet {
-            id: 30,
-            entity_type: EntityType::ElemSet,
-            entity_list: vec![1, 2],
-        };
-        file.put_entity_set(&elemset, None).unwrap();
+        file.put_entity_set(EntityType::ElemSet, 30, &[1, 2])
+            .unwrap();
 
         file.define_variables(EntityType::ElemSet, &["Quality"])
             .unwrap();
