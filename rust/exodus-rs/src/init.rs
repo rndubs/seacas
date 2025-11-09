@@ -731,10 +731,21 @@ mod tests {
     use super::*;
     use tempfile::NamedTempFile;
 
+    // Helper function to create file with clobber mode for tests
+    fn create_test_file(path: impl AsRef<std::path::Path>) -> Result<ExodusFile<mode::Write>> {
+        ExodusFile::create(
+            path,
+            crate::CreateOptions {
+                mode: crate::CreateMode::Clobber,
+                ..Default::default()
+            },
+        )
+    }
+
     #[test]
     fn test_init_minimal() {
         let tmp = NamedTempFile::new().unwrap();
-        let mut file = ExodusFile::create_default(tmp.path()).unwrap();
+        let mut file = create_test_file(tmp.path()).unwrap();
 
         let params = InitParams {
             title: "Test mesh".into(),
@@ -761,7 +772,7 @@ mod tests {
     #[test]
     fn test_init_builder() {
         let tmp = NamedTempFile::new().unwrap();
-        let mut file = ExodusFile::create_default(tmp.path()).unwrap();
+        let mut file = create_test_file(tmp.path()).unwrap();
 
         file.builder()
             .title("Fluent API test")
@@ -785,7 +796,7 @@ mod tests {
     #[test]
     fn test_init_already_initialized() {
         let tmp = NamedTempFile::new().unwrap();
-        let mut file = ExodusFile::create_default(tmp.path()).unwrap();
+        let mut file = create_test_file(tmp.path()).unwrap();
 
         let params = InitParams::default();
         file.init(&params).unwrap();
@@ -798,7 +809,7 @@ mod tests {
     #[test]
     fn test_init_invalid_dimensions() {
         let tmp = NamedTempFile::new().unwrap();
-        let mut file = ExodusFile::create_default(tmp.path()).unwrap();
+        let mut file = create_test_file(tmp.path()).unwrap();
 
         // Invalid: num_dim = 0
         let params = InitParams {
@@ -820,7 +831,7 @@ mod tests {
     #[test]
     fn test_init_title_too_long() {
         let tmp = NamedTempFile::new().unwrap();
-        let mut file = ExodusFile::create_default(tmp.path()).unwrap();
+        let mut file = create_test_file(tmp.path()).unwrap();
 
         let long_title = "a".repeat(81); // 81 characters, max is 80
         let params = InitParams {
@@ -836,7 +847,7 @@ mod tests {
     #[test]
     fn test_init_all_dimensions() {
         let tmp = NamedTempFile::new().unwrap();
-        let mut file = ExodusFile::create_default(tmp.path()).unwrap();
+        let mut file = create_test_file(tmp.path()).unwrap();
 
         let params = InitParams {
             title: "Complete test".into(),

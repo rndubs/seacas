@@ -900,8 +900,20 @@ impl ExodusFile<mode::Append> {
 mod tests {
     use super::*;
     use crate::ExodusFile;
+    use crate::{mode, CreateMode, CreateOptions};
     use approx::assert_relative_eq;
     use tempfile::NamedTempFile;
+
+    // Helper function to create file with clobber mode for tests
+    fn create_test_file(path: impl AsRef<std::path::Path>) -> crate::Result<ExodusFile<mode::Write>> {
+        ExodusFile::create(
+            path,
+            CreateOptions {
+                mode: CreateMode::Clobber,
+                ..Default::default()
+            },
+        )
+    }
 
     #[test]
     fn test_coords_2d() {
@@ -909,7 +921,7 @@ mod tests {
 
         // Write
         {
-            let mut file = ExodusFile::create_default(tmp.path()).unwrap();
+            let mut file = create_test_file(tmp.path()).unwrap();
             file.builder()
                 .dimensions(2)
                 .nodes(4)
@@ -946,7 +958,7 @@ mod tests {
 
         // Write
         {
-            let mut file = ExodusFile::create_default(tmp.path()).unwrap();
+            let mut file = create_test_file(tmp.path()).unwrap();
             file.builder()
                 .dimensions(3)
                 .nodes(8)
@@ -988,7 +1000,7 @@ mod tests {
 
         // Write
         {
-            let mut file = ExodusFile::create_default(tmp.path()).unwrap();
+            let mut file = create_test_file(tmp.path()).unwrap();
             file.builder()
                 .dimensions(2)
                 .nodes(10)
@@ -1029,7 +1041,7 @@ mod tests {
 
         // Write as f32
         {
-            let mut file = ExodusFile::create_default(tmp.path()).unwrap();
+            let mut file = create_test_file(tmp.path()).unwrap();
             file.builder()
                 .dimensions(2)
                 .nodes(3)
@@ -1084,7 +1096,7 @@ mod tests {
 
         // Write
         {
-            let mut file = ExodusFile::create_default(tmp.path()).unwrap();
+            let mut file = create_test_file(tmp.path()).unwrap();
             file.builder()
                 .dimensions(2)
                 .nodes(4)
@@ -1117,7 +1129,7 @@ mod tests {
 
         // Write each dimension separately
         {
-            let mut file = ExodusFile::create_default(tmp.path()).unwrap();
+            let mut file = create_test_file(tmp.path()).unwrap();
             file.builder()
                 .dimensions(3)
                 .nodes(2)

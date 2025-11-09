@@ -303,15 +303,15 @@ impl<M: FileMode> ExodusFile<M> {
                 use netcdf::AttributeValue;
                 match attr.value()? {
                     AttributeValue::Float(val) => {
-                        let version = val as u32;
-                        let major = version / 100;
-                        let minor = version % 100;
+                        // Version is stored as decimal (e.g., 2.0)
+                        let major = val as u32;
+                        let minor = ((val - major as f32) * 10.0).round() as u32;
                         Ok((major, minor))
                     }
                     AttributeValue::Double(val) => {
-                        let version = val as u32;
-                        let major = version / 100;
-                        let minor = version % 100;
+                        // Version is stored as decimal (e.g., 2.0)
+                        let major = val as u32;
+                        let minor = ((val - major as f64) * 10.0).round() as u32;
                         Ok((major, minor))
                     }
                     _ => Ok((2, 0)), // Default version
@@ -388,10 +388,21 @@ mod tests {
     use super::*;
     use tempfile::NamedTempFile;
 
+    // Helper function to create file with clobber mode for tests
+    fn create_test_file(path: impl AsRef<std::path::Path>) -> Result<ExodusFile<mode::Write>> {
+        ExodusFile::create(
+            path,
+            CreateOptions {
+                mode: CreateMode::Clobber,
+                ..Default::default()
+            },
+        )
+    }
+
     #[test]
     fn test_create_default() {
         let tmp = NamedTempFile::new().unwrap();
-        let file = ExodusFile::create_default(tmp.path()).unwrap();
+        let file = create_test_file(tmp.path()).unwrap();
         assert_eq!(file.path(), tmp.path());
         drop(file);
         assert!(tmp.path().exists());
@@ -400,7 +411,7 @@ mod tests {
     #[test]
     fn test_create_noclobber() {
         let tmp = NamedTempFile::new().unwrap();
-        let _file1 = ExodusFile::create_default(tmp.path()).unwrap();
+        let _file1 = create_test_file(tmp.path()).unwrap();
 
         // Should fail - file exists and using NoClobber
         let result = ExodusFile::create(
@@ -416,7 +427,7 @@ mod tests {
     #[test]
     fn test_create_clobber() {
         let tmp = NamedTempFile::new().unwrap();
-        let _file1 = ExodusFile::create_default(tmp.path()).unwrap();
+        let _file1 = create_test_file(tmp.path()).unwrap();
         drop(_file1);
 
         // Should succeed - overwrite existing file
@@ -440,7 +451,7 @@ mod tests {
     fn test_open_existing() {
         let tmp = NamedTempFile::new().unwrap();
         {
-            let _file = ExodusFile::create_default(tmp.path()).unwrap();
+            let _file = create_test_file(tmp.path()).unwrap();
         }
 
         let file = ExodusFile::<mode::Read>::open(tmp.path()).unwrap();
@@ -450,7 +461,7 @@ mod tests {
     #[test]
     fn test_version() {
         let tmp = NamedTempFile::new().unwrap();
-        let file = ExodusFile::create_default(tmp.path()).unwrap();
+        let file = create_test_file(tmp.path()).unwrap();
         let version = file.version().unwrap();
         assert_eq!(version, (2, 0));
     }
@@ -458,7 +469,7 @@ mod tests {
     #[test]
     fn test_format() {
         let tmp = NamedTempFile::new().unwrap();
-        let file = ExodusFile::create_default(tmp.path()).unwrap();
+        let file = create_test_file(tmp.path()).unwrap();
         let format = file.format().unwrap();
         assert_eq!(format, FileFormat::NetCdf4);
     }
@@ -466,7 +477,7 @@ mod tests {
     #[test]
     fn test_close_explicit() {
         let tmp = NamedTempFile::new().unwrap();
-        let file = ExodusFile::create_default(tmp.path()).unwrap();
+        let file = create_test_file(tmp.path()).unwrap();
         file.close().unwrap();
     }
 
@@ -474,7 +485,7 @@ mod tests {
     fn test_append_mode() {
         let tmp = NamedTempFile::new().unwrap();
         {
-            let _file = ExodusFile::create_default(tmp.path()).unwrap();
+            let _file = create_test_file(tmp.path()).unwrap();
         }
 
         let file = ExodusFile::<mode::Append>::append(tmp.path()).unwrap();
