@@ -14,7 +14,7 @@ pub enum ExodusError {
     /// NetCDF library error
     #[cfg(feature = "netcdf4")]
     #[error("NetCDF error: {0}")]
-    NetCdf(#[from] netcdf::error::Error),
+    NetCdf(#[from] netcdf::Error),
 
     /// Invalid file mode operation
     #[error("Invalid file mode: {0}")]

@@ -29,6 +29,7 @@ use netcdf;
 ///     .finish()?;
 /// # Ok::<(), exodus_rs::ExodusError>(())
 /// ```
+#[derive(Debug)]
 pub struct InitBuilder<'a> {
     file: &'a mut ExodusFile<mode::Write>,
     params: InitParams,
@@ -255,7 +256,7 @@ impl ExodusFile<mode::Write> {
     ///     .finish()?;
     /// # Ok::<(), exodus_rs::ExodusError>(())
     /// ```
-    pub fn builder(&mut self) -> InitBuilder {
+    pub fn builder(&mut self) -> InitBuilder<'_> {
         InitBuilder::new(self)
     }
 
@@ -464,6 +465,31 @@ impl ExodusFile<mode::Write> {
                 .insert("num_blob".to_string(), params.num_blobs);
         }
 
+        // Create coordinate variables if we have nodes
+        if params.num_nodes > 0 {
+            self.create_coord_variables()?;
+        }
+
+        Ok(())
+    }
+
+    /// Create coordinate variables
+    fn create_coord_variables(&mut self) -> Result<()> {
+        // Create coordx variable
+        self.nc_file
+            .add_variable::<f64>("coordx", &["num_nodes"])
+            .map_err(|e| ExodusError::NetCdf(e))?;
+
+        // Create coordy variable
+        self.nc_file
+            .add_variable::<f64>("coordy", &["num_nodes"])
+            .map_err(|e| ExodusError::NetCdf(e))?;
+
+        // Create coordz variable
+        self.nc_file
+            .add_variable::<f64>("coordz", &["num_nodes"])
+            .map_err(|e| ExodusError::NetCdf(e))?;
+
         Ok(())
     }
 }
@@ -502,10 +528,8 @@ impl ExodusFile<mode::Read> {
 
         // Read title from global attribute
         if let Some(attr) = self.nc_file.attribute("title") {
-            if let Ok(val) = attr.value() {
-                if let Some(s) = val.as_str() {
-                    params.title = s.to_string();
-                }
+            if let Ok(netcdf::AttributeValue::Str(s)) = attr.value() {
+                params.title = s;
             }
         }
 
@@ -639,10 +663,8 @@ impl ExodusFile<mode::Append> {
 
         // Read title
         if let Some(attr) = self.nc_file.attribute("title") {
-            if let Ok(val) = attr.value() {
-                if let Some(s) = val.as_str() {
-                    params.title = s.to_string();
-                }
+            if let Ok(netcdf::AttributeValue::Str(s)) = attr.value() {
+                params.title = s;
             }
         }
 
