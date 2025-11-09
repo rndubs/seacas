@@ -383,8 +383,13 @@ impl<M: FileMode> ExodusFile<M> {
 #[cfg(feature = "netcdf4")]
 impl<M: FileMode> Drop for ExodusFile<M> {
     fn drop(&mut self) {
+        // Sync the file to ensure all data and metadata are written
+        // This is especially important for NetCDF define mode changes
+        // For read-only files, this will be a no-op
+        // Ignore errors in drop - we're already cleaning up
+        let _ = self.nc_file.sync();
+
         // NetCDF file is automatically closed by its Drop implementation
-        // We don't need to do anything here, but this makes the cleanup explicit
     }
 }
 

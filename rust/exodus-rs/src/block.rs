@@ -72,9 +72,22 @@ impl ExodusFile<mode::Write> {
 
         let block_index = self.get_block_index(block.entity_type, block.id)?;
 
-        // Create dimensions for this block
-        let dim_name_entries = format!("num_el_in_blk{}", block_index + 1);
-        let dim_name_nodes = format!("num_nod_per_el{}", block_index + 1);
+        // Create dimensions for this block (names depend on entity type)
+        let (dim_name_entries, dim_name_nodes) = match block.entity_type {
+            EntityType::ElemBlock => (
+                format!("num_el_in_blk{}", block_index + 1),
+                format!("num_nod_per_el{}", block_index + 1),
+            ),
+            EntityType::EdgeBlock => (
+                format!("num_ed_in_blk{}", block_index + 1),
+                format!("num_nod_per_ed{}", block_index + 1),
+            ),
+            EntityType::FaceBlock => (
+                format!("num_fa_in_blk{}", block_index + 1),
+                format!("num_nod_per_fa{}", block_index + 1),
+            ),
+            _ => unreachable!(), // Already validated above
+        };
 
         self.nc_file
             .add_dimension(&dim_name_entries, block.num_entries)?;
