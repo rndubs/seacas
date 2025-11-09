@@ -277,6 +277,12 @@ impl ExodusAppender {
             PyErr::new::<pyo3::exceptions::PyRuntimeError, _>("File already closed")
         })
     }
+
+    pub(crate) fn file_ref(&self) -> PyResult<&RustExodusFile<mode::Append>> {
+        self.file.as_ref().ok_or_else(|| {
+            PyErr::new::<pyo3::exceptions::PyRuntimeError, _>("File already closed")
+        })
+    }
 }
 
 impl ExodusReader {

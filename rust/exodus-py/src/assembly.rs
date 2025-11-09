@@ -28,40 +28,24 @@ impl ExodusWriter {
 impl ExodusAppender {
     /// Read an assembly
     fn get_assembly(&self, assembly_id: i64) -> PyResult<Assembly> {
-        if let Some(ref file) = self.file {
-            let asm = file.assembly(assembly_id).into_py()?;
-            Ok(Assembly::from_rust(&asm))
-        } else {
-            Err(PyErr::new::<pyo3::exceptions::PyRuntimeError, _>("File closed"))
-        }
+        let asm = self.file_ref()?.assembly(assembly_id).into_py()?;
+        Ok(Assembly::from_rust(&asm))
     }
 
     /// Read a blob (returns blob metadata only, not the data)
     fn get_blob(&self, blob_id: i64) -> PyResult<Blob> {
-        if let Some(ref file) = self.file {
-            let (blob, _data) = file.blob(blob_id).into_py()?;
-            Ok(Blob::from_rust(&blob))
-        } else {
-            Err(PyErr::new::<pyo3::exceptions::PyRuntimeError, _>("File closed"))
-        }
+        let (blob, _data) = self.file_ref()?.blob(blob_id).into_py()?;
+        Ok(Blob::from_rust(&blob))
     }
 
     /// Get all assembly IDs
     fn get_assembly_ids(&self) -> PyResult<Vec<i64>> {
-        if let Some(ref file) = self.file {
-            file.assembly_ids().into_py()
-        } else {
-            Err(PyErr::new::<pyo3::exceptions::PyRuntimeError, _>("File closed"))
-        }
+        self.file_ref()?.assembly_ids().into_py()
     }
 
     /// Get all blob IDs
     fn get_blob_ids(&self) -> PyResult<Vec<i64>> {
-        if let Some(ref file) = self.file {
-            file.blob_ids().into_py()
-        } else {
-            Err(PyErr::new::<pyo3::exceptions::PyRuntimeError, _>("File closed"))
-        }
+        self.file_ref()?.blob_ids().into_py()
     }
 }
 
