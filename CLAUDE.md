@@ -2,7 +2,10 @@
 
 This document provides detailed development instructions for working on the exodus-rs crate.
 
-The crate can be found in ./rust/exodus-rs/
+The crate can be found in ./rust/exodus-rs/.
+
+Development status is tracked in the ./rust/RUST.md file.
+Ensure that completed tasks are marked off from the progress tracker in that file after they have been completed.
 
 ## Prerequisites
 
