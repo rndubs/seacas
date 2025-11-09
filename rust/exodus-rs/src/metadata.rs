@@ -1,35 +1,190 @@
 //! Metadata operations
 //!
 //! This module provides QA records, info records, and name operations for Exodus files.
-//!
-//! TODO: This module needs to be updated to work with netcdf 0.11 API in a future phase.
-//! The API has changed and these implementations need to be fixed.
 
 use crate::error::{ExodusError, Result};
 use crate::types::QaRecord;
 use crate::{mode, ExodusFile};
 
-// Stub implementations to allow compilation for Phase 3 testing
-// These will be properly implemented in a future update
+// Maximum string lengths as defined by Exodus II format
+const MAX_STR_LENGTH: usize = 32;  // Maximum length for QA record fields
+const MAX_LINE_LENGTH: usize = 80; // Maximum length for info record lines
 
 #[cfg(feature = "netcdf4")]
 impl ExodusFile<mode::Write> {
     /// Write QA (Quality Assurance) records
     ///
-    /// TODO: Implementation needs to be updated for netcdf 0.11 API
-    pub fn put_qa_records(&mut self, _qa_records: &[QaRecord]) -> Result<()> {
-        Err(ExodusError::Other(
-            "QA records not yet implemented for netcdf 0.11".to_string(),
-        ))
+    /// QA records provide provenance information about the code that created or modified the file.
+    /// Each record contains: code_name, version, date, and time.
+    ///
+    /// # Arguments
+    ///
+    /// * `qa_records` - Array of QA records to write
+    ///
+    /// # Returns
+    ///
+    /// `Ok(())` on success, or an error if:
+    /// - Any field exceeds 32 characters
+    /// - NetCDF write fails
+    ///
+    /// # Example
+    ///
+    /// ```rust,ignore
+    /// # use exodus_rs::*;
+    /// # let mut file = ExodusFile::create_default("test.exo").unwrap();
+    /// let qa = vec![QaRecord {
+    ///     code_name: "MyApp".into(),
+    ///     code_version: "1.0.0".into(),
+    ///     date: "2025/01/15".into(),
+    ///     time: "10:30:00".into(),
+    /// }];
+    /// file.put_qa_records(&qa)?;
+    /// # Ok::<(), ExodusError>(())
+    /// ```
+    pub fn put_qa_records(&mut self, qa_records: &[QaRecord]) -> Result<()> {
+        if qa_records.is_empty() {
+            return Ok(());
+        }
+
+        let num_qa = qa_records.len();
+
+        // Validate field lengths
+        for (i, qa) in qa_records.iter().enumerate() {
+            if qa.code_name.len() > MAX_STR_LENGTH {
+                return Err(ExodusError::StringTooLong {
+                    max: MAX_STR_LENGTH,
+                    actual: qa.code_name.len(),
+                });
+            }
+            if qa.code_version.len() > MAX_STR_LENGTH {
+                return Err(ExodusError::StringTooLong {
+                    max: MAX_STR_LENGTH,
+                    actual: qa.code_version.len(),
+                });
+            }
+            if qa.date.len() > MAX_STR_LENGTH {
+                return Err(ExodusError::StringTooLong {
+                    max: MAX_STR_LENGTH,
+                    actual: qa.date.len(),
+                });
+            }
+            if qa.time.len() > MAX_STR_LENGTH {
+                return Err(ExodusError::StringTooLong {
+                    max: MAX_STR_LENGTH,
+                    actual: qa.time.len(),
+                });
+            }
+        }
+
+        // Create dimension for number of QA records
+        self.nc_file.add_dimension("num_qa_rec", num_qa)?;
+
+        // Create dimension for 4 fields (code_name, code_version, date, time)
+        self.nc_file.add_dimension("num_qa_dim", 4)?;
+
+        // Create or get len_string dimension
+        if self.nc_file.dimension("len_string").is_none() {
+            self.nc_file.add_dimension("len_string", MAX_STR_LENGTH)?;
+        }
+
+        // Create QA records variable: qa_records(num_qa_rec, num_qa_dim, len_string)
+        self.nc_file.add_variable::<u8>(
+            "qa_records",
+            &["num_qa_rec", "num_qa_dim", "len_string"],
+        )?;
+
+        // Write each QA record
+        if let Some(mut var) = self.nc_file.variable_mut("qa_records") {
+            for (qa_idx, qa) in qa_records.iter().enumerate() {
+                // Write each of the 4 fields
+                let fields = [
+                    &qa.code_name,
+                    &qa.code_version,
+                    &qa.date,
+                    &qa.time,
+                ];
+
+                for (field_idx, field) in fields.iter().enumerate() {
+                    let mut buf = vec![0u8; MAX_STR_LENGTH];
+                    let bytes = field.as_bytes();
+                    let copy_len = bytes.len().min(MAX_STR_LENGTH);
+                    buf[..copy_len].copy_from_slice(&bytes[..copy_len]);
+                    var.put_values(&buf, (qa_idx..qa_idx + 1, field_idx..field_idx + 1, ..))?;
+                }
+            }
+        }
+
+        Ok(())
     }
 
     /// Write info records
     ///
-    /// TODO: Implementation needs to be updated for netcdf 0.11 API
-    pub fn put_info_records(&mut self, _info_records: &[String]) -> Result<()> {
-        Err(ExodusError::Other(
-            "Info records not yet implemented for netcdf 0.11".to_string(),
-        ))
+    /// Info records provide additional text annotations for the file.
+    /// Each record is a single line of text (max 80 characters).
+    ///
+    /// # Arguments
+    ///
+    /// * `info_records` - Array of info strings to write
+    ///
+    /// # Returns
+    ///
+    /// `Ok(())` on success, or an error if:
+    /// - Any line exceeds 80 characters
+    /// - NetCDF write fails
+    ///
+    /// # Example
+    ///
+    /// ```rust,ignore
+    /// # use exodus_rs::*;
+    /// # let mut file = ExodusFile::create_default("test.exo").unwrap();
+    /// let info = vec![
+    ///     "Generated by mesh generator v2.0".into(),
+    ///     "Contact: support@example.com".into(),
+    /// ];
+    /// file.put_info_records(&info)?;
+    /// # Ok::<(), ExodusError>(())
+    /// ```
+    pub fn put_info_records(&mut self, info_records: &[String]) -> Result<()> {
+        if info_records.is_empty() {
+            return Ok(());
+        }
+
+        let num_info = info_records.len();
+
+        // Validate line lengths
+        for (i, line) in info_records.iter().enumerate() {
+            if line.len() > MAX_LINE_LENGTH {
+                return Err(ExodusError::StringTooLong {
+                    max: MAX_LINE_LENGTH,
+                    actual: line.len(),
+                });
+            }
+        }
+
+        // Create dimension for number of info records
+        self.nc_file.add_dimension("num_info", num_info)?;
+
+        // Create dimension for line length
+        if self.nc_file.dimension("len_line").is_none() {
+            self.nc_file.add_dimension("len_line", MAX_LINE_LENGTH)?;
+        }
+
+        // Create info records variable: info(num_info, len_line)
+        self.nc_file
+            .add_variable::<u8>("info_records", &["num_info", "len_line"])?;
+
+        // Write each info record
+        if let Some(mut var) = self.nc_file.variable_mut("info_records") {
+            for (i, line) in info_records.iter().enumerate() {
+                let mut buf = vec![0u8; MAX_LINE_LENGTH];
+                let bytes = line.as_bytes();
+                let copy_len = bytes.len().min(MAX_LINE_LENGTH);
+                buf[..copy_len].copy_from_slice(&bytes[..copy_len]);
+                var.put_values(&buf, (i..i + 1, ..))?;
+            }
+        }
+
+        Ok(())
     }
 }
 
@@ -37,19 +192,120 @@ impl ExodusFile<mode::Write> {
 impl ExodusFile<mode::Read> {
     /// Read QA records
     ///
-    /// TODO: Implementation needs to be updated for netcdf 0.11 API
+    /// # Returns
+    ///
+    /// Vector of QA records, empty if no QA records are present
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if NetCDF read fails
+    ///
+    /// # Example
+    ///
+    /// ```rust,ignore
+    /// # use exodus_rs::*;
+    /// # let file = ExodusFile::<mode::Read>::open("test.exo").unwrap();
+    /// let qa_records = file.qa_records()?;
+    /// for qa in &qa_records {
+    ///     println!("{} {}", qa.code_name, qa.code_version);
+    /// }
+    /// # Ok::<(), ExodusError>(())
+    /// ```
     pub fn qa_records(&self) -> Result<Vec<QaRecord>> {
-        Err(ExodusError::Other(
-            "QA records not yet implemented for netcdf 0.11".to_string(),
-        ))
+        // Check if qa_records variable exists
+        match self.nc_file.variable("qa_records") {
+            Some(var) => {
+                let num_qa = self
+                    .nc_file
+                    .dimension("num_qa_rec")
+                    .map(|d| d.len())
+                    .unwrap_or(0);
+
+                if num_qa == 0 {
+                    return Ok(Vec::new());
+                }
+
+                let mut qa_records = Vec::with_capacity(num_qa);
+
+                // Read each QA record
+                for qa_idx in 0..num_qa {
+                    let mut fields = Vec::with_capacity(4);
+
+                    // Read each of the 4 fields
+                    for field_idx in 0..4 {
+                        let field_chars: Vec<u8> =
+                            var.get_values((qa_idx..qa_idx + 1, field_idx..field_idx + 1, ..))?;
+                        let field = String::from_utf8_lossy(&field_chars)
+                            .trim_end_matches('\0')
+                            .trim()
+                            .to_string();
+                        fields.push(field);
+                    }
+
+                    qa_records.push(QaRecord {
+                        code_name: fields[0].clone(),
+                        code_version: fields[1].clone(),
+                        date: fields[2].clone(),
+                        time: fields[3].clone(),
+                    });
+                }
+
+                Ok(qa_records)
+            }
+            None => Ok(Vec::new()),
+        }
     }
 
     /// Read info records
     ///
-    /// TODO: Implementation needs to be updated for netcdf 0.11 API
+    /// # Returns
+    ///
+    /// Vector of info strings, empty if no info records are present
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if NetCDF read fails
+    ///
+    /// # Example
+    ///
+    /// ```rust,ignore
+    /// # use exodus_rs::*;
+    /// # let file = ExodusFile::<mode::Read>::open("test.exo").unwrap();
+    /// let info = file.info_records()?;
+    /// for line in &info {
+    ///     println!("{}", line);
+    /// }
+    /// # Ok::<(), ExodusError>(())
+    /// ```
     pub fn info_records(&self) -> Result<Vec<String>> {
-        Err(ExodusError::Other(
-            "Info records not yet implemented for netcdf 0.11".to_string(),
-        ))
+        // Check if info_records variable exists
+        match self.nc_file.variable("info_records") {
+            Some(var) => {
+                let num_info = self
+                    .nc_file
+                    .dimension("num_info")
+                    .map(|d| d.len())
+                    .unwrap_or(0);
+
+                if num_info == 0 {
+                    return Ok(Vec::new());
+                }
+
+                let mut info_records = Vec::with_capacity(num_info);
+
+                // Read each info record
+                for i in 0..num_info {
+                    let line_chars: Vec<u8> = var.get_values((i..i + 1, ..))?;
+                    let line = String::from_utf8_lossy(&line_chars)
+                        .trim_end_matches('\0')
+                        .trim()
+                        .to_string();
+                    info_records.push(line);
+                }
+
+                Ok(info_records)
+            }
+            None => Ok(Vec::new()),
+        }
     }
 }
