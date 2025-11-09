@@ -5,7 +5,7 @@
 
 use crate::error::{ExodusError, Result};
 use crate::types::Blob;
-use crate::{mode, ExodusFile, FileMode};
+use crate::{mode, ExodusFile};
 
 #[cfg(feature = "netcdf4")]
 use netcdf;
@@ -54,19 +54,14 @@ impl ExodusFile<mode::Write> {
             });
         }
 
-        // Get or create num_blob dimension
-        let num_blob = if let Some(dim) = self.nc_file.dimension("num_blob") {
-            dim.len()
-        } else {
-            // Initialize blob tracking
-            self.nc_file
-                .add_dimension("num_blob", 0)
-                .map_err(|e| ExodusError::NetCdf(e))?;
-            0
-        };
+        // Count existing blobs by checking for blob variables
+        let mut num_blobs = 0;
+        while self.nc_file.variable(&format!("blob{}_data", num_blobs + 1)).is_some() {
+            num_blobs += 1;
+        }
 
         // Create blob-specific dimensions and variables
-        let blob_index = num_blob;
+        let blob_index = num_blobs;
 
         // Create dimension for blob data size
         let data_dim_name = format!("num_bytes_blob{}", blob_index + 1);
@@ -140,6 +135,8 @@ impl ExodusFile<mode::Read> {
                         match id_value {
                             netcdf::AttributeValue::Short(id) => ids.push(id as i64),
                             netcdf::AttributeValue::Int(id) => ids.push(id as i64),
+                            netcdf::AttributeValue::Longlong(id) => ids.push(id),
+                            netcdf::AttributeValue::Ulonglong(id) => ids.push(id as i64),
                             netcdf::AttributeValue::Float(id) => ids.push(id as i64),
                             netcdf::AttributeValue::Double(id) => ids.push(id as i64),
                             _ => {}
@@ -195,6 +192,8 @@ impl ExodusFile<mode::Read> {
                         let id = match id_value {
                             netcdf::AttributeValue::Short(v) => v as i64,
                             netcdf::AttributeValue::Int(v) => v as i64,
+                            netcdf::AttributeValue::Longlong(v) => v,
+                            netcdf::AttributeValue::Ulonglong(v) => v as i64,
                             netcdf::AttributeValue::Float(v) => v as i64,
                             netcdf::AttributeValue::Double(v) => v as i64,
                             _ => continue,
