@@ -47,6 +47,7 @@
 //! - [`variable`] - Variable definitions and I/O
 //! - [`time`] - Time step operations
 //! - [`metadata`] - QA records, info records, and names
+//! - [`map`] - ID maps, order maps, entity naming, and property arrays
 //! - [`assembly`] - Assembly (hierarchical grouping) operations
 //! - [`blob`] - Blob (arbitrary data) operations
 //! - [`attribute`] - Attribute operations
@@ -68,6 +69,7 @@ mod set;
 mod variable;
 mod time;
 mod metadata;
+mod map;
 mod assembly;
 mod blob;
 mod attribute;
