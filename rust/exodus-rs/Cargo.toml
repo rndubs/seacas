@@ -34,7 +34,7 @@ tempfile = "3.8"      # Temporary test files
 proptest = "1.4"      # Property-based testing
 
 [features]
-default = []
+default = ["netcdf4"]
 # NetCDF-4 support (requires system HDF5/NetCDF libraries)
 netcdf4 = ["dep:netcdf"]
 ndarray = ["dep:ndarray"]

@@ -266,6 +266,31 @@ impl ExodusFile<mode::Write> {
             })
         }
     }
+
+    /// Get all block IDs of a given type
+    ///
+    /// # Arguments
+    ///
+    /// * `entity_type` - Type of block (ElemBlock, EdgeBlock, or FaceBlock)
+    ///
+    /// # Returns
+    ///
+    /// Vector of block IDs
+    pub fn block_ids(&self, entity_type: EntityType) -> Result<Vec<EntityId>> {
+        let id_var_name = match entity_type {
+            EntityType::ElemBlock => "eb_prop1",
+            EntityType::EdgeBlock => "ed_prop1",
+            EntityType::FaceBlock => "fa_prop1",
+            _ => return Err(ExodusError::InvalidEntityType(entity_type.to_string())),
+        };
+
+        if let Some(var) = self.nc_file.variable(id_var_name) {
+            let ids: Vec<i64> = var.get_values(..)?;
+            Ok(ids)
+        } else {
+            Ok(Vec::new())
+        }
+    }
 }
 
 // Block operations for read mode

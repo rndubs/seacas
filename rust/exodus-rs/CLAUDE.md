@@ -25,6 +25,25 @@ pkg-config --modversion hdf5
 pkg-config --modversion netcdf
 ```
 
+**For Claude Code Web Environment (or environments without sudo):**
+
+If you encounter permission errors with sudo, try installing without sudo:
+
+```bash
+# Install HDF5 and NetCDF development libraries directly
+apt-get install -y libhdf5-dev libnetcdf-dev pkg-config
+
+# Verify installation
+pkg-config --modversion hdf5
+pkg-config --modversion netcdf
+```
+
+This successfully installs:
+- HDF5 version 1.10.10
+- NetCDF version 4.9.2
+
+**Note:** Some package update warnings can be safely ignored as long as the installation succeeds.
+
 #### macOS
 
 **Using Homebrew (Recommended)**:

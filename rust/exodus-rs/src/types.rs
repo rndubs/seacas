@@ -176,6 +176,41 @@ pub struct Set {
     pub num_dist_factors: usize,
 }
 
+/// Node set with node IDs and optional distribution factors
+#[derive(Debug, Clone)]
+pub struct NodeSet {
+    /// Set ID
+    pub id: EntityId,
+    /// Node IDs in the set
+    pub nodes: Vec<i64>,
+    /// Distribution factors (one per node, or empty if not used)
+    pub dist_factors: Vec<f64>,
+}
+
+/// Side set with element-side pairs and optional distribution factors
+#[derive(Debug, Clone)]
+pub struct SideSet {
+    /// Set ID
+    pub id: EntityId,
+    /// Element IDs that define the sides
+    pub elements: Vec<i64>,
+    /// Side numbers within each element (topology dependent)
+    pub sides: Vec<i64>,
+    /// Distribution factors (one per node-on-side, or empty if not used)
+    pub dist_factors: Vec<f64>,
+}
+
+/// Entity set (edge, face, or element set)
+#[derive(Debug, Clone)]
+pub struct EntitySet {
+    /// Set ID
+    pub id: EntityId,
+    /// Entity type (EdgeSet, FaceSet, or ElemSet)
+    pub entity_type: EntityType,
+    /// Entity IDs in the set
+    pub entities: Vec<i64>,
+}
+
 /// Assembly (hierarchical grouping)
 #[derive(Debug, Clone)]
 pub struct Assembly {
@@ -220,6 +255,71 @@ pub enum AttributeType {
     Double,
     /// Character/string attribute
     Char,
+}
+
+/// Truth table for sparse variable storage
+///
+/// Truth tables indicate which element blocks have which variables defined.
+/// This allows for efficient storage when not all blocks have all variables.
+#[derive(Debug, Clone)]
+pub struct TruthTable {
+    /// Entity type this truth table applies to
+    pub var_type: EntityType,
+    /// Number of variables
+    pub num_vars: usize,
+    /// Number of blocks
+    pub num_blocks: usize,
+    /// Flat 2D array: table[block_idx * num_vars + var_idx]
+    pub table: Vec<bool>,
+}
+
+impl TruthTable {
+    /// Create a new truth table with all entries set to true (all variables defined for all blocks)
+    ///
+    /// # Arguments
+    ///
+    /// * `var_type` - Entity type (typically ElemBlock, EdgeBlock, or FaceBlock)
+    /// * `num_blocks` - Number of blocks
+    /// * `num_vars` - Number of variables
+    pub fn new(var_type: EntityType, num_blocks: usize, num_vars: usize) -> Self {
+        Self {
+            var_type,
+            num_vars,
+            num_blocks,
+            table: vec![true; num_blocks * num_vars],
+        }
+    }
+
+    /// Set whether a variable exists for a block
+    ///
+    /// # Arguments
+    ///
+    /// * `block_idx` - Block index (0-based)
+    /// * `var_idx` - Variable index (0-based)
+    /// * `exists` - True if the variable exists for this block
+    pub fn set(&mut self, block_idx: usize, var_idx: usize, exists: bool) {
+        if block_idx < self.num_blocks && var_idx < self.num_vars {
+            self.table[block_idx * self.num_vars + var_idx] = exists;
+        }
+    }
+
+    /// Get whether a variable exists for a block
+    ///
+    /// # Arguments
+    ///
+    /// * `block_idx` - Block index (0-based)
+    /// * `var_idx` - Variable index (0-based)
+    ///
+    /// # Returns
+    ///
+    /// True if the variable exists for this block
+    pub fn get(&self, block_idx: usize, var_idx: usize) -> bool {
+        if block_idx < self.num_blocks && var_idx < self.num_vars {
+            self.table[block_idx * self.num_vars + var_idx]
+        } else {
+            false
+        }
+    }
 }
 
 /// QA Record (software provenance tracking)

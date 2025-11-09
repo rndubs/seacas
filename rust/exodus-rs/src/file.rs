@@ -3,7 +3,7 @@
 //! This module provides the core file operations including creating, opening,
 //! and closing Exodus files.
 
-use crate::error::Result;
+use crate::error::{ExodusError, Result};
 use crate::types::{CreateMode, CreateOptions, FileFormat, FloatSize, Int64Mode};
 use crate::{mode, FileMode};
 use std::collections::HashMap;
