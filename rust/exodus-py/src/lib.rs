@@ -30,11 +30,7 @@ fn exodus(py: Python, m: &PyModule) -> PyResult<()> {
     m.add("__version__", env!("CARGO_PKG_VERSION"))?;
     m.add("__doc__", "Python bindings for exodus-rs - Pure Rust Exodus II implementation")?;
 
-    // Register error types
-    m.add("ExodusError", py.get_type::<ExodusError>())?;
-    m.add("FileError", py.get_type::<FileError>())?;
-    m.add("NetCdfError", py.get_type::<NetCdfError>())?;
-    m.add("InvalidDataError", py.get_type::<InvalidDataError>())?;
+    // Note: Error handling uses PyRuntimeError - see error.rs
 
     // Register enum types
     m.add_class::<EntityType>()?;

@@ -91,8 +91,8 @@ impl EntityType {
             rs::EntityType::ElemSet => EntityType::ElemSet,
             rs::EntityType::EdgeMap => EntityType::EdgeMap,
             rs::EntityType::FaceMap => EntityType::FaceMap,
-            rs::EntityType::Global => rs::EntityType::Global,
-            rs::EntityType::Nodal => rs::EntityType::Nodal,
+            rs::EntityType::Global => EntityType::Global,
+            rs::EntityType::Nodal => EntityType::Nodal,
             rs::EntityType::Assembly => EntityType::Assembly,
             rs::EntityType::Blob => EntityType::Blob,
         }
