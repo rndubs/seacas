@@ -1,4 +1,4 @@
-//! Map operations (ID maps, order maps)
+//! ID map operations for Exodus files
 
 use pyo3::prelude::*;
 use crate::error::IntoPyResult;
@@ -6,65 +6,51 @@ use crate::file::{ExodusWriter, ExodusAppender, ExodusReader};
 
 #[pymethods]
 impl ExodusWriter {
-    /// Write node ID map
-    ///
-    /// Args:
-    ///     id_map: Array of node IDs (1-based)
-    fn put_node_id_map(&mut self, id_map: Vec<i64>) -> PyResult<()> {
-        self.file_mut()?.put_node_id_map(&id_map).into_py()?;
-        Ok(())
+    /// Write node ID map (NOTE: Not yet implemented in exodus-rs)
+    fn put_node_id_map(&mut self, _id_map: Vec<i64>) -> PyResult<()> {
+        Err(PyErr::new::<pyo3::exceptions::PyNotImplementedError, _>(
+            "put_node_id_map not yet implemented in exodus-rs"
+        ))
     }
 
-    /// Write element ID map
-    ///
-    /// Args:
-    ///     id_map: Array of element IDs (1-based)
-    fn put_elem_id_map(&mut self, id_map: Vec<i64>) -> PyResult<()> {
-        self.file_mut()?.put_elem_id_map(&id_map).into_py()?;
-        Ok(())
+    /// Write element ID map (NOTE: Not yet implemented in exodus-rs)
+    fn put_elem_id_map(&mut self, _id_map: Vec<i64>) -> PyResult<()> {
+        Err(PyErr::new::<pyo3::exceptions::PyNotImplementedError, _>(
+            "put_elem_id_map not yet implemented in exodus-rs"
+        ))
     }
 }
 
 #[pymethods]
 impl ExodusAppender {
-    /// Write node ID map
-    fn put_node_id_map(&mut self, id_map: Vec<i64>) -> PyResult<()> {
-        self.file_mut()?.put_node_id_map(&id_map).into_py()?;
-        Ok(())
-    }
-
-    /// Write element ID map
-    fn put_elem_id_map(&mut self, id_map: Vec<i64>) -> PyResult<()> {
-        self.file_mut()?.put_elem_id_map(&id_map).into_py()?;
-        Ok(())
-    }
-
-    /// Read node ID map
+    /// Read node ID map (NOTE: Not yet implemented in exodus-rs)
     fn get_node_id_map(&self) -> PyResult<Vec<i64>> {
-        self.file.as_ref()
-            .ok_or_else(|| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>("File closed"))?
-            .get_node_id_map()
-            .into_py()
+        Err(PyErr::new::<pyo3::exceptions::PyNotImplementedError, _>(
+            "get_node_id_map not yet implemented in exodus-rs"
+        ))
     }
 
-    /// Read element ID map
+    /// Read element ID map (NOTE: Not yet implemented in exodus-rs)
     fn get_elem_id_map(&self) -> PyResult<Vec<i64>> {
-        self.file.as_ref()
-            .ok_or_else(|| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>("File closed"))?
-            .get_elem_id_map()
-            .into_py()
+        Err(PyErr::new::<pyo3::exceptions::PyNotImplementedError, _>(
+            "get_elem_id_map not yet implemented in exodus-rs"
+        ))
     }
 }
 
 #[pymethods]
 impl ExodusReader {
-    /// Read node ID map
+    /// Read node ID map (NOTE: Not yet implemented in exodus-rs)
     fn get_node_id_map(&self) -> PyResult<Vec<i64>> {
-        self.file_ref().get_node_id_map().into_py()
+        Err(PyErr::new::<pyo3::exceptions::PyNotImplementedError, _>(
+            "get_node_id_map not yet implemented in exodus-rs"
+        ))
     }
 
-    /// Read element ID map
+    /// Read element ID map (NOTE: Not yet implemented in exodus-rs)
     fn get_elem_id_map(&self) -> PyResult<Vec<i64>> {
-        self.file_ref().get_elem_id_map().into_py()
+        Err(PyErr::new::<pyo3::exceptions::PyNotImplementedError, _>(
+            "get_elem_id_map not yet implemented in exodus-rs"
+        ))
     }
 }

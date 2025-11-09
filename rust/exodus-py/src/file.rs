@@ -210,18 +210,6 @@ impl ExodusAppender {
         }
     }
 
-    /// Initialize the database (if not already initialized)
-    fn init(&mut self, params: &InitParams) -> PyResult<()> {
-        if let Some(ref mut file) = self.file {
-            file.init(&params.to_rust()).into_py()?;
-            Ok(())
-        } else {
-            Err(PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(
-                "File already closed",
-            ))
-        }
-    }
-
     /// Get the file path
     fn path(&self) -> PyResult<String> {
         if let Some(ref file) = self.file {

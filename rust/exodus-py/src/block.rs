@@ -70,33 +70,21 @@ impl ExodusWriter {
 
 #[pymethods]
 impl ExodusAppender {
-    /// Read a block definition
-    ///
-    /// Args:
-    ///     block_id: Block ID
-    ///
-    /// Returns:
-    ///     Block object
-    fn get_block(&self, block_id: i64) -> PyResult<Block> {
-        let block = self.file_ref()?.block(block_id).into_py()?;
-        Ok(Block::from_rust(&block))
+    /// Read a block definition (NOTE: Not fully available in Append mode)
+    fn get_block(&self, _block_id: i64) -> PyResult<Block> {
+        Err(PyErr::new::<pyo3::exceptions::PyNotImplementedError, _>(
+            "get_block not fully available in Append mode - use ExodusReader instead"
+        ))
     }
 
-    /// Read element connectivity
-    ///
-    /// Args:
-    ///     block_id: Block ID
-    ///
-    /// Returns:
-    ///     Connectivity array
-    fn get_connectivity(&self, block_id: i64) -> PyResult<Vec<i64>> {
-        self.file_ref()?.connectivity(block_id).into_py()
+    /// Read element connectivity (NOTE: Not available in Append mode)
+    fn get_connectivity(&self, _block_id: i64) -> PyResult<Vec<i64>> {
+        Err(PyErr::new::<pyo3::exceptions::PyNotImplementedError, _>(
+            "get_connectivity not available in Append mode - use ExodusReader instead"
+        ))
     }
 
     /// Read block IDs
-    ///
-    /// Returns:
-    ///     List of all element block IDs
     fn get_block_ids(&self) -> PyResult<Vec<i64>> {
         use exodus_rs::types::EntityType;
         self.file_ref()?.block_ids(EntityType::ElemBlock).into_py()

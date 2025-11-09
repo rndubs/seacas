@@ -26,26 +26,32 @@ impl ExodusWriter {
 
 #[pymethods]
 impl ExodusAppender {
-    /// Read an assembly
-    fn get_assembly(&self, assembly_id: i64) -> PyResult<Assembly> {
-        let asm = self.file_ref()?.assembly(assembly_id).into_py()?;
-        Ok(Assembly::from_rust(&asm))
+    /// Read an assembly (NOTE: Not available in Append mode)
+    fn get_assembly(&self, _assembly_id: i64) -> PyResult<Assembly> {
+        Err(PyErr::new::<pyo3::exceptions::PyNotImplementedError, _>(
+            "get_assembly not available in Append mode - use ExodusReader instead"
+        ))
     }
 
-    /// Read a blob (returns blob metadata only, not the data)
-    fn get_blob(&self, blob_id: i64) -> PyResult<Blob> {
-        let (blob, _data) = self.file_ref()?.blob(blob_id).into_py()?;
-        Ok(Blob::from_rust(&blob))
+    /// Read a blob (NOTE: Not available in Append mode)
+    fn get_blob(&self, _blob_id: i64) -> PyResult<Blob> {
+        Err(PyErr::new::<pyo3::exceptions::PyNotImplementedError, _>(
+            "get_blob not available in Append mode - use ExodusReader instead"
+        ))
     }
 
-    /// Get all assembly IDs
+    /// Get all assembly IDs (NOTE: Not available in Append mode)
     fn get_assembly_ids(&self) -> PyResult<Vec<i64>> {
-        self.file_ref()?.assembly_ids().into_py()
+        Err(PyErr::new::<pyo3::exceptions::PyNotImplementedError, _>(
+            "get_assembly_ids not available in Append mode - use ExodusReader instead"
+        ))
     }
 
-    /// Get all blob IDs
+    /// Get all blob IDs (NOTE: Not available in Append mode)
     fn get_blob_ids(&self) -> PyResult<Vec<i64>> {
-        self.file_ref()?.blob_ids().into_py()
+        Err(PyErr::new::<pyo3::exceptions::PyNotImplementedError, _>(
+            "get_blob_ids not available in Append mode - use ExodusReader instead"
+        ))
     }
 }
 
