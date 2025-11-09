@@ -287,7 +287,12 @@ impl ExodusFile<mode::Write> {
                     var.put_values(values, (step..step + 1, ..))?;
                 }
                 EntityType::ElemBlock | EntityType::EdgeBlock | EntityType::FaceBlock => {
-                    // Block vars: (time_step, num_elem_in_blk)
+                    // Block vars: (time_step, num_entries_in_block)
+                    var.put_values(values, (step..step + 1, ..))?;
+                }
+                EntityType::NodeSet | EntityType::EdgeSet | EntityType::FaceSet |
+                EntityType::SideSet | EntityType::ElemSet => {
+                    // Set vars: (time_step, num_entries_in_set)
                     var.put_values(values, (step..step + 1, ..))?;
                 }
                 _ => {
@@ -371,7 +376,7 @@ impl ExodusFile<mode::Write> {
                     .add_variable::<f64>(&var_name, &["time_step", "num_nodes"])?;
             }
             EntityType::ElemBlock => {
-                // Element var: vals_elem_var{var_idx}eb{block_idx}(time_step, num_elem_in_blk{block_idx})
+                // Element var: vals_elem_var{var_idx}eb{block_idx}(time_step, num_el_in_blk{block_idx})
                 let block_ids = self.block_ids(EntityType::ElemBlock)?;
                 let block_index = block_ids
                     .iter()
@@ -382,6 +387,104 @@ impl ExodusFile<mode::Write> {
                     })?;
 
                 let dim_name = format!("num_el_in_blk{}", block_index + 1);
+                self.nc_file
+                    .add_variable::<f64>(&var_name, &["time_step", &dim_name])?;
+            }
+            EntityType::EdgeBlock => {
+                let block_ids = self.block_ids(EntityType::EdgeBlock)?;
+                let block_index = block_ids
+                    .iter()
+                    .position(|&id| id == entity_id)
+                    .ok_or_else(|| ExodusError::EntityNotFound {
+                        entity_type: EntityType::EdgeBlock.to_string(),
+                        id: entity_id,
+                    })?;
+
+                let dim_name = format!("num_ed_in_blk{}", block_index + 1);
+                self.nc_file
+                    .add_variable::<f64>(&var_name, &["time_step", &dim_name])?;
+            }
+            EntityType::FaceBlock => {
+                let block_ids = self.block_ids(EntityType::FaceBlock)?;
+                let block_index = block_ids
+                    .iter()
+                    .position(|&id| id == entity_id)
+                    .ok_or_else(|| ExodusError::EntityNotFound {
+                        entity_type: EntityType::FaceBlock.to_string(),
+                        id: entity_id,
+                    })?;
+
+                let dim_name = format!("num_fa_in_blk{}", block_index + 1);
+                self.nc_file
+                    .add_variable::<f64>(&var_name, &["time_step", &dim_name])?;
+            }
+            EntityType::NodeSet => {
+                let set_ids = self.set_ids(EntityType::NodeSet)?;
+                let set_index = set_ids
+                    .iter()
+                    .position(|&id| id == entity_id)
+                    .ok_or_else(|| ExodusError::EntityNotFound {
+                        entity_type: EntityType::NodeSet.to_string(),
+                        id: entity_id,
+                    })?;
+
+                let dim_name = format!("num_nod_ns{}", set_index + 1);
+                self.nc_file
+                    .add_variable::<f64>(&var_name, &["time_step", &dim_name])?;
+            }
+            EntityType::EdgeSet => {
+                let set_ids = self.set_ids(EntityType::EdgeSet)?;
+                let set_index = set_ids
+                    .iter()
+                    .position(|&id| id == entity_id)
+                    .ok_or_else(|| ExodusError::EntityNotFound {
+                        entity_type: EntityType::EdgeSet.to_string(),
+                        id: entity_id,
+                    })?;
+
+                let dim_name = format!("num_edge_es{}", set_index + 1);
+                self.nc_file
+                    .add_variable::<f64>(&var_name, &["time_step", &dim_name])?;
+            }
+            EntityType::FaceSet => {
+                let set_ids = self.set_ids(EntityType::FaceSet)?;
+                let set_index = set_ids
+                    .iter()
+                    .position(|&id| id == entity_id)
+                    .ok_or_else(|| ExodusError::EntityNotFound {
+                        entity_type: EntityType::FaceSet.to_string(),
+                        id: entity_id,
+                    })?;
+
+                let dim_name = format!("num_face_fs{}", set_index + 1);
+                self.nc_file
+                    .add_variable::<f64>(&var_name, &["time_step", &dim_name])?;
+            }
+            EntityType::SideSet => {
+                let set_ids = self.set_ids(EntityType::SideSet)?;
+                let set_index = set_ids
+                    .iter()
+                    .position(|&id| id == entity_id)
+                    .ok_or_else(|| ExodusError::EntityNotFound {
+                        entity_type: EntityType::SideSet.to_string(),
+                        id: entity_id,
+                    })?;
+
+                let dim_name = format!("num_side_ss{}", set_index + 1);
+                self.nc_file
+                    .add_variable::<f64>(&var_name, &["time_step", &dim_name])?;
+            }
+            EntityType::ElemSet => {
+                let set_ids = self.set_ids(EntityType::ElemSet)?;
+                let set_index = set_ids
+                    .iter()
+                    .position(|&id| id == entity_id)
+                    .ok_or_else(|| ExodusError::EntityNotFound {
+                        entity_type: EntityType::ElemSet.to_string(),
+                        id: entity_id,
+                    })?;
+
+                let dim_name = format!("num_ele_els{}", set_index + 1);
                 self.nc_file
                     .add_variable::<f64>(&var_name, &["time_step", &dim_name])?;
             }
@@ -582,7 +685,9 @@ impl ExodusFile<mode::Write> {
                         var.put_value(value, (step..step + 1, var_index..var_index + 1))?;
                     }
                 }
-                EntityType::Nodal | EntityType::ElemBlock | EntityType::EdgeBlock | EntityType::FaceBlock => {
+                EntityType::Nodal | EntityType::ElemBlock | EntityType::EdgeBlock | EntityType::FaceBlock |
+                EntityType::NodeSet | EntityType::EdgeSet | EntityType::FaceSet |
+                EntityType::SideSet | EntityType::ElemSet => {
                     // All other types: (time_step, num_entities)
                     var.put_values(values, (start_step..end_step, ..))?;
                 }
@@ -613,6 +718,83 @@ impl ExodusFile<mode::Write> {
                         id: entity_id,
                     })?;
                 format!("vals_elem_var{}eb{}", var_index + 1, block_index + 1)
+            }
+            EntityType::EdgeBlock => {
+                let block_ids = self.block_ids(EntityType::EdgeBlock)?;
+                let block_index = block_ids
+                    .iter()
+                    .position(|&id| id == entity_id)
+                    .ok_or_else(|| ExodusError::EntityNotFound {
+                        entity_type: EntityType::EdgeBlock.to_string(),
+                        id: entity_id,
+                    })?;
+                format!("vals_edge_var{}edb{}", var_index + 1, block_index + 1)
+            }
+            EntityType::FaceBlock => {
+                let block_ids = self.block_ids(EntityType::FaceBlock)?;
+                let block_index = block_ids
+                    .iter()
+                    .position(|&id| id == entity_id)
+                    .ok_or_else(|| ExodusError::EntityNotFound {
+                        entity_type: EntityType::FaceBlock.to_string(),
+                        id: entity_id,
+                    })?;
+                format!("vals_face_var{}fab{}", var_index + 1, block_index + 1)
+            }
+            EntityType::NodeSet => {
+                let set_ids = self.set_ids(EntityType::NodeSet)?;
+                let set_index = set_ids
+                    .iter()
+                    .position(|&id| id == entity_id)
+                    .ok_or_else(|| ExodusError::EntityNotFound {
+                        entity_type: EntityType::NodeSet.to_string(),
+                        id: entity_id,
+                    })?;
+                format!("vals_nset_var{}ns{}", var_index + 1, set_index + 1)
+            }
+            EntityType::EdgeSet => {
+                let set_ids = self.set_ids(EntityType::EdgeSet)?;
+                let set_index = set_ids
+                    .iter()
+                    .position(|&id| id == entity_id)
+                    .ok_or_else(|| ExodusError::EntityNotFound {
+                        entity_type: EntityType::EdgeSet.to_string(),
+                        id: entity_id,
+                    })?;
+                format!("vals_eset_var{}es{}", var_index + 1, set_index + 1)
+            }
+            EntityType::FaceSet => {
+                let set_ids = self.set_ids(EntityType::FaceSet)?;
+                let set_index = set_ids
+                    .iter()
+                    .position(|&id| id == entity_id)
+                    .ok_or_else(|| ExodusError::EntityNotFound {
+                        entity_type: EntityType::FaceSet.to_string(),
+                        id: entity_id,
+                    })?;
+                format!("vals_fset_var{}fs{}", var_index + 1, set_index + 1)
+            }
+            EntityType::SideSet => {
+                let set_ids = self.set_ids(EntityType::SideSet)?;
+                let set_index = set_ids
+                    .iter()
+                    .position(|&id| id == entity_id)
+                    .ok_or_else(|| ExodusError::EntityNotFound {
+                        entity_type: EntityType::SideSet.to_string(),
+                        id: entity_id,
+                    })?;
+                format!("vals_sset_var{}ss{}", var_index + 1, set_index + 1)
+            }
+            EntityType::ElemSet => {
+                let set_ids = self.set_ids(EntityType::ElemSet)?;
+                let set_index = set_ids
+                    .iter()
+                    .position(|&id| id == entity_id)
+                    .ok_or_else(|| ExodusError::EntityNotFound {
+                        entity_type: EntityType::ElemSet.to_string(),
+                        id: entity_id,
+                    })?;
+                format!("vals_elset_var{}els{}", var_index + 1, set_index + 1)
             }
             _ => {
                 return Err(ExodusError::InvalidEntityType(format!(
@@ -711,7 +893,12 @@ impl ExodusFile<mode::Read> {
                 Ok(var.get_values((step..step + 1, ..))?)
             }
             EntityType::ElemBlock | EntityType::EdgeBlock | EntityType::FaceBlock => {
-                // Block vars: (time_step, num_elem_in_blk)
+                // Block vars: (time_step, num_entries_in_block)
+                Ok(var.get_values((step..step + 1, ..))?)
+            }
+            EntityType::NodeSet | EntityType::EdgeSet | EntityType::FaceSet |
+            EntityType::SideSet | EntityType::ElemSet => {
+                // Set vars: (time_step, num_entries_in_set)
                 Ok(var.get_values((step..step + 1, ..))?)
             }
             _ => Err(ExodusError::InvalidEntityType(format!(
@@ -873,7 +1060,12 @@ impl ExodusFile<mode::Read> {
                 Ok(var.get_values((start_step..end_step, ..))?)
             }
             EntityType::ElemBlock | EntityType::EdgeBlock | EntityType::FaceBlock => {
-                // Block vars: (time_step, num_elem_in_blk)
+                // Block vars: (time_step, num_entries_in_block)
+                Ok(var.get_values((start_step..end_step, ..))?)
+            }
+            EntityType::NodeSet | EntityType::EdgeSet | EntityType::FaceSet |
+            EntityType::SideSet | EntityType::ElemSet => {
+                // Set vars: (time_step, num_entries_in_set)
                 Ok(var.get_values((start_step..end_step, ..))?)
             }
             _ => Err(ExodusError::InvalidEntityType(format!(
@@ -903,6 +1095,83 @@ impl ExodusFile<mode::Read> {
                         id: entity_id,
                     })?;
                 format!("vals_elem_var{}eb{}", var_index + 1, block_index + 1)
+            }
+            EntityType::EdgeBlock => {
+                let block_ids = self.block_ids(EntityType::EdgeBlock)?;
+                let block_index = block_ids
+                    .iter()
+                    .position(|&id| id == entity_id)
+                    .ok_or_else(|| ExodusError::EntityNotFound {
+                        entity_type: EntityType::EdgeBlock.to_string(),
+                        id: entity_id,
+                    })?;
+                format!("vals_edge_var{}edb{}", var_index + 1, block_index + 1)
+            }
+            EntityType::FaceBlock => {
+                let block_ids = self.block_ids(EntityType::FaceBlock)?;
+                let block_index = block_ids
+                    .iter()
+                    .position(|&id| id == entity_id)
+                    .ok_or_else(|| ExodusError::EntityNotFound {
+                        entity_type: EntityType::FaceBlock.to_string(),
+                        id: entity_id,
+                    })?;
+                format!("vals_face_var{}fab{}", var_index + 1, block_index + 1)
+            }
+            EntityType::NodeSet => {
+                let set_ids = self.set_ids(EntityType::NodeSet)?;
+                let set_index = set_ids
+                    .iter()
+                    .position(|&id| id == entity_id)
+                    .ok_or_else(|| ExodusError::EntityNotFound {
+                        entity_type: EntityType::NodeSet.to_string(),
+                        id: entity_id,
+                    })?;
+                format!("vals_nset_var{}ns{}", var_index + 1, set_index + 1)
+            }
+            EntityType::EdgeSet => {
+                let set_ids = self.set_ids(EntityType::EdgeSet)?;
+                let set_index = set_ids
+                    .iter()
+                    .position(|&id| id == entity_id)
+                    .ok_or_else(|| ExodusError::EntityNotFound {
+                        entity_type: EntityType::EdgeSet.to_string(),
+                        id: entity_id,
+                    })?;
+                format!("vals_eset_var{}es{}", var_index + 1, set_index + 1)
+            }
+            EntityType::FaceSet => {
+                let set_ids = self.set_ids(EntityType::FaceSet)?;
+                let set_index = set_ids
+                    .iter()
+                    .position(|&id| id == entity_id)
+                    .ok_or_else(|| ExodusError::EntityNotFound {
+                        entity_type: EntityType::FaceSet.to_string(),
+                        id: entity_id,
+                    })?;
+                format!("vals_fset_var{}fs{}", var_index + 1, set_index + 1)
+            }
+            EntityType::SideSet => {
+                let set_ids = self.set_ids(EntityType::SideSet)?;
+                let set_index = set_ids
+                    .iter()
+                    .position(|&id| id == entity_id)
+                    .ok_or_else(|| ExodusError::EntityNotFound {
+                        entity_type: EntityType::SideSet.to_string(),
+                        id: entity_id,
+                    })?;
+                format!("vals_sset_var{}ss{}", var_index + 1, set_index + 1)
+            }
+            EntityType::ElemSet => {
+                let set_ids = self.set_ids(EntityType::ElemSet)?;
+                let set_index = set_ids
+                    .iter()
+                    .position(|&id| id == entity_id)
+                    .ok_or_else(|| ExodusError::EntityNotFound {
+                        entity_type: EntityType::ElemSet.to_string(),
+                        id: entity_id,
+                    })?;
+                format!("vals_elset_var{}els{}", var_index + 1, set_index + 1)
             }
             _ => {
                 return Err(ExodusError::InvalidEntityType(format!(
