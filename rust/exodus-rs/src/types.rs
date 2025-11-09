@@ -176,6 +176,41 @@ pub struct Set {
     pub num_dist_factors: usize,
 }
 
+/// Node set with node IDs and optional distribution factors
+#[derive(Debug, Clone)]
+pub struct NodeSet {
+    /// Set ID
+    pub id: EntityId,
+    /// Node IDs in the set
+    pub nodes: Vec<i64>,
+    /// Distribution factors (one per node, or empty if not used)
+    pub dist_factors: Vec<f64>,
+}
+
+/// Side set with element-side pairs and optional distribution factors
+#[derive(Debug, Clone)]
+pub struct SideSet {
+    /// Set ID
+    pub id: EntityId,
+    /// Element IDs that define the sides
+    pub elements: Vec<i64>,
+    /// Side numbers within each element (topology dependent)
+    pub sides: Vec<i64>,
+    /// Distribution factors (one per node-on-side, or empty if not used)
+    pub dist_factors: Vec<f64>,
+}
+
+/// Entity set (edge, face, or element set)
+#[derive(Debug, Clone)]
+pub struct EntitySet {
+    /// Set ID
+    pub id: EntityId,
+    /// Entity type (EdgeSet, FaceSet, or ElemSet)
+    pub entity_type: EntityType,
+    /// Entity IDs in the set
+    pub entities: Vec<i64>,
+}
+
 /// Assembly (hierarchical grouping)
 #[derive(Debug, Clone)]
 pub struct Assembly {

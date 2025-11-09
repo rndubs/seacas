@@ -83,8 +83,8 @@ pub use error::{ExodusError, Result};
 pub use file::ExodusFile;
 pub use types::{
     Assembly, Attribute, AttributeType, Block, Blob, Compression, Connectivity,
-    ConnectivityIterator, CreateMode, CreateOptions, EntityType, FileFormat, FloatSize,
-    InfoRecord, InitParams, Int64Mode, QaRecord, Set, Topology,
+    ConnectivityIterator, CreateMode, CreateOptions, EntitySet, EntityType, FileFormat,
+    FloatSize, InfoRecord, InitParams, Int64Mode, NodeSet, QaRecord, Set, SideSet, Topology,
 };
 pub use coord::{CoordValue, Coordinates};
 
