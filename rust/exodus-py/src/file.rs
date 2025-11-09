@@ -10,7 +10,7 @@ use crate::types::{CreateOptions, InitParams};
 /// Exodus file reader (read-only access)
 #[pyclass]
 pub struct ExodusReader {
-    file: RustExodusFile<mode::Read>,
+    pub(crate) file: RustExodusFile<mode::Read>,
 }
 
 #[pymethods]
@@ -74,7 +74,7 @@ impl ExodusReader {
 /// Exodus file writer (write-only, for creating new files)
 #[pyclass]
 pub struct ExodusWriter {
-    file: Option<RustExodusFile<mode::Write>>,
+    pub(crate) file: Option<RustExodusFile<mode::Write>>,
 }
 
 #[pymethods]
@@ -175,7 +175,7 @@ impl ExodusWriter {
 /// Exodus file appender (read-write access to existing files)
 #[pyclass]
 pub struct ExodusAppender {
-    file: Option<RustExodusFile<mode::Append>>,
+    pub(crate) file: Option<RustExodusFile<mode::Append>>,
 }
 
 #[pymethods]
@@ -254,6 +254,12 @@ impl ExodusAppender {
 impl ExodusWriter {
     pub(crate) fn file_mut(&mut self) -> PyResult<&mut RustExodusFile<mode::Write>> {
         self.file.as_mut().ok_or_else(|| {
+            PyErr::new::<pyo3::exceptions::PyRuntimeError, _>("File already closed")
+        })
+    }
+
+    pub(crate) fn file_ref(&self) -> PyResult<&RustExodusFile<mode::Write>> {
+        self.file.as_ref().ok_or_else(|| {
             PyErr::new::<pyo3::exceptions::PyRuntimeError, _>("File already closed")
         })
     }
