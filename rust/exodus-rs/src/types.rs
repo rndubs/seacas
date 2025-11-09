@@ -238,6 +238,240 @@ pub struct QaRecord {
 /// Information record (arbitrary text, max 80 chars each)
 pub type InfoRecord = String;
 
+/// Element topology types
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Topology {
+    // 0D
+    /// Sphere element (1 node)
+    Sphere,
+
+    // 1D
+    /// 2-node bar/truss/beam element
+    Bar2,
+    /// 3-node bar/truss/beam element
+    Bar3,
+
+    // 2D
+    /// 3-node triangle
+    Tri3,
+    /// 6-node triangle
+    Tri6,
+    /// 7-node triangle
+    Tri7,
+    /// 4-node quadrilateral
+    Quad4,
+    /// 8-node quadrilateral
+    Quad8,
+    /// 9-node quadrilateral
+    Quad9,
+
+    // 3D
+    /// 4-node tetrahedron
+    Tet4,
+    /// 8-node tetrahedron
+    Tet8,
+    /// 10-node tetrahedron
+    Tet10,
+    /// 14-node tetrahedron
+    Tet14,
+    /// 15-node tetrahedron
+    Tet15,
+    /// 8-node hexahedron
+    Hex8,
+    /// 20-node hexahedron
+    Hex20,
+    /// 27-node hexahedron
+    Hex27,
+    /// 6-node wedge/prism
+    Wedge6,
+    /// 15-node wedge/prism
+    Wedge15,
+    /// 18-node wedge/prism
+    Wedge18,
+    /// 5-node pyramid
+    Pyramid5,
+    /// 13-node pyramid
+    Pyramid13,
+    /// 14-node pyramid
+    Pyramid14,
+
+    // Arbitrary
+    /// N-sided polygon (variable node count)
+    NSided,
+    /// N-faced polyhedron (variable node count)
+    NFaced,
+
+    // Custom
+    /// Custom topology with arbitrary name
+    Custom(String),
+}
+
+impl Topology {
+    /// Parse topology from string
+    pub fn from_str(s: &str) -> Self {
+        match s.to_uppercase().as_str() {
+            "SPHERE" => Self::Sphere,
+            "BAR2" | "TRUSS2" | "BEAM2" => Self::Bar2,
+            "BAR3" | "TRUSS3" | "BEAM3" => Self::Bar3,
+            "TRI" | "TRI3" | "TRIANGLE" => Self::Tri3,
+            "TRI6" => Self::Tri6,
+            "TRI7" => Self::Tri7,
+            "QUAD" | "QUAD4" | "SHELL4" => Self::Quad4,
+            "QUAD8" | "SHELL8" => Self::Quad8,
+            "QUAD9" | "SHELL9" => Self::Quad9,
+            "TETRA" | "TET4" | "TETRA4" => Self::Tet4,
+            "TET8" | "TETRA8" => Self::Tet8,
+            "TETRA10" | "TET10" => Self::Tet10,
+            "TET14" | "TETRA14" => Self::Tet14,
+            "TET15" | "TETRA15" => Self::Tet15,
+            "HEX" | "HEX8" | "HEXAHEDRON" => Self::Hex8,
+            "HEX20" => Self::Hex20,
+            "HEX27" => Self::Hex27,
+            "WEDGE" | "WEDGE6" => Self::Wedge6,
+            "WEDGE15" => Self::Wedge15,
+            "WEDGE18" => Self::Wedge18,
+            "PYRAMID" | "PYRAMID5" => Self::Pyramid5,
+            "PYRAMID13" => Self::Pyramid13,
+            "PYRAMID14" => Self::Pyramid14,
+            "NSIDED" => Self::NSided,
+            "NFACED" => Self::NFaced,
+            _ => Self::Custom(s.to_string()),
+        }
+    }
+
+    /// Get string representation
+    pub fn as_str(&self) -> &str {
+        match self {
+            Self::Sphere => "SPHERE",
+            Self::Bar2 => "BAR2",
+            Self::Bar3 => "BAR3",
+            Self::Tri3 => "TRI3",
+            Self::Tri6 => "TRI6",
+            Self::Tri7 => "TRI7",
+            Self::Quad4 => "QUAD4",
+            Self::Quad8 => "QUAD8",
+            Self::Quad9 => "QUAD9",
+            Self::Tet4 => "TET4",
+            Self::Tet8 => "TET8",
+            Self::Tet10 => "TET10",
+            Self::Tet14 => "TET14",
+            Self::Tet15 => "TET15",
+            Self::Hex8 => "HEX8",
+            Self::Hex20 => "HEX20",
+            Self::Hex27 => "HEX27",
+            Self::Wedge6 => "WEDGE6",
+            Self::Wedge15 => "WEDGE15",
+            Self::Wedge18 => "WEDGE18",
+            Self::Pyramid5 => "PYRAMID5",
+            Self::Pyramid13 => "PYRAMID13",
+            Self::Pyramid14 => "PYRAMID14",
+            Self::NSided => "NSIDED",
+            Self::NFaced => "NFACED",
+            Self::Custom(s) => s,
+        }
+    }
+
+    /// Get expected number of nodes for standard topologies
+    pub fn expected_nodes(&self) -> Option<usize> {
+        match self {
+            Self::Sphere => Some(1),
+            Self::Bar2 => Some(2),
+            Self::Bar3 => Some(3),
+            Self::Tri3 => Some(3),
+            Self::Tri6 => Some(6),
+            Self::Tri7 => Some(7),
+            Self::Quad4 => Some(4),
+            Self::Quad8 => Some(8),
+            Self::Quad9 => Some(9),
+            Self::Tet4 => Some(4),
+            Self::Tet8 => Some(8),
+            Self::Tet10 => Some(10),
+            Self::Tet14 => Some(14),
+            Self::Tet15 => Some(15),
+            Self::Hex8 => Some(8),
+            Self::Hex20 => Some(20),
+            Self::Hex27 => Some(27),
+            Self::Wedge6 => Some(6),
+            Self::Wedge15 => Some(15),
+            Self::Wedge18 => Some(18),
+            Self::Pyramid5 => Some(5),
+            Self::Pyramid13 => Some(13),
+            Self::Pyramid14 => Some(14),
+            Self::NSided | Self::NFaced => None, // Variable
+            Self::Custom(_) => None,
+        }
+    }
+}
+
+impl std::fmt::Display for Topology {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.as_str())
+    }
+}
+
+/// Structured connectivity with shape information
+#[derive(Debug, Clone)]
+pub struct Connectivity {
+    /// Block ID this connectivity belongs to
+    pub block_id: EntityId,
+    /// Topology of elements in this block
+    pub topology: Topology,
+    /// Connectivity data (flat array)
+    pub data: Vec<i64>,
+    /// Number of entries (elements/edges/faces)
+    pub num_entries: usize,
+    /// Number of nodes per entry
+    pub nodes_per_entry: usize,
+}
+
+impl Connectivity {
+    /// Get connectivity for entry i (0-indexed)
+    pub fn entry(&self, i: usize) -> Option<&[i64]> {
+        if i >= self.num_entries {
+            return None;
+        }
+        let start = i * self.nodes_per_entry;
+        Some(&self.data[start..start + self.nodes_per_entry])
+    }
+
+    /// Get number of entries
+    pub fn len(&self) -> usize {
+        self.num_entries
+    }
+
+    /// Check if connectivity is empty
+    pub fn is_empty(&self) -> bool {
+        self.num_entries == 0
+    }
+
+    /// Iterator over entries
+    pub fn iter(&self) -> ConnectivityIterator<'_> {
+        ConnectivityIterator {
+            connectivity: self,
+            index: 0,
+        }
+    }
+}
+
+/// Iterator over connectivity entries
+#[derive(Debug)]
+pub struct ConnectivityIterator<'a> {
+    connectivity: &'a Connectivity,
+    index: usize,
+}
+
+impl<'a> Iterator for ConnectivityIterator<'a> {
+    type Item = &'a [i64];
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let result = self.connectivity.entry(self.index);
+        if result.is_some() {
+            self.index += 1;
+        }
+        result
+    }
+}
+
 /// File format type
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum FileFormat {

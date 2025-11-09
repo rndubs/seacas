@@ -82,8 +82,9 @@ mod utils;
 pub use error::{ExodusError, Result};
 pub use file::ExodusFile;
 pub use types::{
-    Assembly, Attribute, AttributeType, Block, Blob, Compression, CreateMode, CreateOptions,
-    EntityType, FileFormat, FloatSize, InfoRecord, InitParams, Int64Mode, QaRecord, Set,
+    Assembly, Attribute, AttributeType, Block, Blob, Compression, Connectivity,
+    ConnectivityIterator, CreateMode, CreateOptions, EntityType, FileFormat, FloatSize,
+    InfoRecord, InitParams, Int64Mode, QaRecord, Set, Topology,
 };
 pub use coord::{CoordValue, Coordinates};
 

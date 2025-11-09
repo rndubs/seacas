@@ -185,6 +185,8 @@ RUST_BACKTRACE=1 cargo test --features netcdf4
 cargo test --features netcdf4 -- --test-threads=1
 ```
 
+**Known Issues**: Use `--test-threads=1` to avoid file conflicts. Tests using `NamedTempFile` require `CreateMode::Clobber`. Examples 01-03 have outdated API calls.
+
 ### Running Examples
 
 ```bash
