@@ -90,6 +90,7 @@ pub use types::{
     FloatSize, InfoRecord, InitParams, Int64Mode, NodeSet, QaRecord, Set, SideSet, Topology,
     TruthTable,
 };
+pub use set::SetIterator;
 pub use coord::{CoordValue, Coordinates};
 pub use builder::{BlockBuilder, MeshBuilder};
 
