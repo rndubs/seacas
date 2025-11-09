@@ -31,8 +31,8 @@ This library is currently in the initial development phase. The following phases
 
 - ✅ Phase 0: Project Setup and Infrastructure
 - ✅ Phase 1: File Lifecycle (Create, Open, Close)
-- ✅ Phase 2: Initialization and Basic Metadata (CURRENT)
-- ⏳ Phase 3: Coordinate Operations
+- ✅ Phase 2: Initialization and Basic Metadata
+- ✅ Phase 3: Coordinate Operations (CURRENT)
 - ⏳ Phase 4: Block Operations
 - ⏳ Phase 5: Set Operations
 - ⏳ Phase 6: Variable Operations
@@ -63,6 +63,18 @@ Phase 2 provides database initialization and metadata operations:
 - ✅ Info records for arbitrary text metadata
 - ✅ Coordinate axis naming
 - ✅ Complete validation and error handling
+- ✅ Comprehensive unit tests
+
+### Phase 3 Complete
+
+Phase 3 provides coordinate operations for nodal data:
+- ✅ Generic coordinate I/O supporting f32 and f64 types
+- ✅ Write operations: `put_coords()`, `put_coord_x/y/z()`, `put_partial_coords()`
+- ✅ Read operations: `coords()`, `get_coords()`, `get_coord_x/y/z()`, `get_partial_coords()`
+- ✅ Coordinates container type with iterator support
+- ✅ Partial I/O for large datasets
+- ✅ Automatic type conversion between f32 and f64
+- ✅ Support for all file modes (Read, Write, Append)
 - ✅ Comprehensive unit tests
 
 ## Quick Start
@@ -96,7 +108,7 @@ Add to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-exodus-rs = "0.1"
+exodus-rs = { version = "0.1", features = ["netcdf4"] }
 ```
 
 ### System Requirements
@@ -104,6 +116,98 @@ exodus-rs = "0.1"
 - Rust 1.70 or later
 - NetCDF C library (version 4.1.2+)
 - HDF5 library (for NetCDF-4 support)
+
+### Installing System Dependencies
+
+The `exodus-rs` crate requires the NetCDF and HDF5 C libraries to be installed on your system.
+
+#### Ubuntu/Debian
+
+```bash
+sudo apt-get update
+sudo apt-get install libhdf5-dev libnetcdf-dev
+```
+
+#### macOS
+
+Using Homebrew:
+
+```bash
+brew install hdf5 netcdf
+```
+
+Using MacPorts:
+
+```bash
+sudo port install hdf5 netcdf
+```
+
+#### Fedora/RHEL/CentOS
+
+```bash
+sudo dnf install hdf5-devel netcdf-devel
+```
+
+Or for older versions:
+
+```bash
+sudo yum install hdf5-devel netcdf-devel
+```
+
+#### Arch Linux
+
+```bash
+sudo pacman -S hdf5 netcdf
+```
+
+#### Windows
+
+For Windows, you have several options:
+
+1. **Using vcpkg**:
+   ```bash
+   vcpkg install hdf5 netcdf-c
+   ```
+
+2. **Using conda**:
+   ```bash
+   conda install -c conda-forge hdf5 netcdf4
+   ```
+
+3. **Pre-built binaries**: Download from the official [HDF5](https://www.hdfgroup.org/downloads/hdf5/) and [NetCDF](https://www.unidata.ucar.edu/downloads/netcdf/) websites.
+
+#### Verifying Installation
+
+After installing the dependencies, verify they're available:
+
+```bash
+# Check for pkg-config files
+pkg-config --modversion hdf5
+pkg-config --modversion netcdf
+
+# Or check for library files
+ldconfig -p | grep libhdf5
+ldconfig -p | grep libnetcdf
+```
+
+### Building from Source
+
+Once the system dependencies are installed:
+
+```bash
+# Clone the repository
+git clone https://github.com/sandialabs/seacas.git
+cd seacas/rust/exodus-rs
+
+# Build with netcdf4 support
+cargo build --features netcdf4
+
+# Run tests
+cargo test --features netcdf4
+
+# Build documentation
+cargo doc --features netcdf4 --open
+```
 
 ## Architecture
 
