@@ -2704,6 +2704,347 @@ After comprehensive review, actual completion is **~60%** vs the stated completi
 
 ---
 
+## Task Tracking: Critical Gap Resolution
+
+### 🔴 CRITICAL PRIORITY (Week 1-2)
+
+#### 1. Implement Metadata Module (metadata.rs)
+- [ ] Implement `put_qa_records()` for writing QA records
+  - [ ] Create NetCDF dimension for num_qa_records
+  - [ ] Create NetCDF variable for qa_records (4 x num_qa x len_string)
+  - [ ] Write QA record data (code_name, version, date, time)
+  - [ ] Add validation (32 char limits)
+- [ ] Implement `qa_records()` for reading QA records
+  - [ ] Read NetCDF variable qa_records
+  - [ ] Parse 2D character array into QaRecord structs
+  - [ ] Handle missing QA records gracefully
+- [ ] Implement `put_info_records()` for writing info records
+  - [ ] Create NetCDF dimension for num_info
+  - [ ] Create NetCDF variable for info (num_info x len_line)
+  - [ ] Write info record strings (80 char max each)
+- [ ] Implement `info_records()` for reading info records
+  - [ ] Read NetCDF variable info
+  - [ ] Parse character array into Vec<String>
+- [ ] Add unit tests for QA records (5+ tests)
+- [ ] Add unit tests for info records (5+ tests)
+- [ ] Add integration test: write and read back
+- [ ] Update examples to include QA/info records
+
+#### 2. Complete Variable Type Support
+- [ ] Implement Edge Block variables
+  - [ ] Add edge block variable storage creation
+  - [ ] Test edge block variable write/read
+- [ ] Implement Face Block variables
+  - [ ] Add face block variable storage creation
+  - [ ] Test face block variable write/read
+- [ ] Implement Node Set variables
+  - [ ] Define variable naming convention (name_nset_var)
+  - [ ] Create storage variables (vals_nset_var{i}ns{j})
+  - [ ] Add write operations
+  - [ ] Add read operations
+  - [ ] Add tests (3+ tests)
+- [ ] Implement Edge Set variables
+  - [ ] Define naming and storage
+  - [ ] Add write/read operations
+  - [ ] Add tests (3+ tests)
+- [ ] Implement Face Set variables
+  - [ ] Define naming and storage
+  - [ ] Add write/read operations
+  - [ ] Add tests (3+ tests)
+- [ ] Implement Side Set variables
+  - [ ] Define naming and storage (special handling for element-side pairs)
+  - [ ] Add write/read operations
+  - [ ] Add tests (3+ tests)
+- [ ] Implement Element Set variables
+  - [ ] Define naming and storage
+  - [ ] Add write/read operations
+  - [ ] Add tests (3+ tests)
+- [ ] Update documentation with all supported variable types
+
+#### 3. Add Comprehensive Test Suite
+- [ ] **Phase 1 Tests (File Lifecycle)** - 10+ tests
+  - [ ] Test all CreateMode combinations
+  - [ ] Test all FloatSize combinations
+  - [ ] Test all Int64Mode combinations
+  - [ ] Test file format detection
+  - [ ] Test version reading
+  - [ ] Test error handling (nonexistent files, permissions)
+  - [ ] Test close and Drop behavior
+  - [ ] Test append mode operations
+- [ ] **Phase 2 Tests (Initialization)** - 15+ tests
+  - [ ] Test InitParams validation (invalid dimensions)
+  - [ ] Test builder pattern completeness
+  - [ ] Test title length validation
+  - [ ] Test QA records (once implemented)
+  - [ ] Test info records (once implemented)
+  - [ ] Test coordinate names
+  - [ ] Test round-trip: write init params, read back, verify
+- [ ] **Phase 3 Tests (Coordinates)** - 15+ tests
+  - [ ] Test 1D, 2D, 3D coordinates
+  - [ ] Test f32 and f64 coordinate types
+  - [ ] Test type conversion (write f32, read f64)
+  - [ ] Test partial coordinate I/O
+  - [ ] Test array length validation
+  - [ ] Test empty coordinates
+  - [ ] Test large coordinate arrays (10k+ nodes)
+- [ ] **Phase 4 Tests (Blocks)** - 20+ tests
+  - [ ] Test all standard topologies (Hex8, Tet4, Quad4, etc.)
+  - [ ] Test NSided elements
+  - [ ] Test NFaced elements
+  - [ ] Test custom topologies
+  - [ ] Test block attributes
+  - [ ] Test attribute names
+  - [ ] Test connectivity validation
+  - [ ] Test multiple blocks
+  - [ ] Test block iteration
+  - [ ] Test error cases (invalid topology, wrong node count)
+- [ ] **Phase 5 Tests (Sets)** - 20+ tests
+  - [ ] Test node sets with distribution factors
+  - [ ] Test node sets without distribution factors
+  - [ ] Test side sets (element-side pairs)
+  - [ ] Test side set distribution factors
+  - [ ] Test element sets
+  - [ ] Test edge sets
+  - [ ] Test face sets
+  - [ ] Test empty sets
+  - [ ] Test set iteration
+  - [ ] Test error cases
+- [ ] **Phase 6 Tests (Variables)** - 25+ tests
+  - [ ] Test global variables (single and multiple)
+  - [ ] Test nodal variables (multiple time steps)
+  - [ ] Test element variables (with truth tables)
+  - [ ] Test all set variable types (once implemented)
+  - [ ] Test sparse variables with truth tables
+  - [ ] Test time series operations
+  - [ ] Test var_multi operations
+  - [ ] Test variable name lookup
+  - [ ] Test invalid variable indices
+  - [ ] Test invalid time steps
+- [ ] **Integration Tests** - 10+ tests
+  - [ ] Test complete workflow: create → init → coords → blocks → sets → vars → close → read
+  - [ ] Test multiple blocks of different types
+  - [ ] Test mixed element topologies
+  - [ ] Test large datasets (>100k nodes, >1M elements)
+  - [ ] Test all features combined
+- [ ] Set up code coverage reporting
+- [ ] Achieve >80% code coverage target
+
+### 🟠 HIGH PRIORITY (Week 2-3)
+
+#### 4. C Library Compatibility Tests
+- [ ] Set up test infrastructure
+  - [ ] Create test data directory
+  - [ ] Download/generate reference files from C library
+  - [ ] Create test framework for file comparison
+- [ ] Test reading C library files
+  - [ ] Simple mesh (single hex)
+  - [ ] Multi-block mesh
+  - [ ] Mesh with sets
+  - [ ] Mesh with variables and time steps
+  - [ ] Mesh with all features
+- [ ] Test C library reading Rust files (if C library available)
+  - [ ] Generate files with exodus-rs
+  - [ ] Validate structure matches C library expectations
+  - [ ] Use ncdump to compare NetCDF structure
+- [ ] Test edge cases
+  - [ ] Empty sets
+  - [ ] Sparse variables
+  - [ ] Large files
+  - [ ] Old file versions
+- [ ] Document compatibility matrix
+
+#### 5. NetCDF Define Mode Management
+- [ ] Analyze current define mode transitions
+- [ ] Design explicit define mode management API
+  - [ ] Add `end_define()` method
+  - [ ] Add `reenter_define()` method
+  - [ ] Add internal state tracking
+- [ ] Implement automatic mode management
+  - [ ] Track whether in define mode
+  - [ ] Auto-transition when needed
+  - [ ] Add validation
+- [ ] Improve error messages
+  - [ ] Detect NC_ENOTINDEFINE errors
+  - [ ] Provide helpful guidance
+  - [ ] Suggest operation order
+- [ ] Add tests for mode transitions
+- [ ] Document the restriction in API docs
+- [ ] Add example showing correct operation order
+
+#### 6. Truth Table Validation and Auto-Generation
+- [ ] Implement truth table validation
+  - [ ] Validate table dimensions match blocks/vars
+  - [ ] Validate storage variables match truth table
+  - [ ] Add warning for mismatches
+- [ ] Implement auto-generation
+  - [ ] Generate truth table from defined variables
+  - [ ] Detect which blocks have which variables
+  - [ ] Create optimal truth table
+- [ ] Add truth table builder
+  - [ ] Fluent API for truth table construction
+  - [ ] Validation before writing
+- [ ] Add comprehensive tests
+  - [ ] Test sparse patterns
+  - [ ] Test all-true case
+  - [ ] Test all-false case
+  - [ ] Test validation failures
+- [ ] Document truth table usage in guide
+
+#### 7. Error Handling Audit
+- [ ] Audit all public APIs
+  - [ ] Identify generic `Other` errors
+  - [ ] Replace with specific error variants
+  - [ ] Add new error types as needed
+- [ ] Audit array indexing
+  - [ ] Find all direct indexing operations
+  - [ ] Replace with safe alternatives (.get(), checked_add, etc.)
+  - [ ] Add bounds validation
+- [ ] Audit `unwrap()` calls
+  - [ ] Find all unwrap() in non-test code
+  - [ ] Replace with proper error handling
+  - [ ] Use `?` operator consistently
+- [ ] Add error handling tests
+  - [ ] Test all error conditions
+  - [ ] Verify error messages are helpful
+  - [ ] Test error propagation
+- [ ] Document error handling strategy
+
+### 🟡 MEDIUM PRIORITY (Week 3-4)
+
+#### 8. Python Bindings Testing
+- [ ] Set up pytest infrastructure
+  - [ ] Create tests/ directory in exodus-py
+  - [ ] Configure pytest
+  - [ ] Set up test fixtures
+- [ ] Test file operations (10+ tests)
+  - [ ] Test create/open/close
+  - [ ] Test all file modes
+  - [ ] Test error handling
+- [ ] Test initialization (5+ tests)
+  - [ ] Test InitParams from Python
+  - [ ] Test builder pattern
+- [ ] Test coordinates (5+ tests)
+  - [ ] Test coordinate I/O
+  - [ ] Test NumPy array integration
+- [ ] Test blocks (10+ tests)
+  - [ ] Test block definition
+  - [ ] Test connectivity
+  - [ ] Test all topologies
+- [ ] Test sets (10+ tests)
+  - [ ] Test all set types
+  - [ ] Test distribution factors
+- [ ] Test variables (15+ tests)
+  - [ ] Test all variable types
+  - [ ] Test time steps
+  - [ ] Test truth tables
+- [ ] Test builder API (10+ tests)
+  - [ ] Test MeshBuilder
+  - [ ] Test BlockBuilder
+  - [ ] Test fluent API chains
+- [ ] Test error propagation
+  - [ ] Verify Rust errors appear correctly in Python
+  - [ ] Test error messages
+- [ ] Add Python examples for each feature
+- [ ] Generate type stubs (.pyi files)
+
+#### 9. Documentation Improvements
+- [ ] Create docs/guide.md
+  - [ ] Quick start tutorial
+  - [ ] Common workflows
+  - [ ] Best practices
+- [ ] Create docs/cookbook.md
+  - [ ] Recipe: Create simple mesh
+  - [ ] Recipe: Read and process results
+  - [ ] Recipe: Extract boundary conditions
+  - [ ] Recipe: Time series analysis
+  - [ ] Recipe: Large file handling
+- [ ] Create docs/python-api.md
+  - [ ] Python-specific documentation
+  - [ ] NumPy integration examples
+  - [ ] Error handling from Python
+- [ ] Create docs/limitations.md
+  - [ ] NetCDF define mode restrictions
+  - [ ] Unsupported features
+  - [ ] Workarounds
+  - [ ] Future plans
+- [ ] Update examples
+  - [ ] Ensure all examples work
+  - [ ] Add comments explaining each step
+  - [ ] Cover more scenarios
+- [ ] Add rustdoc examples to remaining functions
+
+#### 10. Code Organization Improvements
+- [ ] Refactor variable.rs (917 lines)
+  - [ ] Split into submodules (global.rs, nodal.rs, block.rs, etc.)
+  - [ ] Extract helper functions to utils
+  - [ ] Reduce code duplication
+- [ ] Move time operations
+  - [ ] Move from variable.rs to time.rs
+  - [ ] Or remove time.rs stub entirely
+  - [ ] Update documentation
+- [ ] Extract common patterns
+  - [ ] NetCDF dimension creation
+  - [ ] NetCDF variable creation
+  - [ ] Character array handling
+  - [ ] Index/ID conversion
+- [ ] Add internal documentation
+  - [ ] Document NetCDF structure
+  - [ ] Document naming conventions
+  - [ ] Document design decisions
+
+### 🟢 LOW PRIORITY (Future)
+
+#### 11. Performance Baseline
+- [ ] Set up criterion benchmarks
+  - [ ] Benchmark coordinate I/O
+  - [ ] Benchmark connectivity I/O
+  - [ ] Benchmark variable I/O
+  - [ ] Benchmark file open/close
+- [ ] Profile memory usage
+  - [ ] Use massif/heaptrack
+  - [ ] Identify allocation hotspots
+  - [ ] Optimize if needed
+- [ ] Test large files
+  - [ ] 1M nodes
+  - [ ] 10M elements
+  - [ ] 100+ time steps
+  - [ ] Memory-mapped I/O if needed
+- [ ] Document performance characteristics
+  - [ ] Expected performance ranges
+  - [ ] Comparison with C library (if available)
+  - [ ] Optimization tips
+
+#### 12. Enhanced Type Safety
+- [ ] Introduce newtype wrappers
+  - [ ] BlockIndex(usize) for internal indices
+  - [ ] VarIndex(usize) for variable indices
+  - [ ] TimeStep(usize) for time step indices
+- [ ] Add conversion traits
+  - [ ] From EntityId to BlockIndex
+  - [ ] Validation on conversion
+- [ ] Update API to use newtypes
+- [ ] Add tests verifying type safety
+
+#### 13. Additional Features
+- [ ] Reduction variables (Phase 6 objective)
+- [ ] Batch operations
+- [ ] Iterator improvements
+- [ ] Convenience methods
+- [ ] File statistics/summary
+
+---
+
+### Progress Summary
+
+**Total Tasks:** ~200+
+**Completed:** 0
+**In Progress:** 0
+**Remaining:** ~200+
+
+**Estimated Completion Time:** 3-4 weeks with focused effort
+
+---
+
 ## Conclusion
 
 This plan provides a comprehensive, incremental roadmap for implementing a Rust Exodus library. Each phase builds on the previous, with clear deliverables and testing requirements. The dual API strategy (low-level and high-level) ensures both compatibility and ergonomics.
