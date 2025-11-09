@@ -396,6 +396,203 @@ impl ExodusFile<mode::Write> {
         Ok(())
     }
 
+    /// Write all variables for an entity at a time step
+    ///
+    /// # Arguments
+    ///
+    /// * `step` - Time step index (0-based)
+    /// * `var_type` - Entity type
+    /// * `entity_id` - Entity ID (block ID for block variables, 0 for global/nodal)
+    /// * `values` - Flat array of all variable values
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if NetCDF write fails
+    pub fn put_var_multi(
+        &mut self,
+        step: usize,
+        var_type: EntityType,
+        entity_id: EntityId,
+        values: &[f64],
+    ) -> Result<()> {
+        let num_vars = self.variable_names(var_type)?.len();
+
+        match var_type {
+            EntityType::Global => {
+                // Global vars: write all variables at once
+                if values.len() != num_vars {
+                    return Err(ExodusError::InvalidArrayLength {
+                        expected: num_vars,
+                        actual: values.len(),
+                    });
+                }
+                for (var_idx, &value) in values.iter().enumerate() {
+                    self.put_var(step, var_type, entity_id, var_idx, &[value])?;
+                }
+            }
+            EntityType::Nodal => {
+                // Nodal vars: values should be [num_nodes * num_vars]
+                let num_nodes = self.nc_file.dimension("num_nodes")
+                    .map(|d| d.len())
+                    .unwrap_or(0);
+
+                if values.len() != num_nodes * num_vars {
+                    return Err(ExodusError::InvalidArrayLength {
+                        expected: num_nodes * num_vars,
+                        actual: values.len(),
+                    });
+                }
+
+                // Split values by variable
+                for var_idx in 0..num_vars {
+                    let start = var_idx * num_nodes;
+                    let end = start + num_nodes;
+                    self.put_var(step, var_type, entity_id, var_idx, &values[start..end])?;
+                }
+            }
+            EntityType::ElemBlock => {
+                // Element vars: values should be [num_elems * num_vars]
+                // Get number of elements from dimension
+                let block_ids = self.block_ids(EntityType::ElemBlock)?;
+                let block_index = block_ids
+                    .iter()
+                    .position(|&id| id == entity_id)
+                    .ok_or_else(|| ExodusError::EntityNotFound {
+                        entity_type: EntityType::ElemBlock.to_string(),
+                        id: entity_id,
+                    })?;
+
+                let dim_name = format!("num_el_in_blk{}", block_index + 1);
+                let num_elems = self.nc_file.dimension(&dim_name)
+                    .map(|d| d.len())
+                    .ok_or_else(|| ExodusError::Other(format!("Block dimension {} not found", dim_name)))?;
+
+                if values.len() != num_elems * num_vars {
+                    return Err(ExodusError::InvalidArrayLength {
+                        expected: num_elems * num_vars,
+                        actual: values.len(),
+                    });
+                }
+
+                // Split values by variable
+                for var_idx in 0..num_vars {
+                    let start = var_idx * num_elems;
+                    let end = start + num_elems;
+                    self.put_var(step, var_type, entity_id, var_idx, &values[start..end])?;
+                }
+            }
+            _ => {
+                return Err(ExodusError::InvalidEntityType(format!(
+                    "Unsupported variable type: {}",
+                    var_type
+                )))
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Write variable across multiple time steps (time series)
+    ///
+    /// # Arguments
+    ///
+    /// * `start_step` - Starting time step index (0-based)
+    /// * `end_step` - Ending time step index (exclusive)
+    /// * `var_type` - Entity type
+    /// * `entity_id` - Entity ID (block ID for block variables, 0 for global/nodal)
+    /// * `var_index` - Variable index (0-based)
+    /// * `values` - Variable values for all time steps
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if NetCDF write fails
+    pub fn put_var_time_series(
+        &mut self,
+        start_step: usize,
+        end_step: usize,
+        var_type: EntityType,
+        entity_id: EntityId,
+        var_index: usize,
+        values: &[f64],
+    ) -> Result<()> {
+        let num_steps = end_step - start_step;
+        let var_name = self.get_var_name(var_type, entity_id, var_index)?;
+
+        // Get or create the variable
+        if self.nc_file.variable(&var_name).is_none() {
+            self.create_var_storage(var_type, entity_id, var_index)?;
+        }
+
+        // Get all needed information BEFORE borrowing variable mutably
+        let expected_len = match var_type {
+            EntityType::Global => num_steps,
+            EntityType::Nodal => {
+                let num_nodes = self.nc_file.dimension("num_nodes")
+                    .map(|d| d.len())
+                    .unwrap_or(0);
+                num_steps * num_nodes
+            }
+            EntityType::ElemBlock | EntityType::EdgeBlock | EntityType::FaceBlock => {
+                let block_ids = self.block_ids(var_type)?;
+                let block_index = block_ids
+                    .iter()
+                    .position(|&id| id == entity_id)
+                    .ok_or_else(|| ExodusError::EntityNotFound {
+                        entity_type: var_type.to_string(),
+                        id: entity_id,
+                    })?;
+
+                let dim_name = match var_type {
+                    EntityType::ElemBlock => format!("num_el_in_blk{}", block_index + 1),
+                    EntityType::EdgeBlock => format!("num_ed_in_blk{}", block_index + 1),
+                    EntityType::FaceBlock => format!("num_fa_in_blk{}", block_index + 1),
+                    _ => unreachable!(),
+                };
+
+                let num_entries = self.nc_file.dimension(&dim_name)
+                    .map(|d| d.len())
+                    .ok_or_else(|| ExodusError::Other(format!("Block dimension {} not found", dim_name)))?;
+
+                num_steps * num_entries
+            }
+            _ => {
+                return Err(ExodusError::InvalidEntityType(format!(
+                    "Unsupported variable type: {}",
+                    var_type
+                )))
+            }
+        };
+
+        // Validate array length
+        if values.len() != expected_len {
+            return Err(ExodusError::InvalidArrayLength {
+                expected: expected_len,
+                actual: values.len(),
+            });
+        }
+
+        // Now write the values
+        if let Some(mut var) = self.nc_file.variable_mut(&var_name) {
+            match var_type {
+                EntityType::Global => {
+                    // Global vars: (time_step, num_glo_var)
+                    // Write time series at [start_step:end_step, var_index]
+                    for (i, &value) in values.iter().enumerate() {
+                        let step = start_step + i;
+                        var.put_value(value, (step..step + 1, var_index..var_index + 1))?;
+                    }
+                }
+                EntityType::Nodal | EntityType::ElemBlock | EntityType::EdgeBlock | EntityType::FaceBlock => {
+                    // All other types: (time_step, num_entities)
+                    var.put_values(values, (start_step..end_step, ..))?;
+                }
+                _ => unreachable!(),
+            }
+        }
+
+        Ok(())
+    }
+
     // Helper function to get variable name
     fn get_var_name(
         &self,
@@ -569,6 +766,121 @@ impl ExodusFile<mode::Read> {
             num_blocks,
             table: table_values,
         })
+    }
+
+    /// Read all variables for an entity at a time step
+    ///
+    /// # Arguments
+    ///
+    /// * `step` - Time step index (0-based)
+    /// * `var_type` - Entity type
+    /// * `entity_id` - Entity ID (block ID for block variables, 0 for global/nodal)
+    ///
+    /// # Returns
+    ///
+    /// Flat array of all variable values
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if NetCDF read fails
+    pub fn var_multi(
+        &self,
+        step: usize,
+        var_type: EntityType,
+        entity_id: EntityId,
+    ) -> Result<Vec<f64>> {
+        let num_vars = self.variable_names(var_type)?.len();
+        let mut all_values = Vec::new();
+
+        match var_type {
+            EntityType::Global => {
+                // Global vars: read all variables at once
+                for var_idx in 0..num_vars {
+                    let values = self.var(step, var_type, entity_id, var_idx)?;
+                    all_values.extend_from_slice(&values);
+                }
+            }
+            EntityType::Nodal => {
+                // Nodal vars: concatenate all variable values
+                for var_idx in 0..num_vars {
+                    let values = self.var(step, var_type, entity_id, var_idx)?;
+                    all_values.extend_from_slice(&values);
+                }
+            }
+            EntityType::ElemBlock => {
+                // Element vars: concatenate all variable values
+                for var_idx in 0..num_vars {
+                    let values = self.var(step, var_type, entity_id, var_idx)?;
+                    all_values.extend_from_slice(&values);
+                }
+            }
+            _ => {
+                return Err(ExodusError::InvalidEntityType(format!(
+                    "Unsupported variable type: {}",
+                    var_type
+                )))
+            }
+        }
+
+        Ok(all_values)
+    }
+
+    /// Read variable time series
+    ///
+    /// # Arguments
+    ///
+    /// * `start_step` - Starting time step index (0-based)
+    /// * `end_step` - Ending time step index (exclusive)
+    /// * `var_type` - Entity type
+    /// * `entity_id` - Entity ID (block ID for block variables, 0 for global/nodal)
+    /// * `var_index` - Variable index (0-based)
+    ///
+    /// # Returns
+    ///
+    /// Variable values for all time steps
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if NetCDF read fails
+    pub fn var_time_series(
+        &self,
+        start_step: usize,
+        end_step: usize,
+        var_type: EntityType,
+        entity_id: EntityId,
+        var_index: usize,
+    ) -> Result<Vec<f64>> {
+        let var_name = self.get_var_name_read(var_type, entity_id, var_index)?;
+
+        let var = self
+            .nc_file
+            .variable(&var_name)
+            .ok_or_else(|| ExodusError::VariableNotDefined(var_name.clone()))?;
+
+        match var_type {
+            EntityType::Global => {
+                // Global vars: (time_step, num_glo_var)
+                // Read time series at [start_step:end_step, var_index]
+                let mut values = Vec::new();
+                for step in start_step..end_step {
+                    let value: f64 = var.get_value((step, var_index))?;
+                    values.push(value);
+                }
+                Ok(values)
+            }
+            EntityType::Nodal => {
+                // Nodal vars: (time_step, num_nodes)
+                Ok(var.get_values((start_step..end_step, ..))?)
+            }
+            EntityType::ElemBlock | EntityType::EdgeBlock | EntityType::FaceBlock => {
+                // Block vars: (time_step, num_elem_in_blk)
+                Ok(var.get_values((start_step..end_step, ..))?)
+            }
+            _ => Err(ExodusError::InvalidEntityType(format!(
+                "Unsupported variable type: {}",
+                var_type
+            ))),
+        }
     }
 
     // Helper function to get variable name for reading

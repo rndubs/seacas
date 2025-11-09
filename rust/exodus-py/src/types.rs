@@ -889,3 +889,109 @@ impl QaRecord {
         }
     }
 }
+
+/// Truth table for sparse variable storage
+///
+/// Indicates which blocks have which variables defined.
+/// Used to optimize storage when not all blocks have all variables.
+#[pyclass]
+#[derive(Debug, Clone)]
+pub struct TruthTable {
+    #[pyo3(get)]
+    /// Entity type (must be a block type)
+    pub var_type: EntityType,
+    #[pyo3(get)]
+    /// Number of variables
+    pub num_vars: usize,
+    #[pyo3(get)]
+    /// Number of blocks
+    pub num_blocks: usize,
+    /// Flat 2D table: [block][var]
+    table: Vec<bool>,
+}
+
+#[pymethods]
+impl TruthTable {
+    /// Create a new truth table
+    ///
+    /// Args:
+    ///     var_type: Entity type (must be a block type)
+    ///     num_blocks: Number of blocks
+    ///     num_vars: Number of variables
+    ///
+    /// Returns:
+    ///     New TruthTable with all entries set to True
+    ///
+    /// Example:
+    ///     >>> table = TruthTable.new(EntityType.ELEM_BLOCK, 2, 3)
+    #[staticmethod]
+    fn new(var_type: EntityType, num_blocks: usize, num_vars: usize) -> Self {
+        TruthTable {
+            var_type,
+            num_vars,
+            num_blocks,
+            table: vec![true; num_blocks * num_vars],
+        }
+    }
+
+    /// Set whether a block has a variable
+    ///
+    /// Args:
+    ///     block_idx: Block index (0-based)
+    ///     var_idx: Variable index (0-based)
+    ///     exists: Whether the variable exists for this block
+    ///
+    /// Example:
+    ///     >>> table.set(1, 2, False)  # Block 2 doesn't have variable 3
+    fn set(&mut self, block_idx: usize, var_idx: usize, exists: bool) {
+        if block_idx < self.num_blocks && var_idx < self.num_vars {
+            self.table[block_idx * self.num_vars + var_idx] = exists;
+        }
+    }
+
+    /// Get whether a block has a variable
+    ///
+    /// Args:
+    ///     block_idx: Block index (0-based)
+    ///     var_idx: Variable index (0-based)
+    ///
+    /// Returns:
+    ///     Whether the variable exists for this block
+    ///
+    /// Example:
+    ///     >>> has_var = table.get(1, 2)
+    fn get(&self, block_idx: usize, var_idx: usize) -> bool {
+        if block_idx < self.num_blocks && var_idx < self.num_vars {
+            self.table[block_idx * self.num_vars + var_idx]
+        } else {
+            false
+        }
+    }
+
+    fn __repr__(&self) -> String {
+        format!(
+            "TruthTable(type={:?}, blocks={}, vars={})",
+            self.var_type, self.num_blocks, self.num_vars
+        )
+    }
+}
+
+impl TruthTable {
+    pub fn to_rust(&self) -> rs::TruthTable {
+        rs::TruthTable {
+            var_type: self.var_type.to_rust(),
+            num_vars: self.num_vars,
+            num_blocks: self.num_blocks,
+            table: self.table.clone(),
+        }
+    }
+
+    pub fn from_rust(tt: &rs::TruthTable) -> Self {
+        TruthTable {
+            var_type: EntityType::from_rust(tt.var_type),
+            num_vars: tt.num_vars,
+            num_blocks: tt.num_blocks,
+            table: tt.table.clone(),
+        }
+    }
+}

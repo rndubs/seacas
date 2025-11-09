@@ -1,0 +1,294 @@
+//! Variable and time step operations for Exodus files
+
+use pyo3::prelude::*;
+use pyo3::types::PyList;
+use exodus_rs::EntityType as RustEntityType;
+
+use crate::error::IntoPyResult;
+use crate::file::{ExodusReader, ExodusWriter};
+use crate::types::{EntityType, TruthTable};
+
+/// Variable operations for ExodusReader
+#[pymethods]
+impl ExodusReader {
+    /// Get variable names for an entity type
+    ///
+    /// Args:
+    ///     var_type: Entity type (e.g., EntityType.GLOBAL, EntityType.NODAL)
+    ///
+    /// Returns:
+    ///     List of variable names
+    ///
+    /// Example:
+    ///     >>> names = reader.variable_names(EntityType.NODAL)
+    ///     >>> print(names)  # ['Temperature', 'Pressure']
+    fn variable_names(&self, var_type: EntityType) -> PyResult<Vec<String>> {
+        self.file.variable_names(var_type.to_rust()).into_py()
+    }
+
+    /// Get number of time steps
+    ///
+    /// Returns:
+    ///     Number of time steps in the file
+    fn num_time_steps(&self) -> PyResult<usize> {
+        self.file.num_time_steps().into_py()
+    }
+
+    /// Get all time values
+    ///
+    /// Returns:
+    ///     List of time values for all steps
+    fn times(&self) -> PyResult<Vec<f64>> {
+        self.file.times().into_py()
+    }
+
+    /// Get time value for a specific step
+    ///
+    /// Args:
+    ///     step: Time step index (0-based)
+    ///
+    /// Returns:
+    ///     Time value
+    fn time(&self, step: usize) -> PyResult<f64> {
+        self.file.time(step).into_py()
+    }
+
+    /// Read variable values at a time step
+    ///
+    /// Args:
+    ///     step: Time step index (0-based)
+    ///     var_type: Entity type
+    ///     entity_id: Entity ID (block ID for block variables, 0 for global/nodal)
+    ///     var_index: Variable index (0-based)
+    ///
+    /// Returns:
+    ///     List of variable values
+    ///
+    /// Example:
+    ///     >>> temp = reader.var(0, EntityType.NODAL, 0, 0)
+    ///     >>> print(f"Temperature at t=0: {temp}")
+    fn var(
+        &self,
+        step: usize,
+        var_type: EntityType,
+        entity_id: i64,
+        var_index: usize,
+    ) -> PyResult<Vec<f64>> {
+        self.file
+            .var(step, var_type.to_rust(), entity_id, var_index)
+            .into_py()
+    }
+
+    /// Read all variables for an entity at a time step
+    ///
+    /// Args:
+    ///     step: Time step index (0-based)
+    ///     var_type: Entity type
+    ///     entity_id: Entity ID (block ID for block variables, 0 for global/nodal)
+    ///
+    /// Returns:
+    ///     Flat list of all variable values
+    fn var_multi(&self, step: usize, var_type: EntityType, entity_id: i64) -> PyResult<Vec<f64>> {
+        self.file
+            .var_multi(step, var_type.to_rust(), entity_id)
+            .into_py()
+    }
+
+    /// Read variable time series
+    ///
+    /// Args:
+    ///     start_step: Starting time step index (0-based)
+    ///     end_step: Ending time step index (exclusive)
+    ///     var_type: Entity type
+    ///     entity_id: Entity ID (block ID for block variables, 0 for global/nodal)
+    ///     var_index: Variable index (0-based)
+    ///
+    /// Returns:
+    ///     Variable values for all time steps
+    fn var_time_series(
+        &self,
+        start_step: usize,
+        end_step: usize,
+        var_type: EntityType,
+        entity_id: i64,
+        var_index: usize,
+    ) -> PyResult<Vec<f64>> {
+        self.file
+            .var_time_series(start_step, end_step, var_type.to_rust(), entity_id, var_index)
+            .into_py()
+    }
+
+    /// Get truth table for sparse variable storage
+    ///
+    /// Args:
+    ///     var_type: Entity type (must be a block type)
+    ///
+    /// Returns:
+    ///     TruthTable object
+    fn truth_table(&self, var_type: EntityType) -> PyResult<TruthTable> {
+        let table = self.file.truth_table(var_type.to_rust()).into_py()?;
+        Ok(TruthTable::from_rust(&table))
+    }
+}
+
+/// Variable operations for ExodusWriter
+#[pymethods]
+impl ExodusWriter {
+    /// Define variables for an entity type
+    ///
+    /// Args:
+    ///     var_type: Entity type (e.g., EntityType.GLOBAL, EntityType.NODAL)
+    ///     names: List of variable names
+    ///
+    /// Example:
+    ///     >>> writer.define_variables(EntityType.NODAL, ["Temperature", "Pressure"])
+    fn define_variables(&mut self, var_type: EntityType, names: Vec<String>) -> PyResult<()> {
+        if let Some(ref mut file) = self.file {
+            let name_refs: Vec<&str> = names.iter().map(|s| s.as_str()).collect();
+            file.define_variables(var_type.to_rust(), &name_refs)
+                .into_py()
+        } else {
+            Err(PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(
+                "File already closed",
+            ))
+        }
+    }
+
+    /// Write time value for a time step
+    ///
+    /// Args:
+    ///     step: Time step index (0-based)
+    ///     time: Time value
+    ///
+    /// Example:
+    ///     >>> writer.put_time(0, 0.0)
+    ///     >>> writer.put_time(1, 1.0)
+    fn put_time(&mut self, step: usize, time: f64) -> PyResult<()> {
+        if let Some(ref mut file) = self.file {
+            file.put_time(step, time).into_py()
+        } else {
+            Err(PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(
+                "File already closed",
+            ))
+        }
+    }
+
+    /// Write variable values for a time step
+    ///
+    /// Args:
+    ///     step: Time step index (0-based)
+    ///     var_type: Entity type
+    ///     entity_id: Entity ID (block ID for block variables, 0 for global/nodal)
+    ///     var_index: Variable index (0-based)
+    ///     values: Variable values
+    ///
+    /// Example:
+    ///     >>> writer.put_var(0, EntityType.NODAL, 0, 0, [100.0, 200.0, 300.0])
+    fn put_var(
+        &mut self,
+        step: usize,
+        var_type: EntityType,
+        entity_id: i64,
+        var_index: usize,
+        values: Vec<f64>,
+    ) -> PyResult<()> {
+        if let Some(ref mut file) = self.file {
+            file.put_var(step, var_type.to_rust(), entity_id, var_index, &values)
+                .into_py()
+        } else {
+            Err(PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(
+                "File already closed",
+            ))
+        }
+    }
+
+    /// Write all variables for an entity at a time step
+    ///
+    /// Args:
+    ///     step: Time step index (0-based)
+    ///     var_type: Entity type
+    ///     entity_id: Entity ID (block ID for block variables, 0 for global/nodal)
+    ///     values: Flat list of all variable values
+    ///
+    /// Example:
+    ///     >>> # Write 2 nodal variables for 3 nodes
+    ///     >>> writer.put_var_multi(0, EntityType.NODAL, 0,
+    ///     ...     [100.0, 200.0, 300.0, 1.0, 2.0, 3.0])
+    fn put_var_multi(
+        &mut self,
+        step: usize,
+        var_type: EntityType,
+        entity_id: i64,
+        values: Vec<f64>,
+    ) -> PyResult<()> {
+        if let Some(ref mut file) = self.file {
+            file.put_var_multi(step, var_type.to_rust(), entity_id, &values)
+                .into_py()
+        } else {
+            Err(PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(
+                "File already closed",
+            ))
+        }
+    }
+
+    /// Write variable across multiple time steps (time series)
+    ///
+    /// Args:
+    ///     start_step: Starting time step index (0-based)
+    ///     end_step: Ending time step index (exclusive)
+    ///     var_type: Entity type
+    ///     entity_id: Entity ID (block ID for block variables, 0 for global/nodal)
+    ///     var_index: Variable index (0-based)
+    ///     values: Variable values for all time steps
+    ///
+    /// Example:
+    ///     >>> # Write 5 time steps of a global variable
+    ///     >>> writer.put_var_time_series(0, 5, EntityType.GLOBAL, 0, 0,
+    ///     ...     [10.0, 9.0, 8.0, 7.0, 6.0])
+    fn put_var_time_series(
+        &mut self,
+        start_step: usize,
+        end_step: usize,
+        var_type: EntityType,
+        entity_id: i64,
+        var_index: usize,
+        values: Vec<f64>,
+    ) -> PyResult<()> {
+        if let Some(ref mut file) = self.file {
+            file.put_var_time_series(
+                start_step,
+                end_step,
+                var_type.to_rust(),
+                entity_id,
+                var_index,
+                &values,
+            )
+            .into_py()
+        } else {
+            Err(PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(
+                "File already closed",
+            ))
+        }
+    }
+
+    /// Set truth table (which blocks have which variables)
+    ///
+    /// Args:
+    ///     var_type: Entity type (must be a block type)
+    ///     table: TruthTable object
+    ///
+    /// Example:
+    ///     >>> table = TruthTable.new(EntityType.ELEM_BLOCK, 2, 2)
+    ///     >>> table.set(1, 1, False)  # Block 2 doesn't have variable 2
+    ///     >>> writer.put_truth_table(EntityType.ELEM_BLOCK, table)
+    fn put_truth_table(&mut self, var_type: EntityType, table: &TruthTable) -> PyResult<()> {
+        if let Some(ref mut file) = self.file {
+            file.put_truth_table(var_type.to_rust(), &table.to_rust())
+                .into_py()
+        } else {
+            Err(PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(
+                "File already closed",
+            ))
+        }
+    }
+}

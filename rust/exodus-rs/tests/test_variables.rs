@@ -500,3 +500,305 @@ fn test_many_time_steps() {
         assert_eq!(file.var(99, EntityType::Nodal, 0, 0).unwrap(), vec![99.0]);
     }
 }
+
+#[test]
+fn test_var_multi_global() {
+    let tmp = NamedTempFile::new().unwrap();
+
+    // Write
+    {
+        let mut file = ExodusFile::create(
+            tmp.path(),
+            CreateOptions {
+                mode: CreateMode::Clobber,
+                ..Default::default()
+            },
+        )
+        .unwrap();
+
+        file.init(&InitParams {
+            title: "Var Multi Global Test".into(),
+            num_dim: 3,
+            ..Default::default()
+        })
+        .unwrap();
+
+        // Define 3 global variables
+        file.define_variables(EntityType::Global, &["KE", "PE", "TE"])
+            .unwrap();
+
+        // Write time step
+        file.put_time(0, 0.0).unwrap();
+
+        // Write all variables at once
+        file.put_var_multi(0, EntityType::Global, 0, &[10.0, 20.0, 30.0])
+            .unwrap();
+    }
+
+    // Read
+    {
+        let file = ExodusFile::<mode::Read>::open(tmp.path()).unwrap();
+
+        // Read all variables at once
+        let all_vars = file.var_multi(0, EntityType::Global, 0).unwrap();
+        assert_eq!(all_vars, vec![10.0, 20.0, 30.0]);
+    }
+}
+
+#[test]
+fn test_var_multi_nodal() {
+    let tmp = NamedTempFile::new().unwrap();
+
+    // Write
+    {
+        let mut file = ExodusFile::create(
+            tmp.path(),
+            CreateOptions {
+                mode: CreateMode::Clobber,
+                ..Default::default()
+            },
+        )
+        .unwrap();
+
+        file.init(&InitParams {
+            title: "Var Multi Nodal Test".into(),
+            num_dim: 3,
+            num_nodes: 3,
+            ..Default::default()
+        })
+        .unwrap();
+
+        // Define 2 nodal variables
+        file.define_variables(EntityType::Nodal, &["Temp", "Press"])
+            .unwrap();
+
+        // Write time step
+        file.put_time(0, 0.0).unwrap();
+
+        // Write all variables at once (interleaved by variable)
+        // [all temp values, then all press values]
+        file.put_var_multi(
+            0,
+            EntityType::Nodal,
+            0,
+            &[100.0, 200.0, 300.0, 1.0, 2.0, 3.0],
+        )
+        .unwrap();
+    }
+
+    // Read
+    {
+        let file = ExodusFile::<mode::Read>::open(tmp.path()).unwrap();
+
+        // Read all variables at once
+        let all_vars = file.var_multi(0, EntityType::Nodal, 0).unwrap();
+        assert_eq!(all_vars, vec![100.0, 200.0, 300.0, 1.0, 2.0, 3.0]);
+
+        // Verify individual reads match
+        let temp = file.var(0, EntityType::Nodal, 0, 0).unwrap();
+        assert_eq!(temp, vec![100.0, 200.0, 300.0]);
+
+        let press = file.var(0, EntityType::Nodal, 0, 1).unwrap();
+        assert_eq!(press, vec![1.0, 2.0, 3.0]);
+    }
+}
+
+#[test]
+fn test_var_time_series_global() {
+    let tmp = NamedTempFile::new().unwrap();
+
+    // Write
+    {
+        let mut file = ExodusFile::create(
+            tmp.path(),
+            CreateOptions {
+                mode: CreateMode::Clobber,
+                ..Default::default()
+            },
+        )
+        .unwrap();
+
+        file.init(&InitParams {
+            title: "Time Series Global Test".into(),
+            num_dim: 3,
+            ..Default::default()
+        })
+        .unwrap();
+
+        // Define global variable
+        file.define_variables(EntityType::Global, &["Energy"])
+            .unwrap();
+
+        // Write time values
+        for i in 0..5 {
+            file.put_time(i, i as f64).unwrap();
+        }
+
+        // Write time series for the variable (all 5 time steps at once)
+        file.put_var_time_series(0, 5, EntityType::Global, 0, 0, &[10.0, 9.0, 8.0, 7.0, 6.0])
+            .unwrap();
+    }
+
+    // Read
+    {
+        let file = ExodusFile::<mode::Read>::open(tmp.path()).unwrap();
+
+        // Read time series
+        let series = file
+            .var_time_series(0, 5, EntityType::Global, 0, 0)
+            .unwrap();
+        assert_eq!(series, vec![10.0, 9.0, 8.0, 7.0, 6.0]);
+
+        // Read partial time series
+        let partial = file
+            .var_time_series(2, 4, EntityType::Global, 0, 0)
+            .unwrap();
+        assert_eq!(partial, vec![8.0, 7.0]);
+    }
+}
+
+#[test]
+fn test_var_time_series_nodal() {
+    let tmp = NamedTempFile::new().unwrap();
+
+    // Write
+    {
+        let mut file = ExodusFile::create(
+            tmp.path(),
+            CreateOptions {
+                mode: CreateMode::Clobber,
+                ..Default::default()
+            },
+        )
+        .unwrap();
+
+        file.init(&InitParams {
+            title: "Time Series Nodal Test".into(),
+            num_dim: 3,
+            num_nodes: 2,
+            ..Default::default()
+        })
+        .unwrap();
+
+        // Define nodal variable
+        file.define_variables(EntityType::Nodal, &["Displacement"])
+            .unwrap();
+
+        // Write time values
+        for i in 0..3 {
+            file.put_time(i, i as f64).unwrap();
+        }
+
+        // Write time series (3 time steps × 2 nodes = 6 values)
+        // Time step 0: [0.0, 0.0]
+        // Time step 1: [1.0, 1.0]
+        // Time step 2: [2.0, 2.0]
+        file.put_var_time_series(
+            0,
+            3,
+            EntityType::Nodal,
+            0,
+            0,
+            &[0.0, 0.0, 1.0, 1.0, 2.0, 2.0],
+        )
+        .unwrap();
+    }
+
+    // Read
+    {
+        let file = ExodusFile::<mode::Read>::open(tmp.path()).unwrap();
+
+        // Read time series
+        let series = file
+            .var_time_series(0, 3, EntityType::Nodal, 0, 0)
+            .unwrap();
+        assert_eq!(series, vec![0.0, 0.0, 1.0, 1.0, 2.0, 2.0]);
+
+        // Verify by reading individual time steps
+        let t0 = file.var(0, EntityType::Nodal, 0, 0).unwrap();
+        assert_eq!(t0, vec![0.0, 0.0]);
+
+        let t1 = file.var(1, EntityType::Nodal, 0, 0).unwrap();
+        assert_eq!(t1, vec![1.0, 1.0]);
+
+        let t2 = file.var(2, EntityType::Nodal, 0, 0).unwrap();
+        assert_eq!(t2, vec![2.0, 2.0]);
+    }
+}
+
+#[test]
+fn test_var_time_series_element() {
+    let tmp = NamedTempFile::new().unwrap();
+
+    // Write
+    {
+        let mut file = ExodusFile::create(
+            tmp.path(),
+            CreateOptions {
+                mode: CreateMode::Clobber,
+                ..Default::default()
+            },
+        )
+        .unwrap();
+
+        file.init(&InitParams {
+            title: "Time Series Element Test".into(),
+            num_dim: 3,
+            num_nodes: 8,
+            num_elems: 2,
+            num_elem_blocks: 1,
+            ..Default::default()
+        })
+        .unwrap();
+
+        // Define element block
+        let block = Block {
+            id: 100,
+            entity_type: EntityType::ElemBlock,
+            topology: "HEX8".into(),
+            num_entries: 2,
+            num_nodes_per_entry: 8,
+            num_edges_per_entry: 0,
+            num_faces_per_entry: 0,
+            num_attributes: 0,
+        };
+        file.put_block(&block).unwrap();
+
+        // Define element variable
+        file.define_variables(EntityType::ElemBlock, &["Pressure"])
+            .unwrap();
+
+        // Write time values
+        for i in 0..4 {
+            file.put_time(i, i as f64 * 0.5).unwrap();
+        }
+
+        // Write time series (4 time steps × 2 elements = 8 values)
+        file.put_var_time_series(
+            0,
+            4,
+            EntityType::ElemBlock,
+            100,
+            0,
+            &[10.0, 20.0, 11.0, 21.0, 12.0, 22.0, 13.0, 23.0],
+        )
+        .unwrap();
+    }
+
+    // Read
+    {
+        let file = ExodusFile::<mode::Read>::open(tmp.path()).unwrap();
+
+        // Read full time series
+        let series = file
+            .var_time_series(0, 4, EntityType::ElemBlock, 100, 0)
+            .unwrap();
+        assert_eq!(series, vec![10.0, 20.0, 11.0, 21.0, 12.0, 22.0, 13.0, 23.0]);
+
+        // Read partial time series (steps 1-3)
+        let partial = file
+            .var_time_series(1, 3, EntityType::ElemBlock, 100, 0)
+            .unwrap();
+        assert_eq!(partial, vec![11.0, 21.0, 12.0, 22.0]);
+    }
+}
