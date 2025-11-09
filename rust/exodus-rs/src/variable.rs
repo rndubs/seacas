@@ -316,7 +316,11 @@ impl ExodusFile<mode::Write> {
     ///
     /// # Errors
     ///
-    /// Returns an error if NetCDF write fails
+    /// Returns an error if:
+    /// - var_type doesn't match table.var_type
+    /// - table dimensions don't match actual blocks/variables
+    /// - table array length is incorrect
+    /// - NetCDF write fails
     pub fn put_truth_table(&mut self, var_type: EntityType, table: &TruthTable) -> Result<()> {
         let var_name = match var_type {
             EntityType::ElemBlock => "elem_var_tab",
@@ -329,6 +333,42 @@ impl ExodusFile<mode::Write> {
                 )))
             }
         };
+
+        // Validate that table var_type matches parameter
+        if table.var_type != var_type {
+            return Err(ExodusError::Other(format!(
+                "Truth table var_type {:?} doesn't match parameter {:?}",
+                table.var_type, var_type
+            )));
+        }
+
+        // Get actual counts from file
+        let actual_num_blocks = self.block_ids(var_type)?.len();
+        let actual_num_vars = self.variable_names(var_type)?.len();
+
+        // Validate dimensions
+        if table.num_blocks != actual_num_blocks {
+            return Err(ExodusError::Other(format!(
+                "Truth table num_blocks {} doesn't match actual blocks {}",
+                table.num_blocks, actual_num_blocks
+            )));
+        }
+
+        if table.num_vars != actual_num_vars {
+            return Err(ExodusError::Other(format!(
+                "Truth table num_vars {} doesn't match actual variables {}",
+                table.num_vars, actual_num_vars
+            )));
+        }
+
+        // Validate table array length
+        let expected_len = actual_num_blocks * actual_num_vars;
+        if table.table.len() != expected_len {
+            return Err(ExodusError::InvalidArrayLength {
+                expected: expected_len,
+                actual: table.table.len(),
+            });
+        }
 
         let (num_blocks_dim, num_vars_dim) = match var_type {
             EntityType::ElemBlock => ("num_elem_blocks", "num_elem_var"),
@@ -920,7 +960,10 @@ impl ExodusFile<mode::Read> {
     ///
     /// # Errors
     ///
-    /// Returns an error if NetCDF read fails
+    /// Returns an error if:
+    /// - var_type is not a block type
+    /// - truth table size doesn't match expected dimensions
+    /// - NetCDF read fails
     pub fn truth_table(&self, var_type: EntityType) -> Result<TruthTable> {
         let var_name = match var_type {
             EntityType::ElemBlock => "elem_var_tab",
@@ -937,14 +980,24 @@ impl ExodusFile<mode::Read> {
         // Get number of blocks and variables
         let num_blocks = self.block_ids(var_type)?.len();
         let num_vars = self.variable_names(var_type)?.len();
+        let expected_len = num_blocks * num_vars;
 
         // Read truth table if it exists
         let table_values = if let Some(var) = self.nc_file.variable(var_name) {
             let table_i32: Vec<i32> = var.get_values(..)?;
+
+            // Validate size
+            if table_i32.len() != expected_len {
+                return Err(ExodusError::InvalidArrayLength {
+                    expected: expected_len,
+                    actual: table_i32.len(),
+                });
+            }
+
             table_i32.iter().map(|&v| v != 0).collect()
         } else {
             // Default: all true
-            vec![true; num_blocks * num_vars]
+            vec![true; expected_len]
         };
 
         Ok(TruthTable {
@@ -953,6 +1006,74 @@ impl ExodusFile<mode::Read> {
             num_blocks,
             table: table_values,
         })
+    }
+
+    /// Check if a variable is enabled in the truth table for a given block
+    ///
+    /// This is a helper method to check whether a specific variable is defined
+    /// for a specific block according to the truth table. This is useful for
+    /// sparse variable storage where not all variables are defined on all blocks.
+    ///
+    /// # Arguments
+    ///
+    /// * `var_type` - Entity type (must be a block type)
+    /// * `block_id` - Block ID
+    /// * `var_index` - Variable index (0-based)
+    ///
+    /// # Returns
+    ///
+    /// `true` if the variable is enabled for the block, `false` otherwise.
+    /// If no truth table exists, returns `true` (all variables enabled by default).
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - var_type is not a block type
+    /// - block_id is not found
+    /// - var_index is out of range
+    /// - truth table read fails
+    pub fn is_var_in_truth_table(
+        &self,
+        var_type: EntityType,
+        block_id: EntityId,
+        var_index: usize,
+    ) -> Result<bool> {
+        // Only supported for block types
+        if !matches!(
+            var_type,
+            EntityType::ElemBlock | EntityType::EdgeBlock | EntityType::FaceBlock
+        ) {
+            return Err(ExodusError::InvalidEntityType(format!(
+                "Truth tables only supported for block types, got {}",
+                var_type
+            )));
+        }
+
+        // Get the block index from the block ID
+        let block_ids = self.block_ids(var_type)?;
+        let block_index = block_ids
+            .iter()
+            .position(|&id| id == block_id)
+            .ok_or_else(|| ExodusError::EntityNotFound {
+                entity_type: var_type.to_string(),
+                id: block_id,
+            })?;
+
+        // Get the truth table
+        let truth_table = self.truth_table(var_type)?;
+
+        // Validate var_index
+        if var_index >= truth_table.num_vars {
+            return Err(ExodusError::Other(format!(
+                "Variable index {} out of range (max {})",
+                var_index,
+                truth_table.num_vars - 1
+            )));
+        }
+
+        // Truth table is stored as [block0_var0, block0_var1, ..., block1_var0, block1_var1, ...]
+        let table_index = block_index * truth_table.num_vars + var_index;
+        Ok(truth_table.table[table_index])
     }
 
     /// Read all variables for an entity at a time step

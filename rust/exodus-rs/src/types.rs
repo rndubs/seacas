@@ -297,10 +297,24 @@ impl TruthTable {
     /// * `block_idx` - Block index (0-based)
     /// * `var_idx` - Variable index (0-based)
     /// * `exists` - True if the variable exists for this block
+    ///
+    /// # Panics
+    ///
+    /// Panics if block_idx or var_idx are out of bounds
     pub fn set(&mut self, block_idx: usize, var_idx: usize, exists: bool) {
-        if block_idx < self.num_blocks && var_idx < self.num_vars {
-            self.table[block_idx * self.num_vars + var_idx] = exists;
-        }
+        assert!(
+            block_idx < self.num_blocks,
+            "Block index {} out of range (max {})",
+            block_idx,
+            self.num_blocks - 1
+        );
+        assert!(
+            var_idx < self.num_vars,
+            "Variable index {} out of range (max {})",
+            var_idx,
+            self.num_vars - 1
+        );
+        self.table[block_idx * self.num_vars + var_idx] = exists;
     }
 
     /// Get whether a variable exists for a block
@@ -313,12 +327,40 @@ impl TruthTable {
     /// # Returns
     ///
     /// True if the variable exists for this block
+    ///
+    /// # Panics
+    ///
+    /// Panics if block_idx or var_idx are out of bounds
     pub fn get(&self, block_idx: usize, var_idx: usize) -> bool {
-        if block_idx < self.num_blocks && var_idx < self.num_vars {
-            self.table[block_idx * self.num_vars + var_idx]
-        } else {
-            false
+        assert!(
+            block_idx < self.num_blocks,
+            "Block index {} out of range (max {})",
+            block_idx,
+            self.num_blocks - 1
+        );
+        assert!(
+            var_idx < self.num_vars,
+            "Variable index {} out of range (max {})",
+            var_idx,
+            self.num_vars - 1
+        );
+        self.table[block_idx * self.num_vars + var_idx]
+    }
+
+    /// Validate that the truth table is structurally correct
+    ///
+    /// # Returns
+    ///
+    /// `Ok(())` if valid, `Err` if the table size doesn't match dimensions
+    pub fn validate(&self) -> Result<(), String> {
+        let expected_len = self.num_blocks * self.num_vars;
+        if self.table.len() != expected_len {
+            return Err(format!(
+                "Truth table size mismatch: expected {} ({}×{}), got {}",
+                expected_len, self.num_blocks, self.num_vars, self.table.len()
+            ));
         }
+        Ok(())
     }
 }
 
