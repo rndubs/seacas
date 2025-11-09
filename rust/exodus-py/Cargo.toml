@@ -1,0 +1,39 @@
+[package]
+name = "exodus-py"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.70"
+authors = ["SEACAS Development Team"]
+license = "BSD-3-Clause"
+description = "Python bindings for exodus-rs - Pure Rust implementation of Exodus II"
+repository = "https://github.com/sandialabs/seacas"
+keywords = ["exodus", "finite-element", "mesh", "python", "bindings"]
+categories = ["science", "api-bindings"]
+
+[lib]
+name = "exodus"
+crate-type = ["cdylib"]
+
+[dependencies]
+# PyO3 for Python bindings
+pyo3 = { version = "0.20", features = ["extension-module"] }
+
+# Exodus-rs library (local dependency)
+exodus-rs = { path = "../exodus-rs", features = ["netcdf4"] }
+
+# NumPy integration (optional)
+numpy = { version = "0.20", optional = true }
+
+[dev-dependencies]
+# Testing
+approx = "0.5"
+tempfile = "3.8"
+
+[features]
+default = []
+numpy = ["dep:numpy"]
+
+[package.metadata.maturin]
+# Maturin build configuration
+python-source = "python"
+module-name = "exodus"

@@ -1,0 +1,56 @@
+[build-system]
+requires = ["maturin>=1.0,<2.0"]
+build-backend = "maturin"
+
+[project]
+name = "exodus-py"
+version = "0.1.0"
+description = "Python bindings for exodus-rs - Pure Rust implementation of Exodus II finite element data format"
+readme = "README.md"
+requires-python = ">=3.8"
+license = { text = "BSD-3-Clause" }
+authors = [
+    { name = "SEACAS Development Team" }
+]
+keywords = ["exodus", "finite-element", "mesh", "netcdf", "hdf5"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: BSD License",
+    "Operating System :: POSIX :: Linux",
+    "Operating System :: MacOS",
+    "Operating System :: Microsoft :: Windows",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Rust",
+    "Topic :: Scientific/Engineering",
+]
+
+[project.optional-dependencies]
+numpy = ["numpy>=1.20"]
+dev = [
+    "pytest>=7.0",
+    "pytest-cov>=4.0",
+    "numpy>=1.20",
+]
+
+[project.urls]
+Homepage = "https://github.com/sandialabs/seacas"
+Documentation = "https://sandialabs.github.io/seacas-docs/"
+Repository = "https://github.com/sandialabs/seacas"
+Issues = "https://github.com/sandialabs/seacas/issues"
+
+[tool.maturin]
+features = ["pyo3/extension-module"]
+python-source = "python"
+module-name = "exodus"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = "test_*.py"
+python_classes = "Test*"
+python_functions = "test_*"
