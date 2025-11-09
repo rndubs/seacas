@@ -13,59 +13,55 @@ impl ExodusWriter {
         Ok(())
     }
 
-    /// Write a blob
-    fn put_blob(&mut self, blob: &Blob) -> PyResult<()> {
-        self.file_mut()?.put_blob(&blob.to_rust()).into_py()?;
+    /// Write a blob with binary data
+    ///
+    /// Args:
+    ///     blob: Blob metadata (ID and name)
+    ///     data: Binary data as bytes
+    fn put_blob(&mut self, blob: &Blob, data: Vec<u8>) -> PyResult<()> {
+        self.file_mut()?.put_blob(&blob.to_rust(), &data).into_py()?;
         Ok(())
     }
 }
 
 #[pymethods]
 impl ExodusAppender {
-    /// Write an assembly
-    fn put_assembly(&mut self, assembly: &Assembly) -> PyResult<()> {
-        self.file_mut()?.put_assembly(&assembly.to_rust()).into_py()?;
-        Ok(())
-    }
-
-    /// Write a blob
-    fn put_blob(&mut self, blob: &Blob) -> PyResult<()> {
-        self.file_mut()?.put_blob(&blob.to_rust()).into_py()?;
-        Ok(())
-    }
-
     /// Read an assembly
     fn get_assembly(&self, assembly_id: i64) -> PyResult<Assembly> {
-        let asm = self.file.as_ref()
-            .ok_or_else(|| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>("File closed"))?
-            .get_assembly(assembly_id)
-            .into_py()?;
-        Ok(Assembly::from_rust(&asm))
+        if let Some(ref file) = self.file {
+            let asm = file.assembly(assembly_id).into_py()?;
+            Ok(Assembly::from_rust(&asm))
+        } else {
+            Err(PyErr::new::<pyo3::exceptions::PyRuntimeError, _>("File closed"))
+        }
     }
 
-    /// Read a blob
+    /// Read a blob (returns blob metadata only, not the data)
     fn get_blob(&self, blob_id: i64) -> PyResult<Blob> {
-        let blob = self.file.as_ref()
-            .ok_or_else(|| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>("File closed"))?
-            .get_blob(blob_id)
-            .into_py()?;
-        Ok(Blob::from_rust(&blob))
+        if let Some(ref file) = self.file {
+            let (blob, _data) = file.blob(blob_id).into_py()?;
+            Ok(Blob::from_rust(&blob))
+        } else {
+            Err(PyErr::new::<pyo3::exceptions::PyRuntimeError, _>("File closed"))
+        }
     }
 
     /// Get all assembly IDs
     fn get_assembly_ids(&self) -> PyResult<Vec<i64>> {
-        self.file.as_ref()
-            .ok_or_else(|| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>("File closed"))?
-            .get_assembly_ids()
-            .into_py()
+        if let Some(ref file) = self.file {
+            file.assembly_ids().into_py()
+        } else {
+            Err(PyErr::new::<pyo3::exceptions::PyRuntimeError, _>("File closed"))
+        }
     }
 
     /// Get all blob IDs
     fn get_blob_ids(&self) -> PyResult<Vec<i64>> {
-        self.file.as_ref()
-            .ok_or_else(|| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>("File closed"))?
-            .get_blob_ids()
-            .into_py()
+        if let Some(ref file) = self.file {
+            file.blob_ids().into_py()
+        } else {
+            Err(PyErr::new::<pyo3::exceptions::PyRuntimeError, _>("File closed"))
+        }
     }
 }
 
@@ -73,23 +69,23 @@ impl ExodusAppender {
 impl ExodusReader {
     /// Read an assembly
     fn get_assembly(&self, assembly_id: i64) -> PyResult<Assembly> {
-        let asm = self.file_ref().get_assembly(assembly_id).into_py()?;
+        let asm = self.file_ref().assembly(assembly_id).into_py()?;
         Ok(Assembly::from_rust(&asm))
     }
 
-    /// Read a blob
+    /// Read a blob (returns blob metadata only, not the data)
     fn get_blob(&self, blob_id: i64) -> PyResult<Blob> {
-        let blob = self.file_ref().get_blob(blob_id).into_py()?;
+        let (blob, _data) = self.file_ref().blob(blob_id).into_py()?;
         Ok(Blob::from_rust(&blob))
     }
 
     /// Get all assembly IDs
     fn get_assembly_ids(&self) -> PyResult<Vec<i64>> {
-        self.file_ref().get_assembly_ids().into_py()
+        self.file_ref().assembly_ids().into_py()
     }
 
     /// Get all blob IDs
     fn get_blob_ids(&self) -> PyResult<Vec<i64>> {
-        self.file_ref().get_blob_ids().into_py()
+        self.file_ref().blob_ids().into_py()
     }
 }

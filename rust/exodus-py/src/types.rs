@@ -1,6 +1,7 @@
 //! Core type bindings for Exodus II data structures
 
 use pyo3::prelude::*;
+use pyo3::types::PyDict;
 use exodus_rs::types as rs;
 
 /// Entity types in Exodus II
