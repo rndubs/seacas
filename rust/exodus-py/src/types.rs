@@ -1,6 +1,7 @@
 //! Core type bindings for Exodus II data structures
 
 use pyo3::prelude::*;
+use pyo3::types::PyDict;
 use exodus_rs::types as rs;
 
 /// Entity types in Exodus II
@@ -90,8 +91,8 @@ impl EntityType {
             rs::EntityType::ElemSet => EntityType::ElemSet,
             rs::EntityType::EdgeMap => EntityType::EdgeMap,
             rs::EntityType::FaceMap => EntityType::FaceMap,
-            rs::EntityType::Global => rs::EntityType::Global,
-            rs::EntityType::Nodal => rs::EntityType::Nodal,
+            rs::EntityType::Global => EntityType::Global,
+            rs::EntityType::Nodal => EntityType::Nodal,
             rs::EntityType::Assembly => EntityType::Assembly,
             rs::EntityType::Blob => EntityType::Blob,
         }

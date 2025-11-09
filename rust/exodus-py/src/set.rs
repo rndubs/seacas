@@ -1,4 +1,4 @@
-//! Set operations (node sets, side sets, etc.)
+//! Set operations for Exodus files
 
 use pyo3::prelude::*;
 use crate::error::IntoPyResult;
@@ -7,100 +7,89 @@ use crate::types::{NodeSet, SideSet, EntitySet};
 
 #[pymethods]
 impl ExodusWriter {
-    /// Write a node set
+    /// Write a node set definition (NOTE: Incomplete - needs members and dist_factors parameters)
     fn put_node_set(&mut self, node_set: &NodeSet) -> PyResult<()> {
-        self.file_mut()?.put_node_set(&node_set.to_rust()).into_py()?;
-        Ok(())
+        // TODO: exodus-rs put_node_set requires members and dist_factors parameters
+        Err(PyErr::new::<pyo3::exceptions::PyNotImplementedError, _>(
+            "put_node_set requires additional parameters not yet exposed"
+        ))
     }
 
-    /// Write a side set
+    /// Write a side set definition (NOTE: Incomplete - needs members parameters)
     fn put_side_set(&mut self, side_set: &SideSet) -> PyResult<()> {
-        self.file_mut()?.put_side_set(&side_set.to_rust()).into_py()?;
-        Ok(())
+        // TODO: exodus-rs put_side_set requires members and other parameters
+        Err(PyErr::new::<pyo3::exceptions::PyNotImplementedError, _>(
+            "put_side_set requires additional parameters not yet exposed"
+        ))
     }
 
-    /// Write an entity set (edge/face/elem set)
+    /// Write an entity set definition (NOTE: Incomplete - needs members parameter)
     fn put_entity_set(&mut self, entity_set: &EntitySet) -> PyResult<()> {
-        self.file_mut()?.put_entity_set(&entity_set.to_rust()).into_py()?;
-        Ok(())
+        // TODO: exodus-rs put_entity_set requires members parameter
+        Err(PyErr::new::<pyo3::exceptions::PyNotImplementedError, _>(
+            "put_entity_set requires additional parameters not yet exposed"
+        ))
     }
 }
 
 #[pymethods]
 impl ExodusAppender {
-    /// Write a node set
-    fn put_node_set(&mut self, node_set: &NodeSet) -> PyResult<()> {
-        self.file_mut()?.put_node_set(&node_set.to_rust()).into_py()?;
-        Ok(())
+    /// Read a node set (NOTE: Not fully implemented in exodus-rs yet)
+    fn get_node_set(&self, _set_id: i64) -> PyResult<NodeSet> {
+        Err(PyErr::new::<pyo3::exceptions::PyNotImplementedError, _>(
+            "get_node_set not yet fully implemented in exodus-rs"
+        ))
     }
 
-    /// Write a side set
-    fn put_side_set(&mut self, side_set: &SideSet) -> PyResult<()> {
-        self.file_mut()?.put_side_set(&side_set.to_rust()).into_py()?;
-        Ok(())
+    /// Read a side set (NOTE: Not fully implemented in exodus-rs yet)
+    fn get_side_set(&self, _set_id: i64) -> PyResult<SideSet> {
+        Err(PyErr::new::<pyo3::exceptions::PyNotImplementedError, _>(
+            "get_side_set not yet fully implemented in exodus-rs"
+        ))
     }
 
-    /// Write an entity set
-    fn put_entity_set(&mut self, entity_set: &EntitySet) -> PyResult<()> {
-        self.file_mut()?.put_entity_set(&entity_set.to_rust()).into_py()?;
-        Ok(())
-    }
-
-    /// Read a node set
-    fn get_node_set(&self, set_id: i64) -> PyResult<NodeSet> {
-        let ns = self.file.as_ref()
-            .ok_or_else(|| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>("File closed"))?
-            .get_node_set(set_id)
-            .into_py()?;
-        Ok(NodeSet::from_rust(&ns))
-    }
-
-    /// Read a side set
-    fn get_side_set(&self, set_id: i64) -> PyResult<SideSet> {
-        let ss = self.file.as_ref()
-            .ok_or_else(|| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>("File closed"))?
-            .get_side_set(set_id)
-            .into_py()?;
-        Ok(SideSet::from_rust(&ss))
-    }
-
-    /// Read an entity set
-    fn get_entity_set(&self, set_id: i64) -> PyResult<EntitySet> {
-        let es = self.file.as_ref()
-            .ok_or_else(|| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>("File closed"))?
-            .get_entity_set(set_id)
-            .into_py()?;
-        Ok(EntitySet::from_rust(&es))
+    /// Read an entity set (NOTE: Not fully implemented in exodus-rs yet)
+    fn get_entity_set(&self, _set_id: i64) -> PyResult<EntitySet> {
+        Err(PyErr::new::<pyo3::exceptions::PyNotImplementedError, _>(
+            "get_entity_set not yet fully implemented in exodus-rs"
+        ))
     }
 }
 
 #[pymethods]
 impl ExodusReader {
-    /// Read a node set
-    fn get_node_set(&self, set_id: i64) -> PyResult<NodeSet> {
-        let ns = self.file_ref().get_node_set(set_id).into_py()?;
-        Ok(NodeSet::from_rust(&ns))
+    /// Read a node set (NOTE: Not fully implemented in exodus-rs yet)
+    fn get_node_set(&self, _set_id: i64) -> PyResult<NodeSet> {
+        Err(PyErr::new::<pyo3::exceptions::PyNotImplementedError, _>(
+            "get_node_set not yet fully implemented in exodus-rs"
+        ))
     }
 
-    /// Read a side set
-    fn get_side_set(&self, set_id: i64) -> PyResult<SideSet> {
-        let ss = self.file_ref().get_side_set(set_id).into_py()?;
-        Ok(SideSet::from_rust(&ss))
+    /// Read a side set (NOTE: Not fully implemented in exodus-rs yet)
+    fn get_side_set(&self, _set_id: i64) -> PyResult<SideSet> {
+        Err(PyErr::new::<pyo3::exceptions::PyNotImplementedError, _>(
+            "get_side_set not yet fully implemented in exodus-rs"
+        ))
     }
 
-    /// Read an entity set
-    fn get_entity_set(&self, set_id: i64) -> PyResult<EntitySet> {
-        let es = self.file_ref().get_entity_set(set_id).into_py()?;
-        Ok(EntitySet::from_rust(&es))
+    /// Read an entity set (NOTE: Not fully implemented in exodus-rs yet)
+    fn get_entity_set(&self, _set_id: i64) -> PyResult<EntitySet> {
+        Err(PyErr::new::<pyo3::exceptions::PyNotImplementedError, _>(
+            "get_entity_set not yet fully implemented in exodus-rs"
+        ))
     }
 
-    /// Get all node set IDs
+    /// Get node set IDs (NOTE: Not fully implemented in exodus-rs yet)
     fn get_node_set_ids(&self) -> PyResult<Vec<i64>> {
-        self.file_ref().get_node_set_ids().into_py()
+        Err(PyErr::new::<pyo3::exceptions::PyNotImplementedError, _>(
+            "get_node_set_ids not yet fully implemented in exodus-rs"
+        ))
     }
 
-    /// Get all side set IDs
+    /// Get side set IDs (NOTE: Not fully implemented in exodus-rs yet)
     fn get_side_set_ids(&self) -> PyResult<Vec<i64>> {
-        self.file_ref().get_side_set_ids().into_py()
+        Err(PyErr::new::<pyo3::exceptions::PyNotImplementedError, _>(
+            "get_side_set_ids not yet fully implemented in exodus-rs"
+        ))
     }
 }

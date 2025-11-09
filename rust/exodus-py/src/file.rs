@@ -210,18 +210,6 @@ impl ExodusAppender {
         }
     }
 
-    /// Initialize the database (if not already initialized)
-    fn init(&mut self, params: &InitParams) -> PyResult<()> {
-        if let Some(ref mut file) = self.file {
-            file.init(&params.to_rust()).into_py()?;
-            Ok(())
-        } else {
-            Err(PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(
-                "File already closed",
-            ))
-        }
-    }
-
     /// Get the file path
     fn path(&self) -> PyResult<String> {
         if let Some(ref file) = self.file {
@@ -274,6 +262,12 @@ impl ExodusWriter {
 impl ExodusAppender {
     pub(crate) fn file_mut(&mut self) -> PyResult<&mut RustExodusFile<mode::Append>> {
         self.file.as_mut().ok_or_else(|| {
+            PyErr::new::<pyo3::exceptions::PyRuntimeError, _>("File already closed")
+        })
+    }
+
+    pub(crate) fn file_ref(&self) -> PyResult<&RustExodusFile<mode::Append>> {
+        self.file.as_ref().ok_or_else(|| {
             PyErr::new::<pyo3::exceptions::PyRuntimeError, _>("File already closed")
         })
     }
