@@ -16,6 +16,7 @@ mod set;
 mod metadata;
 mod map;
 mod assembly;
+mod variable;
 
 // Re-exports
 use types::*;
@@ -49,6 +50,7 @@ fn exodus(py: Python, m: &PyModule) -> PyResult<()> {
     m.add_class::<Assembly>()?;
     m.add_class::<Blob>()?;
     m.add_class::<QaRecord>()?;
+    m.add_class::<TruthTable>()?;
 
     // Register file classes
     m.add_class::<ExodusReader>()?;
