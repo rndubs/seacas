@@ -80,6 +80,7 @@ mod utils;
 
 // Re-exports for convenience
 pub use error::{ExodusError, Result};
+pub use file::ExodusFile;
 pub use types::{
     Assembly, Attribute, AttributeType, Block, Blob, Compression, CreateMode, CreateOptions,
     EntityType, FileFormat, FloatSize, InfoRecord, InitParams, Int64Mode, QaRecord, Set,
@@ -113,16 +114,6 @@ mod private {
     impl Sealed for super::mode::Read {}
     impl Sealed for super::mode::Write {}
     impl Sealed for super::mode::Append {}
-}
-
-// Main file type - will be implemented in Phase 1
-/// Main Exodus file handle
-///
-/// The file is parameterized by mode (Read, Write, or Append) to enforce
-/// correct usage at compile time.
-#[derive(Debug)]
-pub struct ExodusFile<M: FileMode> {
-    _mode: std::marker::PhantomData<M>,
 }
 
 /// Type alias for read-only Exodus files
