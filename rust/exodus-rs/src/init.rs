@@ -464,6 +464,31 @@ impl ExodusFile<mode::Write> {
                 .insert("num_blob".to_string(), params.num_blobs);
         }
 
+        // Create coordinate variables if we have nodes
+        if params.num_nodes > 0 {
+            self.create_coord_variables()?;
+        }
+
+        Ok(())
+    }
+
+    /// Create coordinate variables
+    fn create_coord_variables(&mut self) -> Result<()> {
+        // Create coordx variable
+        self.nc_file
+            .add_variable::<f64>("coordx", &["num_nodes"])
+            .map_err(|e| ExodusError::NetCdf(e))?;
+
+        // Create coordy variable
+        self.nc_file
+            .add_variable::<f64>("coordy", &["num_nodes"])
+            .map_err(|e| ExodusError::NetCdf(e))?;
+
+        // Create coordz variable
+        self.nc_file
+            .add_variable::<f64>("coordz", &["num_nodes"])
+            .map_err(|e| ExodusError::NetCdf(e))?;
+
         Ok(())
     }
 }

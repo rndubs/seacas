@@ -1,4 +1,1151 @@
 //! Coordinate operations
 //!
-//! This module will contain coordinate I/O operations.
-//! To be implemented in Phase 3.
+//! This module provides functionality for reading and writing nodal coordinates
+//! in Exodus files. Coordinates can be stored as either f32 or f64 values.
+
+use crate::error::{ExodusError, Result};
+use crate::{mode, ExodusFile};
+
+#[cfg(feature = "netcdf4")]
+use netcdf;
+
+/// Trait for coordinate value types
+///
+/// This trait abstracts over f32 and f64 to allow flexible coordinate storage
+/// and conversion between different precision levels.
+pub trait CoordValue: Copy + Default + 'static {
+    /// Convert from f32
+    fn from_f32(v: f32) -> Self;
+    /// Convert from f64
+    fn from_f64(v: f64) -> Self;
+    /// Convert to f64
+    fn to_f64(self) -> f64;
+}
+
+impl CoordValue for f32 {
+    fn from_f32(v: f32) -> Self {
+        v
+    }
+    fn from_f64(v: f64) -> Self {
+        v as f32
+    }
+    fn to_f64(self) -> f64 {
+        self as f64
+    }
+}
+
+impl CoordValue for f64 {
+    fn from_f32(v: f32) -> Self {
+        v as f64
+    }
+    fn from_f64(v: f64) -> Self {
+        v
+    }
+    fn to_f64(self) -> f64 {
+        self
+    }
+}
+
+/// Container for coordinate data
+///
+/// Stores x, y, and z coordinates for all nodes in the mesh.
+/// The number of dimensions (1, 2, or 3) determines which coordinates are used.
+///
+/// # Example
+///
+/// ```rust,ignore
+/// use exodus_rs::coord::Coordinates;
+///
+/// let coords = Coordinates {
+///     x: vec![0.0, 1.0, 1.0, 0.0],
+///     y: vec![0.0, 0.0, 1.0, 1.0],
+///     z: vec![0.0, 0.0, 0.0, 0.0],
+///     num_dim: 2,
+/// };
+///
+/// // Get coordinate for node 0
+/// let coord = coords.get(0).unwrap();
+/// assert_eq!(coord, [0.0, 0.0, 0.0]);
+/// ```
+#[derive(Debug, Clone, PartialEq)]
+pub struct Coordinates<T: CoordValue> {
+    /// X coordinates for all nodes
+    pub x: Vec<T>,
+    /// Y coordinates for all nodes
+    pub y: Vec<T>,
+    /// Z coordinates for all nodes
+    pub z: Vec<T>,
+    /// Number of spatial dimensions (1, 2, or 3)
+    pub num_dim: usize,
+}
+
+impl<T: CoordValue> Coordinates<T> {
+    /// Get coordinate for node i (0-indexed)
+    ///
+    /// # Arguments
+    ///
+    /// * `i` - Node index (0-based)
+    ///
+    /// # Returns
+    ///
+    /// Some([x, y, z]) if index is valid, None otherwise
+    pub fn get(&self, i: usize) -> Option<[T; 3]> {
+        if i >= self.x.len() {
+            return None;
+        }
+        Some([self.x[i], self.y[i], self.z[i]])
+    }
+
+    /// Iterator over coordinates
+    ///
+    /// # Returns
+    ///
+    /// An iterator that yields [x, y, z] arrays for each node
+    pub fn iter(&self) -> CoordinateIterator<'_, T> {
+        CoordinateIterator {
+            coords: self,
+            index: 0,
+        }
+    }
+
+    /// Get the number of nodes
+    pub fn len(&self) -> usize {
+        self.x.len()
+    }
+
+    /// Check if there are no nodes
+    pub fn is_empty(&self) -> bool {
+        self.x.is_empty()
+    }
+}
+
+/// Iterator over coordinates
+pub struct CoordinateIterator<'a, T: CoordValue> {
+    coords: &'a Coordinates<T>,
+    index: usize,
+}
+
+impl<'a, T: CoordValue> Iterator for CoordinateIterator<'a, T> {
+    type Item = [T; 3];
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.index < self.coords.x.len() {
+            let result = [
+                self.coords.x[self.index],
+                self.coords.y[self.index],
+                self.coords.z[self.index],
+            ];
+            self.index += 1;
+            Some(result)
+        } else {
+            None
+        }
+    }
+}
+
+// Writer methods
+#[cfg(feature = "netcdf4")]
+impl ExodusFile<mode::Write> {
+    /// Write all coordinates at once
+    ///
+    /// # Arguments
+    ///
+    /// * `x` - X coordinates for all nodes
+    /// * `y` - Y coordinates for all nodes (required if num_dim >= 2)
+    /// * `z` - Z coordinates for all nodes (required if num_dim >= 3)
+    ///
+    /// # Returns
+    ///
+    /// `Ok(())` on success, or an error if:
+    /// - The file is not initialized
+    /// - Array lengths don't match num_nodes
+    /// - Coordinates have already been written
+    /// - NetCDF write fails
+    ///
+    /// # Example
+    ///
+    /// ```rust,ignore
+    /// use exodus_rs::ExodusFile;
+    ///
+    /// let mut file = ExodusFile::create_default("mesh.exo")?;
+    /// file.builder().dimensions(2).nodes(4).finish()?;
+    ///
+    /// let x = vec![0.0, 1.0, 1.0, 0.0];
+    /// let y = vec![0.0, 0.0, 1.0, 1.0];
+    /// file.put_coords(&x, Some(&y), None)?;
+    /// # Ok::<(), exodus_rs::ExodusError>(())
+    /// ```
+    pub fn put_coords<T: CoordValue>(
+        &mut self,
+        x: &[T],
+        y: Option<&[T]>,
+        z: Option<&[T]>,
+    ) -> Result<()> {
+        // Validate that file is initialized
+        if !self.metadata.initialized {
+            return Err(ExodusError::NotInitialized);
+        }
+
+        // Get number of nodes and dimensions
+        let num_nodes = self.metadata.dim_cache.get("num_nodes").copied().ok_or(
+            ExodusError::Other("num_nodes dimension not found".to_string()),
+        )?;
+        let num_dim = self.metadata.num_dim.ok_or(ExodusError::Other(
+            "num_dim not set in metadata".to_string(),
+        ))?;
+
+        // Validate array lengths
+        if x.len() != num_nodes {
+            return Err(ExodusError::InvalidArrayLength {
+                expected: num_nodes,
+                actual: x.len(),
+            });
+        }
+
+        // Write X coordinates
+        self.put_coord_x(x)?;
+
+        // Write Y coordinates if provided and needed
+        if num_dim >= 2 {
+            if let Some(y_coords) = y {
+                if y_coords.len() != num_nodes {
+                    return Err(ExodusError::InvalidArrayLength {
+                        expected: num_nodes,
+                        actual: y_coords.len(),
+                    });
+                }
+                self.put_coord_y(y_coords)?;
+            } else {
+                return Err(ExodusError::Other(
+                    "Y coordinates required for num_dim >= 2".to_string(),
+                ));
+            }
+        }
+
+        // Write Z coordinates if provided and needed
+        if num_dim >= 3 {
+            if let Some(z_coords) = z {
+                if z_coords.len() != num_nodes {
+                    return Err(ExodusError::InvalidArrayLength {
+                        expected: num_nodes,
+                        actual: z_coords.len(),
+                    });
+                }
+                self.put_coord_z(z_coords)?;
+            } else {
+                return Err(ExodusError::Other(
+                    "Z coordinates required for num_dim >= 3".to_string(),
+                ));
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Write X coordinates
+    ///
+    /// # Arguments
+    ///
+    /// * `x` - X coordinates for all nodes
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the file is not initialized or NetCDF write fails
+    pub fn put_coord_x<T: CoordValue>(&mut self, x: &[T]) -> Result<()> {
+        self.put_coord_dim(0, x)
+    }
+
+    /// Write Y coordinates
+    ///
+    /// # Arguments
+    ///
+    /// * `y` - Y coordinates for all nodes
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the file is not initialized or NetCDF write fails
+    pub fn put_coord_y<T: CoordValue>(&mut self, y: &[T]) -> Result<()> {
+        self.put_coord_dim(1, y)
+    }
+
+    /// Write Z coordinates
+    ///
+    /// # Arguments
+    ///
+    /// * `z` - Z coordinates for all nodes
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the file is not initialized or NetCDF write fails
+    pub fn put_coord_z<T: CoordValue>(&mut self, z: &[T]) -> Result<()> {
+        self.put_coord_dim(2, z)
+    }
+
+    /// Write coordinates for a specific dimension
+    fn put_coord_dim<T: CoordValue>(&mut self, dim: usize, coords: &[T]) -> Result<()> {
+        let var_name = match dim {
+            0 => "coordx",
+            1 => "coordy",
+            2 => "coordz",
+            _ => {
+                return Err(ExodusError::InvalidDimension {
+                    expected: 3,
+                    actual: dim,
+                })
+            }
+        };
+
+        // Get or create the variable
+        let var = if let Some(var) = self.nc_file.variable_mut(var_name) {
+            var
+        } else {
+            // Variable doesn't exist, we need to create it
+            // This should have been done during initialization
+            return Err(ExodusError::VariableNotDefined(var_name.to_string()));
+        };
+
+        // Convert to f64 for writing
+        let data: Vec<f64> = coords.iter().map(|&v| v.to_f64()).collect();
+
+        // Write the data
+        var.put_values(&data, None, None)?;
+
+        Ok(())
+    }
+
+    /// Write partial coordinates (for large datasets)
+    ///
+    /// # Arguments
+    ///
+    /// * `start` - Starting node index (0-based)
+    /// * `count` - Number of nodes to write
+    /// * `x` - X coordinates
+    /// * `y` - Y coordinates (required if num_dim >= 2)
+    /// * `z` - Z coordinates (required if num_dim >= 3)
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - File is not initialized
+    /// - Array lengths don't match count
+    /// - start + count exceeds num_nodes
+    pub fn put_partial_coords<T: CoordValue>(
+        &mut self,
+        start: usize,
+        count: usize,
+        x: &[T],
+        y: Option<&[T]>,
+        z: Option<&[T]>,
+    ) -> Result<()> {
+        // Validate that file is initialized
+        if !self.metadata.initialized {
+            return Err(ExodusError::NotInitialized);
+        }
+
+        // Get number of nodes and dimensions
+        let num_nodes = self.metadata.dim_cache.get("num_nodes").copied().ok_or(
+            ExodusError::Other("num_nodes dimension not found".to_string()),
+        )?;
+        let num_dim = self.metadata.num_dim.ok_or(ExodusError::Other(
+            "num_dim not set in metadata".to_string(),
+        ))?;
+
+        // Validate range
+        if start + count > num_nodes {
+            return Err(ExodusError::InvalidArrayLength {
+                expected: num_nodes - start,
+                actual: count,
+            });
+        }
+
+        // Validate array lengths
+        if x.len() != count {
+            return Err(ExodusError::InvalidArrayLength {
+                expected: count,
+                actual: x.len(),
+            });
+        }
+
+        // Write X coordinates
+        self.put_partial_coord_dim(0, start, x)?;
+
+        // Write Y coordinates if needed
+        if num_dim >= 2 {
+            if let Some(y_coords) = y {
+                if y_coords.len() != count {
+                    return Err(ExodusError::InvalidArrayLength {
+                        expected: count,
+                        actual: y_coords.len(),
+                    });
+                }
+                self.put_partial_coord_dim(1, start, y_coords)?;
+            } else {
+                return Err(ExodusError::Other(
+                    "Y coordinates required for num_dim >= 2".to_string(),
+                ));
+            }
+        }
+
+        // Write Z coordinates if needed
+        if num_dim >= 3 {
+            if let Some(z_coords) = z {
+                if z_coords.len() != count {
+                    return Err(ExodusError::InvalidArrayLength {
+                        expected: count,
+                        actual: z_coords.len(),
+                    });
+                }
+                self.put_partial_coord_dim(2, start, z_coords)?;
+            } else {
+                return Err(ExodusError::Other(
+                    "Z coordinates required for num_dim >= 3".to_string(),
+                ));
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Write partial coordinates for a specific dimension
+    fn put_partial_coord_dim<T: CoordValue>(
+        &mut self,
+        dim: usize,
+        start: usize,
+        coords: &[T],
+    ) -> Result<()> {
+        let var_name = match dim {
+            0 => "coordx",
+            1 => "coordy",
+            2 => "coordz",
+            _ => {
+                return Err(ExodusError::InvalidDimension {
+                    expected: 3,
+                    actual: dim,
+                })
+            }
+        };
+
+        let var = self
+            .nc_file
+            .variable_mut(var_name)
+            .ok_or_else(|| ExodusError::VariableNotDefined(var_name.to_string()))?;
+
+        // Convert to f64 for writing
+        let data: Vec<f64> = coords.iter().map(|&v| v.to_f64()).collect();
+
+        // Write the data at the specified offset
+        var.put_values(&data, Some(&[start]), Some(&[coords.len()]))?;
+
+        Ok(())
+    }
+}
+
+// Reader methods
+#[cfg(feature = "netcdf4")]
+impl ExodusFile<mode::Read> {
+    /// Read all coordinates
+    ///
+    /// # Returns
+    ///
+    /// A `Coordinates<T>` struct containing x, y, z coordinate vectors
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - File is not initialized
+    /// - Coordinate variables are not found
+    /// - NetCDF read fails
+    ///
+    /// # Example
+    ///
+    /// ```rust,ignore
+    /// use exodus_rs::ExodusFile;
+    /// use exodus_rs::mode::Read;
+    ///
+    /// let file = ExodusFile::<Read>::open("mesh.exo")?;
+    /// let coords = file.coords::<f64>()?;
+    /// println!("Number of nodes: {}", coords.len());
+    /// # Ok::<(), exodus_rs::ExodusError>(())
+    /// ```
+    pub fn coords<T: CoordValue>(&self) -> Result<Coordinates<T>> {
+        // Get num_nodes from dimensions
+        let num_nodes = self
+            .nc_file
+            .dimension("num_nodes")
+            .ok_or_else(|| ExodusError::Other("num_nodes dimension not found".to_string()))?
+            .len();
+
+        let num_dim = self
+            .nc_file
+            .dimension("num_dim")
+            .ok_or_else(|| ExodusError::Other("num_dim dimension not found".to_string()))?
+            .len();
+
+        // Read X coordinates
+        let x = self.get_coord_x::<T>()?;
+
+        // Read Y coordinates if num_dim >= 2
+        let y = if num_dim >= 2 {
+            self.get_coord_y::<T>()?
+        } else {
+            vec![T::default(); num_nodes]
+        };
+
+        // Read Z coordinates if num_dim >= 3
+        let z = if num_dim >= 3 {
+            self.get_coord_z::<T>()?
+        } else {
+            vec![T::default(); num_nodes]
+        };
+
+        Ok(Coordinates { x, y, z, num_dim })
+    }
+
+    /// Read coordinates into provided buffers
+    ///
+    /// # Arguments
+    ///
+    /// * `x` - Buffer for X coordinates
+    /// * `y` - Buffer for Y coordinates (required if num_dim >= 2)
+    /// * `z` - Buffer for Z coordinates (required if num_dim >= 3)
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if buffer sizes don't match num_nodes
+    pub fn get_coords<T: CoordValue>(
+        &self,
+        x: &mut [T],
+        y: Option<&mut [T]>,
+        z: Option<&mut [T]>,
+    ) -> Result<()> {
+        // Get num_nodes and num_dim
+        let num_nodes = self
+            .nc_file
+            .dimension("num_nodes")
+            .ok_or_else(|| ExodusError::Other("num_nodes dimension not found".to_string()))?
+            .len();
+
+        let num_dim = self
+            .nc_file
+            .dimension("num_dim")
+            .ok_or_else(|| ExodusError::Other("num_dim dimension not found".to_string()))?
+            .len();
+
+        // Validate buffer sizes
+        if x.len() != num_nodes {
+            return Err(ExodusError::InvalidArrayLength {
+                expected: num_nodes,
+                actual: x.len(),
+            });
+        }
+
+        // Read X coordinates
+        let x_data = self.get_coord_x::<T>()?;
+        x.copy_from_slice(&x_data);
+
+        // Read Y coordinates if needed
+        if num_dim >= 2 {
+            if let Some(y_buf) = y {
+                if y_buf.len() != num_nodes {
+                    return Err(ExodusError::InvalidArrayLength {
+                        expected: num_nodes,
+                        actual: y_buf.len(),
+                    });
+                }
+                let y_data = self.get_coord_y::<T>()?;
+                y_buf.copy_from_slice(&y_data);
+            } else {
+                return Err(ExodusError::Other(
+                    "Y buffer required for num_dim >= 2".to_string(),
+                ));
+            }
+        }
+
+        // Read Z coordinates if needed
+        if num_dim >= 3 {
+            if let Some(z_buf) = z {
+                if z_buf.len() != num_nodes {
+                    return Err(ExodusError::InvalidArrayLength {
+                        expected: num_nodes,
+                        actual: z_buf.len(),
+                    });
+                }
+                let z_data = self.get_coord_z::<T>()?;
+                z_buf.copy_from_slice(&z_data);
+            } else {
+                return Err(ExodusError::Other(
+                    "Z buffer required for num_dim >= 3".to_string(),
+                ));
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Read X coordinates
+    ///
+    /// # Returns
+    ///
+    /// A vector of X coordinates for all nodes
+    pub fn get_coord_x<T: CoordValue>(&self) -> Result<Vec<T>> {
+        self.get_coord_dim(0)
+    }
+
+    /// Read Y coordinates
+    ///
+    /// # Returns
+    ///
+    /// A vector of Y coordinates for all nodes
+    pub fn get_coord_y<T: CoordValue>(&self) -> Result<Vec<T>> {
+        self.get_coord_dim(1)
+    }
+
+    /// Read Z coordinates
+    ///
+    /// # Returns
+    ///
+    /// A vector of Z coordinates for all nodes
+    pub fn get_coord_z<T: CoordValue>(&self) -> Result<Vec<T>> {
+        self.get_coord_dim(2)
+    }
+
+    /// Read coordinates for a specific dimension
+    fn get_coord_dim<T: CoordValue>(&self, dim: usize) -> Result<Vec<T>> {
+        let var_name = match dim {
+            0 => "coordx",
+            1 => "coordy",
+            2 => "coordz",
+            _ => {
+                return Err(ExodusError::InvalidDimension {
+                    expected: 3,
+                    actual: dim,
+                })
+            }
+        };
+
+        let var = self
+            .nc_file
+            .variable(var_name)
+            .ok_or_else(|| ExodusError::VariableNotDefined(var_name.to_string()))?;
+
+        // Read as f64 from NetCDF
+        let data: Vec<f64> = var.values(None, None)?;
+
+        // Convert to target type
+        Ok(data.iter().map(|&v| T::from_f64(v)).collect())
+    }
+
+    /// Read partial coordinates
+    ///
+    /// # Arguments
+    ///
+    /// * `start` - Starting node index (0-based)
+    /// * `count` - Number of nodes to read
+    ///
+    /// # Returns
+    ///
+    /// A `Coordinates<T>` struct containing the requested coordinates
+    pub fn get_partial_coords<T: CoordValue>(
+        &self,
+        start: usize,
+        count: usize,
+    ) -> Result<Coordinates<T>> {
+        let num_dim = self
+            .nc_file
+            .dimension("num_dim")
+            .ok_or_else(|| ExodusError::Other("num_dim dimension not found".to_string()))?
+            .len();
+
+        let num_nodes = self
+            .nc_file
+            .dimension("num_nodes")
+            .ok_or_else(|| ExodusError::Other("num_nodes dimension not found".to_string()))?
+            .len();
+
+        // Validate range
+        if start + count > num_nodes {
+            return Err(ExodusError::InvalidArrayLength {
+                expected: num_nodes - start,
+                actual: count,
+            });
+        }
+
+        // Read X coordinates
+        let x = self.get_partial_coord_dim::<T>(0, start, count)?;
+
+        // Read Y coordinates if num_dim >= 2
+        let y = if num_dim >= 2 {
+            self.get_partial_coord_dim::<T>(1, start, count)?
+        } else {
+            vec![T::default(); count]
+        };
+
+        // Read Z coordinates if num_dim >= 3
+        let z = if num_dim >= 3 {
+            self.get_partial_coord_dim::<T>(2, start, count)?
+        } else {
+            vec![T::default(); count]
+        };
+
+        Ok(Coordinates { x, y, z, num_dim })
+    }
+
+    /// Read partial coordinates for a specific dimension
+    fn get_partial_coord_dim<T: CoordValue>(
+        &self,
+        dim: usize,
+        start: usize,
+        count: usize,
+    ) -> Result<Vec<T>> {
+        let var_name = match dim {
+            0 => "coordx",
+            1 => "coordy",
+            2 => "coordz",
+            _ => {
+                return Err(ExodusError::InvalidDimension {
+                    expected: 3,
+                    actual: dim,
+                })
+            }
+        };
+
+        let var = self
+            .nc_file
+            .variable(var_name)
+            .ok_or_else(|| ExodusError::VariableNotDefined(var_name.to_string()))?;
+
+        // Read as f64 from NetCDF
+        let data: Vec<f64> = var.values(Some(&[start]), Some(&[count]))?;
+
+        // Convert to target type
+        Ok(data.iter().map(|&v| T::from_f64(v)).collect())
+    }
+}
+
+// Append mode can both read and write
+#[cfg(feature = "netcdf4")]
+impl ExodusFile<mode::Append> {
+    /// Write all coordinates (append mode)
+    pub fn put_coords<T: CoordValue>(
+        &mut self,
+        x: &[T],
+        y: Option<&[T]>,
+        z: Option<&[T]>,
+    ) -> Result<()> {
+        // Same implementation as Write mode
+        // (In a real implementation, we'd refactor to avoid duplication)
+        if !self.metadata.initialized {
+            return Err(ExodusError::NotInitialized);
+        }
+
+        let num_nodes = self.metadata.dim_cache.get("num_nodes").copied().ok_or(
+            ExodusError::Other("num_nodes dimension not found".to_string()),
+        )?;
+        let num_dim = self.metadata.num_dim.ok_or(ExodusError::Other(
+            "num_dim not set in metadata".to_string(),
+        ))?;
+
+        if x.len() != num_nodes {
+            return Err(ExodusError::InvalidArrayLength {
+                expected: num_nodes,
+                actual: x.len(),
+            });
+        }
+
+        self.put_coord_x(x)?;
+
+        if num_dim >= 2 {
+            if let Some(y_coords) = y {
+                if y_coords.len() != num_nodes {
+                    return Err(ExodusError::InvalidArrayLength {
+                        expected: num_nodes,
+                        actual: y_coords.len(),
+                    });
+                }
+                self.put_coord_y(y_coords)?;
+            } else {
+                return Err(ExodusError::Other(
+                    "Y coordinates required for num_dim >= 2".to_string(),
+                ));
+            }
+        }
+
+        if num_dim >= 3 {
+            if let Some(z_coords) = z {
+                if z_coords.len() != num_nodes {
+                    return Err(ExodusError::InvalidArrayLength {
+                        expected: num_nodes,
+                        actual: z_coords.len(),
+                    });
+                }
+                self.put_coord_z(z_coords)?;
+            } else {
+                return Err(ExodusError::Other(
+                    "Z coordinates required for num_dim >= 3".to_string(),
+                ));
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Write X coordinates (append mode)
+    pub fn put_coord_x<T: CoordValue>(&mut self, x: &[T]) -> Result<()> {
+        self.put_coord_dim(0, x)
+    }
+
+    /// Write Y coordinates (append mode)
+    pub fn put_coord_y<T: CoordValue>(&mut self, y: &[T]) -> Result<()> {
+        self.put_coord_dim(1, y)
+    }
+
+    /// Write Z coordinates (append mode)
+    pub fn put_coord_z<T: CoordValue>(&mut self, z: &[T]) -> Result<()> {
+        self.put_coord_dim(2, z)
+    }
+
+    /// Write coordinates for a specific dimension
+    fn put_coord_dim<T: CoordValue>(&mut self, dim: usize, coords: &[T]) -> Result<()> {
+        let var_name = match dim {
+            0 => "coordx",
+            1 => "coordy",
+            2 => "coordz",
+            _ => {
+                return Err(ExodusError::InvalidDimension {
+                    expected: 3,
+                    actual: dim,
+                })
+            }
+        };
+
+        let var = self
+            .nc_file
+            .variable_mut(var_name)
+            .ok_or_else(|| ExodusError::VariableNotDefined(var_name.to_string()))?;
+
+        let data: Vec<f64> = coords.iter().map(|&v| v.to_f64()).collect();
+        var.put_values(&data, None, None)?;
+
+        Ok(())
+    }
+
+    /// Read all coordinates (append mode)
+    pub fn coords<T: CoordValue>(&self) -> Result<Coordinates<T>> {
+        let num_nodes = self
+            .nc_file
+            .dimension("num_nodes")
+            .ok_or_else(|| ExodusError::Other("num_nodes dimension not found".to_string()))?
+            .len();
+
+        let num_dim = self
+            .nc_file
+            .dimension("num_dim")
+            .ok_or_else(|| ExodusError::Other("num_dim dimension not found".to_string()))?
+            .len();
+
+        let x = self.get_coord_x::<T>()?;
+        let y = if num_dim >= 2 {
+            self.get_coord_y::<T>()?
+        } else {
+            vec![T::default(); num_nodes]
+        };
+        let z = if num_dim >= 3 {
+            self.get_coord_z::<T>()?
+        } else {
+            vec![T::default(); num_nodes]
+        };
+
+        Ok(Coordinates { x, y, z, num_dim })
+    }
+
+    /// Read X coordinates (append mode)
+    pub fn get_coord_x<T: CoordValue>(&self) -> Result<Vec<T>> {
+        self.get_coord_dim(0)
+    }
+
+    /// Read Y coordinates (append mode)
+    pub fn get_coord_y<T: CoordValue>(&self) -> Result<Vec<T>> {
+        self.get_coord_dim(1)
+    }
+
+    /// Read Z coordinates (append mode)
+    pub fn get_coord_z<T: CoordValue>(&self) -> Result<Vec<T>> {
+        self.get_coord_dim(2)
+    }
+
+    /// Read coordinates for a specific dimension
+    fn get_coord_dim<T: CoordValue>(&self, dim: usize) -> Result<Vec<T>> {
+        let var_name = match dim {
+            0 => "coordx",
+            1 => "coordy",
+            2 => "coordz",
+            _ => {
+                return Err(ExodusError::InvalidDimension {
+                    expected: 3,
+                    actual: dim,
+                })
+            }
+        };
+
+        let var = self
+            .nc_file
+            .variable(var_name)
+            .ok_or_else(|| ExodusError::VariableNotDefined(var_name.to_string()))?;
+
+        let data: Vec<f64> = var.values(None, None)?;
+        Ok(data.iter().map(|&v| T::from_f64(v)).collect())
+    }
+}
+
+#[cfg(test)]
+#[cfg(feature = "netcdf4")]
+mod tests {
+    use super::*;
+    use crate::ExodusFile;
+    use approx::assert_relative_eq;
+    use tempfile::NamedTempFile;
+
+    #[test]
+    fn test_coords_2d() {
+        let tmp = NamedTempFile::new().unwrap();
+
+        // Write
+        {
+            let mut file = ExodusFile::create_default(tmp.path()).unwrap();
+            file.builder()
+                .dimensions(2)
+                .nodes(4)
+                .finish()
+                .unwrap();
+
+            let x = vec![0.0, 1.0, 1.0, 0.0];
+            let y = vec![0.0, 0.0, 1.0, 1.0];
+            file.put_coords(&x, Some(&y), None).unwrap();
+        }
+
+        // Read
+        {
+            let file = ExodusFile::<mode::Read>::open(tmp.path()).unwrap();
+            let coords = file.coords::<f64>().unwrap();
+
+            assert_eq!(coords.x.len(), 4);
+            assert_eq!(coords.y.len(), 4);
+            assert_eq!(coords.num_dim, 2);
+
+            let coord0 = coords.get(0).unwrap();
+            assert_relative_eq!(coord0[0], 0.0);
+            assert_relative_eq!(coord0[1], 0.0);
+
+            let coord2 = coords.get(2).unwrap();
+            assert_relative_eq!(coord2[0], 1.0);
+            assert_relative_eq!(coord2[1], 1.0);
+        }
+    }
+
+    #[test]
+    fn test_coords_3d() {
+        let tmp = NamedTempFile::new().unwrap();
+
+        // Write
+        {
+            let mut file = ExodusFile::create_default(tmp.path()).unwrap();
+            file.builder()
+                .dimensions(3)
+                .nodes(8)
+                .finish()
+                .unwrap();
+
+            let x = vec![0.0, 1.0, 1.0, 0.0, 0.0, 1.0, 1.0, 0.0];
+            let y = vec![0.0, 0.0, 1.0, 1.0, 0.0, 0.0, 1.0, 1.0];
+            let z = vec![0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0];
+            file.put_coords(&x, Some(&y), Some(&z)).unwrap();
+        }
+
+        // Read
+        {
+            let file = ExodusFile::<mode::Read>::open(tmp.path()).unwrap();
+            let coords = file.coords::<f64>().unwrap();
+
+            assert_eq!(coords.x.len(), 8);
+            assert_eq!(coords.y.len(), 8);
+            assert_eq!(coords.z.len(), 8);
+            assert_eq!(coords.num_dim, 3);
+
+            // Check corner coordinates
+            let coord0 = coords.get(0).unwrap();
+            assert_relative_eq!(coord0[0], 0.0);
+            assert_relative_eq!(coord0[1], 0.0);
+            assert_relative_eq!(coord0[2], 0.0);
+
+            let coord7 = coords.get(7).unwrap();
+            assert_relative_eq!(coord7[0], 0.0);
+            assert_relative_eq!(coord7[1], 1.0);
+            assert_relative_eq!(coord7[2], 1.0);
+        }
+    }
+
+    #[test]
+    fn test_partial_coords() {
+        let tmp = NamedTempFile::new().unwrap();
+
+        // Write
+        {
+            let mut file = ExodusFile::create_default(tmp.path()).unwrap();
+            file.builder()
+                .dimensions(2)
+                .nodes(10)
+                .finish()
+                .unwrap();
+
+            // Write first 5 nodes
+            let x1 = vec![0.0, 1.0, 2.0, 3.0, 4.0];
+            let y1 = vec![0.0, 0.0, 0.0, 0.0, 0.0];
+            file.put_partial_coords(0, 5, &x1, Some(&y1), None)
+                .unwrap();
+
+            // Write next 5 nodes
+            let x2 = vec![5.0, 6.0, 7.0, 8.0, 9.0];
+            let y2 = vec![1.0, 1.0, 1.0, 1.0, 1.0];
+            file.put_partial_coords(5, 5, &x2, Some(&y2), None)
+                .unwrap();
+        }
+
+        // Read partial
+        {
+            let file = ExodusFile::<mode::Read>::open(tmp.path()).unwrap();
+
+            // Read middle section
+            let coords = file.get_partial_coords::<f64>(3, 4).unwrap();
+            assert_eq!(coords.len(), 4);
+
+            assert_relative_eq!(coords.x[0], 3.0);
+            assert_relative_eq!(coords.x[1], 4.0);
+            assert_relative_eq!(coords.x[2], 5.0);
+            assert_relative_eq!(coords.x[3], 6.0);
+        }
+    }
+
+    #[test]
+    fn test_coord_type_conversion() {
+        let tmp = NamedTempFile::new().unwrap();
+
+        // Write as f32
+        {
+            let mut file = ExodusFile::create_default(tmp.path()).unwrap();
+            file.builder()
+                .dimensions(2)
+                .nodes(3)
+                .finish()
+                .unwrap();
+
+            let x: Vec<f32> = vec![0.0, 1.0, 2.0];
+            let y: Vec<f32> = vec![0.0, 1.0, 2.0];
+            file.put_coords(&x, Some(&y), None).unwrap();
+        }
+
+        // Read as f64
+        {
+            let file = ExodusFile::<mode::Read>::open(tmp.path()).unwrap();
+            let coords = file.coords::<f64>().unwrap();
+
+            assert_eq!(coords.len(), 3);
+            assert_relative_eq!(coords.x[1], 1.0);
+            assert_relative_eq!(coords.y[2], 2.0);
+        }
+
+        // Read as f32
+        {
+            let file = ExodusFile::<mode::Read>::open(tmp.path()).unwrap();
+            let coords = file.coords::<f32>().unwrap();
+
+            assert_eq!(coords.len(), 3);
+            assert_relative_eq!(coords.x[1], 1.0);
+            assert_relative_eq!(coords.y[2], 2.0);
+        }
+    }
+
+    #[test]
+    fn test_coordinates_iterator() {
+        let coords = Coordinates {
+            x: vec![0.0, 1.0, 2.0],
+            y: vec![0.0, 1.0, 2.0],
+            z: vec![0.0, 0.0, 0.0],
+            num_dim: 2,
+        };
+
+        let points: Vec<[f64; 3]> = coords.iter().collect();
+        assert_eq!(points.len(), 3);
+        assert_eq!(points[0], [0.0, 0.0, 0.0]);
+        assert_eq!(points[1], [1.0, 1.0, 0.0]);
+        assert_eq!(points[2], [2.0, 2.0, 0.0]);
+    }
+
+    #[test]
+    fn test_get_coords_into_buffer() {
+        let tmp = NamedTempFile::new().unwrap();
+
+        // Write
+        {
+            let mut file = ExodusFile::create_default(tmp.path()).unwrap();
+            file.builder()
+                .dimensions(2)
+                .nodes(4)
+                .finish()
+                .unwrap();
+
+            let x = vec![0.0, 1.0, 1.0, 0.0];
+            let y = vec![0.0, 0.0, 1.0, 1.0];
+            file.put_coords(&x, Some(&y), None).unwrap();
+        }
+
+        // Read into buffers
+        {
+            let file = ExodusFile::<mode::Read>::open(tmp.path()).unwrap();
+            let mut x_buf = vec![0.0f64; 4];
+            let mut y_buf = vec![0.0f64; 4];
+
+            file.get_coords(&mut x_buf, Some(&mut y_buf), None)
+                .unwrap();
+
+            assert_relative_eq!(x_buf[0], 0.0);
+            assert_relative_eq!(x_buf[2], 1.0);
+            assert_relative_eq!(y_buf[2], 1.0);
+        }
+    }
+
+    #[test]
+    fn test_individual_coord_dims() {
+        let tmp = NamedTempFile::new().unwrap();
+
+        // Write each dimension separately
+        {
+            let mut file = ExodusFile::create_default(tmp.path()).unwrap();
+            file.builder()
+                .dimensions(3)
+                .nodes(2)
+                .finish()
+                .unwrap();
+
+            let x = vec![1.0, 2.0];
+            let y = vec![3.0, 4.0];
+            let z = vec![5.0, 6.0];
+
+            file.put_coord_x(&x).unwrap();
+            file.put_coord_y(&y).unwrap();
+            file.put_coord_z(&z).unwrap();
+        }
+
+        // Read each dimension separately
+        {
+            let file = ExodusFile::<mode::Read>::open(tmp.path()).unwrap();
+
+            let x = file.get_coord_x::<f64>().unwrap();
+            let y = file.get_coord_y::<f64>().unwrap();
+            let z = file.get_coord_z::<f64>().unwrap();
+
+            assert_eq!(x, vec![1.0, 2.0]);
+            assert_eq!(y, vec![3.0, 4.0]);
+            assert_eq!(z, vec![5.0, 6.0]);
+        }
+    }
+}

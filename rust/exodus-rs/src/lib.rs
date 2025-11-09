@@ -58,11 +58,11 @@
 // Public modules
 pub mod error;
 pub mod types;
+pub mod coord;
 
 // Internal modules (will be implemented in phases)
 mod file;
 mod init;
-mod coord;
 mod block;
 mod set;
 mod variable;
@@ -85,6 +85,7 @@ pub use types::{
     Assembly, Attribute, AttributeType, Block, Blob, Compression, CreateMode, CreateOptions,
     EntityType, FileFormat, FloatSize, InfoRecord, InitParams, Int64Mode, QaRecord, Set,
 };
+pub use coord::{CoordValue, Coordinates};
 
 // File mode types
 /// Type-state pattern for file modes
