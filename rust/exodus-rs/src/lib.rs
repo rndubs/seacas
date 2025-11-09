@@ -47,6 +47,7 @@
 //! - [`variable`] - Variable definitions and I/O
 //! - [`time`] - Time step operations
 //! - [`metadata`] - QA records, info records, and names
+//! - [`map`] - ID maps, order maps, entity naming, and property arrays
 //! - [`assembly`] - Assembly (hierarchical grouping) operations
 //! - [`blob`] - Blob (arbitrary data) operations
 //! - [`attribute`] - Attribute operations
@@ -59,6 +60,7 @@
 pub mod error;
 pub mod types;
 pub mod coord;
+pub mod builder;
 
 // Internal modules (will be implemented in phases)
 mod file;
@@ -68,6 +70,7 @@ mod set;
 mod variable;
 mod time;
 mod metadata;
+mod map;
 mod assembly;
 mod blob;
 mod attribute;
@@ -88,6 +91,7 @@ pub use types::{
     TruthTable,
 };
 pub use coord::{CoordValue, Coordinates};
+pub use builder::{BlockBuilder, MeshBuilder};
 
 // File mode types
 /// Type-state pattern for file modes

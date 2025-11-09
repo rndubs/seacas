@@ -93,7 +93,8 @@ impl ExodusFile<mode::Write> {
         // Set block ID
         let id_var_name = self.get_block_id_var_name(block.entity_type)?;
         if let Some(mut id_var) = self.nc_file.variable_mut(&id_var_name) {
-            id_var.put_value(block.id, block_index..block_index+1)?;
+            // Use put_values with a slice instead of put_value
+            id_var.put_values(&[block.id], block_index..block_index+1)?;
         }
 
         // Create attribute variable if needed
@@ -222,20 +223,16 @@ impl ExodusFile<mode::Write> {
 
     // Helper methods
     fn get_block_index(&self, entity_type: EntityType, _block_id: EntityId) -> Result<usize> {
-        // For now, return a simple index based on current count
-        // In a full implementation, this would track block IDs
-        let count_var = match entity_type {
-            EntityType::ElemBlock => "num_el_blk",
-            EntityType::EdgeBlock => "num_ed_blk",
-            EntityType::FaceBlock => "num_fa_blk",
-            _ => return Err(ExodusError::InvalidEntityType(entity_type.to_string())),
-        };
-
-        if let Some(dim) = self.nc_file.dimension(count_var) {
-            Ok(dim.len())
-        } else {
-            Ok(0)
+        // Count how many blocks have been written by checking for connectivity variables
+        let mut count = 0;
+        loop {
+            let conn_var_name = format!("connect{}", count + 1);
+            if self.nc_file.variable(&conn_var_name).is_none() {
+                break;
+            }
+            count += 1;
         }
+        Ok(count)
     }
 
     fn get_block_id_var_name(&self, entity_type: EntityType) -> Result<String> {
