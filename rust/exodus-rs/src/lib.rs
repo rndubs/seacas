@@ -60,6 +60,7 @@
 pub mod error;
 pub mod types;
 pub mod coord;
+pub mod builder;
 
 // Internal modules (will be implemented in phases)
 mod file;
@@ -90,6 +91,7 @@ pub use types::{
     TruthTable,
 };
 pub use coord::{CoordValue, Coordinates};
+pub use builder::{BlockBuilder, MeshBuilder};
 
 // File mode types
 /// Type-state pattern for file modes
