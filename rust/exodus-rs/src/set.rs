@@ -652,3 +652,69 @@ impl ExodusFile<mode::Read> {
         })
     }
 }
+
+// ====================
+// Set Iteration
+// ====================
+
+impl<M: FileMode> ExodusFile<M> {
+    /// Get an iterator over all sets of a given type
+    ///
+    /// # Arguments
+    ///
+    /// * `entity_type` - Type of set to iterate over
+    ///
+    /// # Returns
+    ///
+    /// Iterator over set IDs
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the entity type is not a set type
+    ///
+    /// # Example
+    ///
+    /// ```rust,ignore
+    /// let file = ExodusFile::<mode::Read>::open("mesh.exo")?;
+    ///
+    /// // Iterate over all node sets
+    /// for set_id in file.sets(EntityType::NodeSet)? {
+    ///     let node_set = file.node_set(set_id)?;
+    ///     println!("Node set {}: {} nodes", set_id, node_set.nodes.len());
+    /// }
+    /// ```
+    pub fn sets(&self, entity_type: EntityType) -> Result<SetIterator> {
+        let ids = self.set_ids(entity_type)?;
+        Ok(SetIterator {
+            ids,
+            index: 0,
+        })
+    }
+}
+
+/// Iterator over set IDs
+#[derive(Debug)]
+pub struct SetIterator {
+    ids: Vec<EntityId>,
+    index: usize,
+}
+
+impl Iterator for SetIterator {
+    type Item = EntityId;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.index < self.ids.len() {
+            let id = self.ids[self.index];
+            self.index += 1;
+            Some(id)
+        } else {
+            None
+        }
+    }
+}
+
+impl ExactSizeIterator for SetIterator {
+    fn len(&self) -> usize {
+        self.ids.len() - self.index
+    }
+}
