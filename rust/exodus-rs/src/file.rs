@@ -213,13 +213,6 @@ impl ExodusFile<mode::Write> {
         self.nc_file.sync()?;
         Ok(())
     }
-
-    /// Get file path
-    ///
-    /// Returns the path to the underlying file.
-    pub fn path(&self) -> &Path {
-        &self.path
-    }
 }
 
 #[cfg(feature = "netcdf4")]
