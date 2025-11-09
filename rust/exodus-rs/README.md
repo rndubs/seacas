@@ -32,8 +32,8 @@ This library is currently in the initial development phase. The following phases
 - ✅ Phase 0: Project Setup and Infrastructure
 - ✅ Phase 1: File Lifecycle (Create, Open, Close)
 - ✅ Phase 2: Initialization and Basic Metadata
-- ✅ Phase 3: Coordinate Operations (CURRENT)
-- ⏳ Phase 4: Block Operations
+- ✅ Phase 3: Coordinate Operations
+- ✅ Phase 4: Element Blocks and Connectivity (CURRENT)
 - ⏳ Phase 5: Set Operations
 - ⏳ Phase 6: Variable Operations
 - ⏳ Phase 7: Time Step Operations
@@ -74,6 +74,20 @@ Phase 3 provides coordinate operations for nodal data:
 - ✅ Coordinates container type with iterator support
 - ✅ Partial I/O for large datasets
 - ✅ Automatic type conversion between f32 and f64
+- ✅ Support for all file modes (Read, Write, Append)
+- ✅ Comprehensive unit tests
+
+### Phase 4 Complete
+
+Phase 4 provides element block operations and connectivity:
+- ✅ Topology enum with all standard element types (HEX8, QUAD4, TET4, etc.)
+- ✅ Topology parsing from strings with aliases
+- ✅ Write operations: `put_block()`, `put_connectivity()`, `put_block_attributes()`
+- ✅ Read operations: `block_ids()`, `block()`, `connectivity()`, `connectivity_structured()`
+- ✅ Connectivity container with iterator support
+- ✅ Support for element, edge, and face blocks
+- ✅ Block attribute support with naming
+- ✅ Automatic validation of topology vs. node count
 - ✅ Support for all file modes (Read, Write, Append)
 - ✅ Comprehensive unit tests
 

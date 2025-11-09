@@ -470,6 +470,17 @@ impl ExodusFile<mode::Write> {
             self.create_coord_variables()?;
         }
 
+        // Create block ID property variables
+        if params.num_elem_blocks > 0 {
+            self.create_block_id_variable("eb_prop1", "num_el_blk")?;
+        }
+        if params.num_edge_blocks > 0 {
+            self.create_block_id_variable("ed_prop1", "num_ed_blk")?;
+        }
+        if params.num_face_blocks > 0 {
+            self.create_block_id_variable("fa_prop1", "num_fa_blk")?;
+        }
+
         Ok(())
     }
 
@@ -488,6 +499,20 @@ impl ExodusFile<mode::Write> {
         // Create coordz variable
         self.nc_file
             .add_variable::<f64>("coordz", &["num_nodes"])
+            .map_err(|e| ExodusError::NetCdf(e))?;
+
+        Ok(())
+    }
+
+    /// Create block ID property variable
+    fn create_block_id_variable(&mut self, var_name: &str, dim_name: &str) -> Result<()> {
+        let mut var = self
+            .nc_file
+            .add_variable::<i64>(var_name, &[dim_name])
+            .map_err(|e| ExodusError::NetCdf(e))?;
+
+        // Add attribute to identify this as a property variable
+        var.put_attribute("name", "ID")
             .map_err(|e| ExodusError::NetCdf(e))?;
 
         Ok(())
