@@ -1,0 +1,28 @@
+# Generated test output
+output/
+*.exo
+*.e
+
+# C build artifacts
+rust-to-c/verify
+c-to-rust/writer
+*.o
+*.so
+*.a
+
+# Rust build artifacts
+target/
+Cargo.lock
+
+# Editor and IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Test reports
+*.html
+*.xml
+test_results.txt
