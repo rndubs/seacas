@@ -6,9 +6,6 @@
 use crate::error::{ExodusError, Result};
 use crate::{mode, ExodusFile};
 
-#[cfg(feature = "netcdf4")]
-use netcdf;
-
 /// Trait for coordinate value types
 ///
 /// This trait abstracts over f32 and f64 to allow flexible coordinate storage
@@ -120,6 +117,7 @@ impl<T: CoordValue> Coordinates<T> {
 }
 
 /// Iterator over coordinates
+#[derive(Debug)]
 pub struct CoordinateIterator<'a, T: CoordValue> {
     coords: &'a Coordinates<T>,
     index: usize,
@@ -289,14 +287,14 @@ impl ExodusFile<mode::Write> {
             2 => "coordz",
             _ => {
                 return Err(ExodusError::InvalidDimension {
-                    expected: 3,
+                    expected: "0, 1, or 2".to_string(),
                     actual: dim,
                 })
             }
         };
 
         // Get or create the variable
-        let var = if let Some(var) = self.nc_file.variable_mut(var_name) {
+        let mut var = if let Some(var) = self.nc_file.variable_mut(var_name) {
             var
         } else {
             // Variable doesn't exist, we need to create it
@@ -307,8 +305,8 @@ impl ExodusFile<mode::Write> {
         // Convert to f64 for writing
         let data: Vec<f64> = coords.iter().map(|&v| v.to_f64()).collect();
 
-        // Write the data
-        var.put_values(&data, None, None)?;
+        // Write the data (use .. for full range)
+        var.put_values(&data, ..)?;
 
         Ok(())
     }
@@ -419,13 +417,13 @@ impl ExodusFile<mode::Write> {
             2 => "coordz",
             _ => {
                 return Err(ExodusError::InvalidDimension {
-                    expected: 3,
+                    expected: "0, 1, or 2".to_string(),
                     actual: dim,
                 })
             }
         };
 
-        let var = self
+        let mut var = self
             .nc_file
             .variable_mut(var_name)
             .ok_or_else(|| ExodusError::VariableNotDefined(var_name.to_string()))?;
@@ -433,8 +431,8 @@ impl ExodusFile<mode::Write> {
         // Convert to f64 for writing
         let data: Vec<f64> = coords.iter().map(|&v| v.to_f64()).collect();
 
-        // Write the data at the specified offset
-        var.put_values(&data, Some(&[start]), Some(&[coords.len()]))?;
+        // Write the data at the specified offset (use range)
+        var.put_values(&data, start..(start + coords.len()))?;
 
         Ok(())
     }
@@ -617,7 +615,7 @@ impl ExodusFile<mode::Read> {
             2 => "coordz",
             _ => {
                 return Err(ExodusError::InvalidDimension {
-                    expected: 3,
+                    expected: "0, 1, or 2".to_string(),
                     actual: dim,
                 })
             }
@@ -628,8 +626,8 @@ impl ExodusFile<mode::Read> {
             .variable(var_name)
             .ok_or_else(|| ExodusError::VariableNotDefined(var_name.to_string()))?;
 
-        // Read as f64 from NetCDF
-        let data: Vec<f64> = var.values(None, None)?;
+        // Read as f64 from NetCDF (use .. for full range)
+        let data: Vec<f64> = var.get_values(..)?;
 
         // Convert to target type
         Ok(data.iter().map(|&v| T::from_f64(v)).collect())
@@ -703,7 +701,7 @@ impl ExodusFile<mode::Read> {
             2 => "coordz",
             _ => {
                 return Err(ExodusError::InvalidDimension {
-                    expected: 3,
+                    expected: "0, 1, or 2".to_string(),
                     actual: dim,
                 })
             }
@@ -714,8 +712,8 @@ impl ExodusFile<mode::Read> {
             .variable(var_name)
             .ok_or_else(|| ExodusError::VariableNotDefined(var_name.to_string()))?;
 
-        // Read as f64 from NetCDF
-        let data: Vec<f64> = var.values(Some(&[start]), Some(&[count]))?;
+        // Read as f64 from NetCDF (use range)
+        let data: Vec<f64> = var.get_values(start..(start + count))?;
 
         // Convert to target type
         Ok(data.iter().map(|&v| T::from_f64(v)).collect())
@@ -812,19 +810,19 @@ impl ExodusFile<mode::Append> {
             2 => "coordz",
             _ => {
                 return Err(ExodusError::InvalidDimension {
-                    expected: 3,
+                    expected: "0, 1, or 2".to_string(),
                     actual: dim,
                 })
             }
         };
 
-        let var = self
+        let mut var = self
             .nc_file
             .variable_mut(var_name)
             .ok_or_else(|| ExodusError::VariableNotDefined(var_name.to_string()))?;
 
         let data: Vec<f64> = coords.iter().map(|&v| v.to_f64()).collect();
-        var.put_values(&data, None, None)?;
+        var.put_values(&data, ..)?;
 
         Ok(())
     }
@@ -881,7 +879,7 @@ impl ExodusFile<mode::Append> {
             2 => "coordz",
             _ => {
                 return Err(ExodusError::InvalidDimension {
-                    expected: 3,
+                    expected: "0, 1, or 2".to_string(),
                     actual: dim,
                 })
             }
@@ -892,7 +890,7 @@ impl ExodusFile<mode::Append> {
             .variable(var_name)
             .ok_or_else(|| ExodusError::VariableNotDefined(var_name.to_string()))?;
 
-        let data: Vec<f64> = var.values(None, None)?;
+        let data: Vec<f64> = var.get_values(..)?;
         Ok(data.iter().map(|&v| T::from_f64(v)).collect())
     }
 }

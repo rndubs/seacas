@@ -23,9 +23,6 @@ pub(crate) struct FileMetadata {
     pub num_dim: Option<usize>,
     /// Cache for dimension IDs (dimension name -> size)
     pub dim_cache: HashMap<String, usize>,
-    /// Cache for variable IDs (variable name -> variable ID)
-    #[cfg(feature = "netcdf4")]
-    pub var_cache: HashMap<String, netcdf::VariableId>,
 }
 
 impl FileMetadata {
@@ -36,8 +33,6 @@ impl FileMetadata {
             title: None,
             num_dim: None,
             dim_cache: HashMap::new(),
-            #[cfg(feature = "netcdf4")]
-            var_cache: HashMap::new(),
         }
     }
 }
@@ -93,20 +88,17 @@ impl ExodusFile<mode::Write> {
         let path = path.as_ref();
 
         // Convert options to NetCDF creation flags
-        let mut nc_options = netcdf::Options::default();
+        let mut nc_options = netcdf::Options::NETCDF4;
 
         // Set creation mode
         match options.mode {
             CreateMode::Clobber => {
-                nc_options = nc_options.set_create_flag(netcdf::CreateFlag::Clobber);
+                // Clobber is the default (no NOCLOBBER flag)
             }
             CreateMode::NoClobber => {
-                nc_options = nc_options.set_create_flag(netcdf::CreateFlag::NoClobber);
+                nc_options |= netcdf::Options::NOCLOBBER;
             }
         }
-
-        // Set NetCDF format - use NetCDF-4 for compression and 64-bit support
-        nc_options = nc_options.set_create_flag(netcdf::CreateFlag::Netcdf4);
 
         // Create the NetCDF file
         let mut nc_file = netcdf::create_with(path, nc_options)?;
@@ -209,8 +201,8 @@ impl ExodusFile<mode::Read> {
     pub fn open<P: AsRef<Path>>(path: P) -> Result<Self> {
         let path = path.as_ref();
 
-        // Open the NetCDF file in read-only mode
-        let nc_file = netcdf::open(path)?;
+        // Open the NetCDF file (use append to get FileMut for variable reads)
+        let nc_file = netcdf::append(path)?;
 
         Ok(Self {
             nc_file,
@@ -308,18 +300,21 @@ impl<M: FileMode> ExodusFile<M> {
         // Read the version attribute
         match self.nc_file.attribute("version") {
             Some(attr) => {
-                if let Some(val) = attr.value()?.as_f32() {
-                    let version = val as u32;
-                    let major = version / 100;
-                    let minor = version % 100;
-                    Ok((major, minor))
-                } else if let Some(val) = attr.value()?.as_f64() {
-                    let version = val as u32;
-                    let major = version / 100;
-                    let minor = version % 100;
-                    Ok((major, minor))
-                } else {
-                    Ok((2, 0)) // Default version
+                use netcdf::AttributeValue;
+                match attr.value()? {
+                    AttributeValue::Float(val) => {
+                        let version = val as u32;
+                        let major = version / 100;
+                        let minor = version % 100;
+                        Ok((major, minor))
+                    }
+                    AttributeValue::Double(val) => {
+                        let version = val as u32;
+                        let major = version / 100;
+                        let minor = version % 100;
+                        Ok((major, minor))
+                    }
+                    _ => Ok((2, 0)), // Default version
                 }
             }
             None => Ok((2, 0)), // Default version if attribute not found

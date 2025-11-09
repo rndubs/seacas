@@ -29,6 +29,7 @@ use netcdf;
 ///     .finish()?;
 /// # Ok::<(), exodus_rs::ExodusError>(())
 /// ```
+#[derive(Debug)]
 pub struct InitBuilder<'a> {
     file: &'a mut ExodusFile<mode::Write>,
     params: InitParams,
@@ -255,7 +256,7 @@ impl ExodusFile<mode::Write> {
     ///     .finish()?;
     /// # Ok::<(), exodus_rs::ExodusError>(())
     /// ```
-    pub fn builder(&mut self) -> InitBuilder {
+    pub fn builder(&mut self) -> InitBuilder<'_> {
         InitBuilder::new(self)
     }
 
@@ -527,10 +528,8 @@ impl ExodusFile<mode::Read> {
 
         // Read title from global attribute
         if let Some(attr) = self.nc_file.attribute("title") {
-            if let Ok(val) = attr.value() {
-                if let Some(s) = val.as_str() {
-                    params.title = s.to_string();
-                }
+            if let Ok(netcdf::AttributeValue::Str(s)) = attr.value() {
+                params.title = s;
             }
         }
 
@@ -664,10 +663,8 @@ impl ExodusFile<mode::Append> {
 
         // Read title
         if let Some(attr) = self.nc_file.attribute("title") {
-            if let Ok(val) = attr.value() {
-                if let Some(s) = val.as_str() {
-                    params.title = s.to_string();
-                }
+            if let Ok(netcdf::AttributeValue::Str(s)) = attr.value() {
+                params.title = s;
             }
         }
 
