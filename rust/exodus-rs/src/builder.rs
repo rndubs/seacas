@@ -370,7 +370,6 @@ mod tests {
     use tempfile::NamedTempFile;
 
     #[test]
-    #[ignore] // Temporarily ignored - depends on Phase 4 block implementation
     fn test_simple_mesh_builder() {
         let tmp = NamedTempFile::new().unwrap();
 
@@ -393,7 +392,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore] // Temporarily ignored - depends on Phase 4 block implementation
     fn test_hex_mesh_builder() {
         let tmp = NamedTempFile::new().unwrap();
 
@@ -425,7 +423,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore] // Temporarily ignored - depends on Phase 4 block implementation
     fn test_multiple_blocks() {
         let tmp = NamedTempFile::new().unwrap();
 
@@ -452,7 +449,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore] // Temporarily ignored - depends on Phase 4 block implementation
     fn test_block_with_attributes() {
         let tmp = NamedTempFile::new().unwrap();
 
