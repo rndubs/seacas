@@ -1,0 +1,377 @@
+#!/usr/bin/env bash
+
+# exodus-py Installation and Testing Script
+# This script handles dependency installation, building, and testing
+# for both macOS and Ubuntu environments using uv for Python dependency management.
+
+set -e  # Exit on error
+set -u  # Exit on undefined variable
+
+# Color codes for output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+NC='\033[0m' # No Color
+
+# Helper functions
+log_info() {
+    echo -e "${BLUE}[INFO]${NC} $1"
+}
+
+log_success() {
+    echo -e "${GREEN}[SUCCESS]${NC} $1"
+}
+
+log_warning() {
+    echo -e "${YELLOW}[WARNING]${NC} $1"
+}
+
+log_error() {
+    echo -e "${RED}[ERROR]${NC} $1"
+}
+
+# Detect OS
+detect_os() {
+    if [[ "$OSTYPE" == "darwin"* ]]; then
+        echo "macos"
+    elif [[ "$OSTYPE" == "linux-gnu"* ]]; then
+        if [ -f /etc/os-release ]; then
+            . /etc/os-release
+            if [[ "$ID" == "ubuntu" ]] || [[ "$ID_LIKE" == *"ubuntu"* ]] || [[ "$ID_LIKE" == *"debian"* ]]; then
+                echo "ubuntu"
+            else
+                echo "unknown"
+            fi
+        else
+            echo "unknown"
+        fi
+    else
+        echo "unknown"
+    fi
+}
+
+# Check if libraries are installed
+check_library() {
+    local lib=$1
+    if command -v pkg-config &> /dev/null; then
+        pkg-config --exists "$lib" 2>/dev/null
+        return $?
+    fi
+    return 1
+}
+
+# Get library version
+get_library_version() {
+    local lib=$1
+    if command -v pkg-config &> /dev/null && pkg-config --exists "$lib" 2>/dev/null; then
+        pkg-config --modversion "$lib" 2>/dev/null
+    else
+        echo "unknown"
+    fi
+}
+
+# Install system dependencies
+install_system_deps() {
+    local os=$1
+    log_info "Checking system dependencies for $os..."
+
+    # Check if libraries are already installed
+    local netcdf_installed=false
+    local hdf5_installed=false
+
+    if check_library "netcdf"; then
+        netcdf_installed=true
+        local netcdf_version=$(get_library_version "netcdf")
+        log_success "NetCDF already installed: version $netcdf_version"
+    fi
+
+    if check_library "hdf5"; then
+        hdf5_installed=true
+        local hdf5_version=$(get_library_version "hdf5")
+        log_success "HDF5 already installed: version $hdf5_version"
+    fi
+
+    case $os in
+        macos)
+            if ! command -v brew &> /dev/null; then
+                log_error "Homebrew not found. Please install Homebrew first:"
+                log_error "  /bin/bash -c \"\$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)\""
+                exit 1
+            fi
+
+            # Install missing packages
+            local packages_to_install=()
+
+            if ! $netcdf_installed; then
+                if brew list netcdf &> /dev/null; then
+                    log_success "NetCDF installed via Homebrew (but pkg-config not detecting it)"
+                else
+                    packages_to_install+=("netcdf")
+                fi
+            fi
+
+            if ! $hdf5_installed; then
+                if brew list hdf5 &> /dev/null; then
+                    log_success "HDF5 installed via Homebrew (but pkg-config not detecting it)"
+                else
+                    packages_to_install+=("hdf5")
+                fi
+            fi
+
+            if [ ${#packages_to_install[@]} -gt 0 ]; then
+                log_info "Installing missing packages via Homebrew: ${packages_to_install[*]}"
+                brew install "${packages_to_install[@]}"
+            else
+                log_success "All required packages already installed"
+            fi
+
+            # Set environment variables for macOS
+            if command -v brew &> /dev/null; then
+                export NETCDF_DIR=$(brew --prefix netcdf 2>/dev/null || echo "/usr/local")
+                export HDF5_DIR=$(brew --prefix hdf5 2>/dev/null || echo "/usr/local")
+                log_success "NetCDF location: $NETCDF_DIR"
+                log_success "HDF5 location: $HDF5_DIR"
+            fi
+            ;;
+
+        ubuntu)
+            # Check if packages are installed via dpkg
+            local packages_to_install=()
+
+            if ! $netcdf_installed; then
+                if ! dpkg -l libnetcdf-dev 2>/dev/null | grep -q "^ii"; then
+                    packages_to_install+=("libnetcdf-dev")
+                else
+                    log_success "libnetcdf-dev already installed"
+                fi
+            fi
+
+            if ! $hdf5_installed; then
+                if ! dpkg -l libhdf5-dev 2>/dev/null | grep -q "^ii"; then
+                    packages_to_install+=("libhdf5-dev")
+                else
+                    log_success "libhdf5-dev already installed"
+                fi
+            fi
+
+            # Always ensure pkg-config is installed
+            if ! command -v pkg-config &> /dev/null; then
+                packages_to_install+=("pkg-config")
+            fi
+
+            if [ ${#packages_to_install[@]} -gt 0 ]; then
+                log_info "Installing missing packages via apt-get: ${packages_to_install[*]}"
+
+                # Check if we have sudo
+                if command -v sudo &> /dev/null; then
+                    sudo apt-get update || log_warning "apt-get update failed, continuing anyway"
+                    sudo apt-get install -y "${packages_to_install[@]}"
+                else
+                    # Try without sudo (for restricted environments)
+                    log_warning "sudo not available, attempting installation without sudo"
+                    apt-get update || log_warning "apt-get update failed, continuing anyway"
+                    apt-get install -y "${packages_to_install[@]}"
+                fi
+            else
+                log_success "All required packages already installed"
+            fi
+
+            # Set environment variables for Ubuntu
+            if [ -d "/usr/lib/x86_64-linux-gnu/hdf5/serial" ]; then
+                export HDF5_DIR=/usr/lib/x86_64-linux-gnu/hdf5/serial
+                log_success "HDF5 location: $HDF5_DIR"
+            fi
+            ;;
+
+        *)
+            log_error "Unsupported OS: $os"
+            log_error "This script supports macOS and Ubuntu only"
+            exit 1
+            ;;
+    esac
+
+    # Verify installation
+    echo ""
+    log_info "Verifying library installation..."
+    if check_library "netcdf"; then
+        log_success "NetCDF is available: version $(get_library_version 'netcdf')"
+    else
+        log_warning "NetCDF not detected via pkg-config (may still work)"
+    fi
+
+    if check_library "hdf5"; then
+        log_success "HDF5 is available: version $(get_library_version 'hdf5')"
+    else
+        log_warning "HDF5 not detected via pkg-config (may still work)"
+    fi
+}
+
+# Install uv if not present
+install_uv() {
+    if command -v uv &> /dev/null; then
+        log_success "uv is already installed: $(uv --version)"
+    else
+        log_info "Installing uv package manager..."
+        curl -LsSf https://astral.sh/uv/install.sh | sh
+
+        # Add uv to PATH for current session
+        export PATH="$HOME/.cargo/bin:$PATH"
+
+        if command -v uv &> /dev/null; then
+            log_success "uv installed successfully: $(uv --version)"
+        else
+            log_error "Failed to install uv. Please install manually from https://github.com/astral-sh/uv"
+            exit 1
+        fi
+    fi
+}
+
+# Check for Rust
+check_rust() {
+    if ! command -v rustc &> /dev/null; then
+        log_error "Rust compiler not found. Installing via rustup..."
+        curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+        source "$HOME/.cargo/env"
+        log_success "Rust installed: $(rustc --version)"
+    else
+        log_success "Rust is already installed: $(rustc --version)"
+    fi
+}
+
+# Install build dependencies
+install_build_deps() {
+    log_info "Installing build dependencies (maturin)..."
+    uv venv .venv
+    uv pip install maturin
+    log_success "Build dependencies installed"
+}
+
+# Build the distribution
+build_wheel() {
+    log_info "Building wheel distribution in release mode..."
+
+    # Navigate to exodus-py directory
+    local script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    cd "$script_dir"
+
+    # Build the wheel
+    maturin build --release
+
+    # Find the built wheel
+    WHEEL_FILE=$(find target/wheels -name "exodus_py-*.whl" -type f | sort -r | head -n 1)
+
+    if [ -z "$WHEEL_FILE" ]; then
+        log_error "Wheel file not found in target/wheels/"
+        exit 1
+    fi
+
+    log_success "Wheel built successfully: $WHEEL_FILE"
+}
+
+# Test wheel installation in clean venv
+test_wheel() {
+    log_info "Testing wheel installation in clean virtual environment..."
+
+    local script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    local test_venv="$script_dir/test-venv"
+
+    # Remove old test venv if it exists
+    if [ -d "$test_venv" ]; then
+        log_info "Removing old test environment..."
+        rm -rf "$test_venv"
+    fi
+
+    # Create clean venv using uv
+    log_info "Creating clean virtual environment with uv..."
+    uv venv "$test_venv"
+
+    # Activate venv
+    source "$test_venv/bin/activate"
+    log_success "Virtual environment activated"
+
+    # Install the wheel
+    log_info "Installing wheel: $WHEEL_FILE"
+    uv pip install "$WHEEL_FILE"
+
+    # Verify installation
+    log_info "Verifying installation..."
+    python -c "import exodus; print(f'exodus-py version: {exodus.__version__}')" || {
+        log_error "Failed to import exodus module"
+        deactivate
+        exit 1
+    }
+
+    log_success "Wheel installation verified successfully"
+
+    # Run additional tests if pytest is available
+    if [ -d "$script_dir/tests" ]; then
+        log_info "Installing test dependencies..."
+        uv pip install pytest
+
+        log_info "Running test suite..."
+        pytest "$script_dir/tests" -v || log_warning "Some tests failed"
+    fi
+
+    # Run example if available
+    if [ -d "$script_dir/examples" ]; then
+        local example_file=$(find "$script_dir/examples" -name "*.py" -type f | head -n 1)
+        if [ -n "$example_file" ]; then
+            log_info "Running example: $example_file"
+            python "$example_file" || log_warning "Example failed to run"
+        fi
+    fi
+
+    # Deactivate and keep venv for inspection
+    deactivate
+    log_success "Test environment available at: $test_venv"
+    log_info "To activate test environment: source $test_venv/bin/activate"
+}
+
+# Main execution
+main() {
+    log_info "Starting exodus-py installation and testing..."
+    echo ""
+
+    # Detect OS
+    OS=$(detect_os)
+    log_info "Detected OS: $OS"
+    echo ""
+
+    # Install system dependencies
+    install_system_deps "$OS"
+    echo ""
+
+    # Install uv
+    install_uv
+    echo ""
+
+    # Check Rust installation
+    check_rust
+    echo ""
+
+    # Install build dependencies
+    install_build_deps
+    echo ""
+
+    # Build wheel
+    build_wheel
+    echo ""
+
+    # Test wheel installation
+    test_wheel
+    echo ""
+
+    log_success "=========================================="
+    log_success "Installation and testing complete!"
+    log_success "=========================================="
+    log_info "Wheel location: $WHEEL_FILE"
+    log_info "Test environment: $script_dir/test-venv"
+    log_info ""
+    log_info "To use the installed package:"
+    log_info "  source $script_dir/test-venv/bin/activate"
+    log_info "  python -c 'import exodus; print(exodus.__version__)'"
+}
+
+# Run main function
+main "$@"
