@@ -2,6 +2,8 @@
 
 This document provides detailed development instructions for working on the exodus-rs crate.
 
+The crate can be found in ./rust/exodus-rs/
+
 ## Prerequisites
 
 ### System Dependencies
@@ -64,21 +66,6 @@ pkg-config --modversion hdf5
 pkg-config --modversion netcdf
 ```
 
-**Using MacPorts**:
-
-```bash
-# Install MacPorts if not already installed
-# https://www.macports.org/install.php
-
-# Install HDF5 and NetCDF
-sudo port install hdf5 netcdf
-sudo port install pkgconfig
-
-# Verify installation
-port installed hdf5
-port installed netcdf
-```
-
 **Troubleshooting macOS**:
 
 If you encounter linking errors on macOS:
@@ -93,60 +80,6 @@ echo 'export HDF5_DIR=$(brew --prefix hdf5)' >> ~/.zshrc
 echo 'export NETCDF_DIR=$(brew --prefix netcdf)' >> ~/.zshrc
 ```
 
-#### Fedora/RHEL/CentOS
-
-```bash
-# Fedora 22+ / RHEL 8+ / CentOS 8+
-sudo dnf install -y hdf5-devel netcdf-devel
-
-# Older versions
-sudo yum install -y hdf5-devel netcdf-devel
-
-# Verify installation
-rpm -q hdf5-devel netcdf-devel
-```
-
-#### Arch Linux
-
-```bash
-# Install HDF5 and NetCDF
-sudo pacman -S hdf5 netcdf
-
-# Verify installation
-pacman -Q hdf5 netcdf
-```
-
-#### Windows
-
-**Option 1: Using vcpkg**:
-
-```bash
-# Install vcpkg
-git clone https://github.com/Microsoft/vcpkg.git
-cd vcpkg
-./bootstrap-vcpkg.sh  # or bootstrap-vcpkg.bat on Windows
-
-# Install HDF5 and NetCDF
-./vcpkg install hdf5:x64-windows netcdf-c:x64-windows
-
-# Integrate with your system
-./vcpkg integrate install
-```
-
-**Option 2: Using conda**:
-
-```bash
-# Create a development environment
-conda create -n exodus-dev python=3.9
-conda activate exodus-dev
-
-# Install dependencies
-conda install -c conda-forge hdf5 netcdf4
-
-# Set environment variables
-set HDF5_DIR=%CONDA_PREFIX%\Library
-set NETCDF_DIR=%CONDA_PREFIX%\Library
-```
 
 ## Building
 
@@ -190,18 +123,6 @@ cargo test --features netcdf4
 
 # Run tests with output
 cargo test --features netcdf4 -- --nocapture
-
-# Run specific test
-cargo test --features netcdf4 test_coords_2d
-
-# Run tests for a specific module
-cargo test --features netcdf4 coord
-
-# Run tests with backtrace
-RUST_BACKTRACE=1 cargo test --features netcdf4
-
-# Run tests in parallel (default) or single-threaded
-cargo test --features netcdf4 -- --test-threads=1
 ```
 
 **Known Issues**: Use `--test-threads=1` to avoid file conflicts. Tests using `NamedTempFile` require `CreateMode::Clobber`. Examples 01-03 have outdated API calls.
@@ -228,15 +149,6 @@ cargo run --release --example 03_coordinates --features netcdf4
 ```bash
 # Build documentation
 cargo doc --features netcdf4
-
-# Build and open documentation in browser
-cargo doc --features netcdf4 --open
-
-# Build documentation with all features
-cargo doc --all-features --open
-
-# Build private documentation (includes private items)
-cargo doc --features netcdf4 --document-private-items --open
 ```
 
 ### Documentation Standards
@@ -269,9 +181,6 @@ cargo clippy --features netcdf4
 
 # Run clippy with all features
 cargo clippy --all-features
-
-# Run clippy with warnings as errors
-cargo clippy --features netcdf4 -- -D warnings
 
 # Apply clippy suggestions automatically (use with caution)
 cargo clippy --features netcdf4 --fix
@@ -378,88 +287,6 @@ Each phase of development follows this pattern:
 - Use the `?` operator for error propagation
 - Add `#[cfg(feature = "netcdf4")]` guards where appropriate
 
-### Git Workflow
-
-```bash
-# Create a feature branch
-git checkout -b feature/phase-4-blocks
-
-# Make changes and commit
-git add src/block.rs
-git commit -m "Phase 4: Implement block operations"
-
-# Run tests before pushing
-cargo test --features netcdf4
-
-# Push to remote
-git push origin feature/phase-4-blocks
-```
-
-## Useful Commands
-
-```bash
-# Show dependency tree
-cargo tree --features netcdf4
-
-# Check for outdated dependencies
-cargo outdated
-
-# Update dependencies
-cargo update
-
-# Clean build artifacts
-cargo clean
-
-# Benchmark (if benchmarks are added)
-cargo bench --features netcdf4
-
-# Generate code coverage (requires cargo-tarpaulin)
-cargo install cargo-tarpaulin
-cargo tarpaulin --features netcdf4 --out Html
-
-# Check for security vulnerabilities
-cargo install cargo-audit
-cargo audit
-```
-
-## Performance Profiling
-
-```bash
-# Build with debug symbols in release mode
-RUSTFLAGS="-C debuginfo=2" cargo build --release --features netcdf4
-
-# Profile with perf (Linux)
-perf record --call-graph dwarf ./target/release/examples/03_coordinates
-perf report
-
-# Profile with Instruments (macOS)
-cargo instruments --release --features netcdf4 --example 03_coordinates
-```
-
-## IDE Setup
-
-### VS Code
-
-Recommended extensions:
-- rust-analyzer
-- CodeLLDB (for debugging)
-- Better TOML
-- Error Lens
-
-Settings (`.vscode/settings.json`):
-```json
-{
-  "rust-analyzer.cargo.features": ["netcdf4"],
-  "rust-analyzer.checkOnSave.command": "clippy"
-}
-```
-
-### IntelliJ IDEA / CLion
-
-- Install the Rust plugin
-- Configure Cargo features in Run Configurations
-- Enable Clippy integration
-
 ## Resources
 
 - [Exodus II Format Specification](https://sandialabs.github.io/seacas-docs/)
@@ -467,10 +294,3 @@ Settings (`.vscode/settings.json`):
 - [HDF5 Documentation](https://portal.hdfgroup.org/display/HDF5/HDF5)
 - [netcdf-rs Crate Documentation](https://docs.rs/netcdf/)
 - [Rust API Guidelines](https://rust-lang.github.io/api-guidelines/)
-
-## Contact
-
-For questions or issues related to development:
-- Open an issue on GitHub
-- Check existing documentation in `RUST.md`
-- Consult the SEACAS project documentation
