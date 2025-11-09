@@ -8,7 +8,7 @@
 //! - Iterating over connectivity data
 
 use exodus_rs::{
-    Block, Connectivity, EntityType, ExodusFile, InitParams, Topology,
+    Block, EntityType, ExodusFile, InitParams, Topology,
     mode,
 };
 

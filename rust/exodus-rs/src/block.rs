@@ -5,10 +5,7 @@
 
 use crate::error::{EntityId, ExodusError, Result};
 use crate::types::{Block, Connectivity, EntityType, Topology};
-use crate::{mode, ExodusFile, FileMode};
-
-#[cfg(feature = "netcdf4")]
-use netcdf;
+use crate::{mode, ExodusFile};
 
 // Block operations for write mode
 #[cfg(feature = "netcdf4")]
@@ -95,8 +92,8 @@ impl ExodusFile<mode::Write> {
 
         // Set block ID
         let id_var_name = self.get_block_id_var_name(block.entity_type)?;
-        if let Ok(mut id_var) = self.nc_file.variable_mut(&id_var_name) {
-            id_var.put_value(block.id, &[block_index])?;
+        if let Some(mut id_var) = self.nc_file.variable_mut(&id_var_name) {
+            id_var.put_value(block.id, block_index..block_index+1)?;
         }
 
         // Create attribute variable if needed
@@ -151,7 +148,7 @@ impl ExodusFile<mode::Write> {
             .collect();
 
         // Write the full connectivity array
-        var.put_values(&conn_i32, None, None)?;
+        var.put_values(&conn_i32, ..)?;
 
         Ok(())
     }
@@ -176,7 +173,7 @@ impl ExodusFile<mode::Write> {
             ExodusError::VariableNotDefined(format!("Attribute variable {}", attr_var_name))
         })?;
 
-        var.put_values(attributes, None, None)?;
+        var.put_values(attributes, ..)?;
 
         Ok(())
     }
@@ -217,7 +214,7 @@ impl ExodusFile<mode::Write> {
             for (j, &byte) in name_str.as_bytes().iter().take(32).enumerate() {
                 buf[j] = byte as i8;
             }
-            var.put_values(&buf, &[i, 0], &[1, 33])?;
+            var.put_values(&buf, (i..i+1, 0..33))?;
         }
 
         Ok(())
@@ -254,17 +251,17 @@ impl ExodusFile<mode::Write> {
     fn find_block_index(&self, entity_type: EntityType, block_id: EntityId) -> Result<usize> {
         let id_var_name = self.get_block_id_var_name(entity_type)?;
 
-        if let Ok(var) = self.nc_file.variable(&id_var_name) {
-            let ids: Vec<i64> = var.values(None, None)?;
+        if let Some(var) = self.nc_file.variable(&id_var_name) {
+            let ids: Vec<i64> = var.get_values(..)?;
             ids.iter()
                 .position(|&id| id == block_id)
                 .ok_or_else(|| ExodusError::EntityNotFound {
-                    entity_type,
+                    entity_type: entity_type.to_string(),
                     id: block_id,
                 })
         } else {
             Err(ExodusError::EntityNotFound {
-                entity_type,
+                entity_type: entity_type.to_string(),
                 id: block_id,
             })
         }
@@ -291,8 +288,8 @@ impl ExodusFile<mode::Read> {
             _ => return Err(ExodusError::InvalidEntityType(entity_type.to_string())),
         };
 
-        if let Ok(var) = self.nc_file.variable(id_var_name) {
-            let ids: Vec<i64> = var.values(None, None)?;
+        if let Some(var) = self.nc_file.variable(id_var_name) {
+            let ids: Vec<i64> = var.get_values(..)?;
             Ok(ids)
         } else {
             Ok(Vec::new())
@@ -325,7 +322,7 @@ impl ExodusFile<mode::Read> {
         }
 
         Err(ExodusError::EntityNotFound {
-            entity_type: EntityType::ElemBlock,
+            entity_type: EntityType::ElemBlock.to_string(),
             id: block_id,
         })
     }
@@ -348,7 +345,7 @@ impl ExodusFile<mode::Read> {
             .variable(&conn_var_name)
             .ok_or_else(|| ExodusError::VariableNotDefined(conn_var_name.clone()))?;
 
-        let conn_i32: Vec<i32> = var.values(None, None)?;
+        let conn_i32: Vec<i32> = var.get_values(..)?;
         let conn: Vec<i64> = conn_i32.iter().map(|&x| x as i64).collect();
 
         Ok(conn)
@@ -389,8 +386,8 @@ impl ExodusFile<mode::Read> {
         let block_index = self.find_block_index_read(EntityType::ElemBlock, block_id)?;
         let attr_var_name = format!("attrib{}", block_index + 1);
 
-        if let Ok(var) = self.nc_file.variable(&attr_var_name) {
-            let attrs: Vec<f64> = var.values(None, None)?;
+        if let Some(var) = self.nc_file.variable(&attr_var_name) {
+            let attrs: Vec<f64> = var.get_values(..)?;
             Ok(attrs)
         } else {
             Ok(Vec::new())
@@ -410,12 +407,12 @@ impl ExodusFile<mode::Read> {
         let block_index = self.find_block_index_read(EntityType::ElemBlock, block_id)?;
         let attr_name_var = format!("attrib_name{}", block_index + 1);
 
-        if let Ok(var) = self.nc_file.variable(&attr_name_var) {
+        if let Some(var) = self.nc_file.variable(&attr_name_var) {
             let block = self.block(block_id)?;
             let mut names = Vec::with_capacity(block.num_attributes);
 
             for i in 0..block.num_attributes {
-                let bytes: Vec<i8> = var.values(&[i, 0], &[1, 33])?;
+                let bytes: Vec<i8> = var.get_values((i..i+1, 0..33))?;
                 let name = String::from_utf8_lossy(
                     &bytes
                         .iter()
@@ -447,9 +444,14 @@ impl ExodusFile<mode::Read> {
         // Get topology from attribute
         let topology = var
             .attribute("elem_type")
-            .and_then(|attr| attr.value()?.as_str().ok())
-            .unwrap_or("UNKNOWN")
-            .to_string();
+            .and_then(|attr| {
+                if let Ok(netcdf::AttributeValue::Str(s)) = attr.value() {
+                    Some(s)
+                } else {
+                    None
+                }
+            })
+            .unwrap_or_else(|| "UNKNOWN".to_string());
 
         // Get dimensions
         let dims = var.dimensions();
@@ -484,17 +486,17 @@ impl ExodusFile<mode::Read> {
             _ => return Err(ExodusError::InvalidEntityType(entity_type.to_string())),
         };
 
-        if let Ok(var) = self.nc_file.variable(id_var_name) {
-            let ids: Vec<i64> = var.values(None, None)?;
+        if let Some(var) = self.nc_file.variable(id_var_name) {
+            let ids: Vec<i64> = var.get_values(..)?;
             ids.iter()
                 .position(|&id| id == block_id)
                 .ok_or_else(|| ExodusError::EntityNotFound {
-                    entity_type,
+                    entity_type: entity_type.to_string(),
                     id: block_id,
                 })
         } else {
             Err(ExodusError::EntityNotFound {
-                entity_type,
+                entity_type: entity_type.to_string(),
                 id: block_id,
             })
         }
@@ -513,8 +515,8 @@ impl ExodusFile<mode::Append> {
             _ => return Err(ExodusError::InvalidEntityType(entity_type.to_string())),
         };
 
-        if let Ok(var) = self.nc_file.variable(id_var_name) {
-            let ids: Vec<i64> = var.values(None, None)?;
+        if let Some(var) = self.nc_file.variable(id_var_name) {
+            let ids: Vec<i64> = var.get_values(..)?;
             Ok(ids)
         } else {
             Ok(Vec::new())
@@ -535,7 +537,7 @@ impl ExodusFile<mode::Append> {
         }
 
         Err(ExodusError::EntityNotFound {
-            entity_type: EntityType::ElemBlock,
+            entity_type: EntityType::ElemBlock.to_string(),
             id: block_id,
         })
     }
@@ -551,9 +553,14 @@ impl ExodusFile<mode::Append> {
 
         let topology = var
             .attribute("elem_type")
-            .and_then(|attr| attr.value()?.as_str().ok())
-            .unwrap_or("UNKNOWN")
-            .to_string();
+            .and_then(|attr| {
+                if let Ok(netcdf::AttributeValue::Str(s)) = attr.value() {
+                    Some(s)
+                } else {
+                    None
+                }
+            })
+            .unwrap_or_else(|| "UNKNOWN".to_string());
 
         let dims = var.dimensions();
         let num_entries = dims.first().map(|d| d.len()).unwrap_or(0);
@@ -586,17 +593,17 @@ impl ExodusFile<mode::Append> {
             _ => return Err(ExodusError::InvalidEntityType(entity_type.to_string())),
         };
 
-        if let Ok(var) = self.nc_file.variable(id_var_name) {
-            let ids: Vec<i64> = var.values(None, None)?;
+        if let Some(var) = self.nc_file.variable(id_var_name) {
+            let ids: Vec<i64> = var.get_values(..)?;
             ids.iter()
                 .position(|&id| id == block_id)
                 .ok_or_else(|| ExodusError::EntityNotFound {
-                    entity_type,
+                    entity_type: entity_type.to_string(),
                     id: block_id,
                 })
         } else {
             Err(ExodusError::EntityNotFound {
-                entity_type,
+                entity_type: entity_type.to_string(),
                 id: block_id,
             })
         }
@@ -616,7 +623,12 @@ mod tests {
 
         // Write
         {
-            let mut file = ExodusFile::create_default(tmp.path()).unwrap();
+            // Use clobber mode since NamedTempFile creates the file
+            let options = crate::types::CreateOptions {
+                mode: crate::types::CreateMode::Clobber,
+                ..Default::default()
+            };
+            let mut file = ExodusFile::create(tmp.path(), options).unwrap();
             let params = InitParams {
                 title: "Test Hex Block".into(),
                 num_dim: 3,
@@ -667,7 +679,11 @@ mod tests {
         let tmp = NamedTempFile::new().unwrap();
 
         {
-            let mut file = ExodusFile::create_default(tmp.path()).unwrap();
+            let options = crate::types::CreateOptions {
+                mode: crate::types::CreateMode::Clobber,
+                ..Default::default()
+            };
+            let mut file = ExodusFile::create(tmp.path(), options).unwrap();
             let params = InitParams {
                 title: "Test Quad Block".into(),
                 num_dim: 2,

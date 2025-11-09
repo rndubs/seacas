@@ -454,6 +454,7 @@ impl Connectivity {
 }
 
 /// Iterator over connectivity entries
+#[derive(Debug)]
 pub struct ConnectivityIterator<'a> {
     connectivity: &'a Connectivity,
     index: usize,
