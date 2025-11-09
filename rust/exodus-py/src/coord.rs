@@ -34,19 +34,6 @@ impl ExodusWriter {
             .into_py()?;
         Ok(())
     }
-
-    /// Write coordinate names
-    ///
-    /// Args:
-    ///     names: List of coordinate names (e.g., ["X", "Y", "Z"])
-    ///
-    /// Example:
-    ///     >>> writer.put_coord_names(["X", "Y", "Z"])
-    fn put_coord_names(&mut self, names: Vec<String>) -> PyResult<()> {
-        let name_refs: Vec<&str> = names.iter().map(|s| s.as_str()).collect();
-        self.file_mut()?.put_coord_names(&name_refs).into_py()?;
-        Ok(())
-    }
 }
 
 #[pymethods]
@@ -68,32 +55,13 @@ impl ExodusAppender {
         Ok(())
     }
 
-    /// Write coordinate names
-    fn put_coord_names(&mut self, names: Vec<String>) -> PyResult<()> {
-        let name_refs: Vec<&str> = names.iter().map(|s| s.as_str()).collect();
-        self.file_mut()?.put_coord_names(&name_refs).into_py()?;
-        Ok(())
-    }
-
     /// Read nodal coordinates
     ///
     /// Returns:
     ///     Tuple of (x, y, z) coordinate arrays
     fn get_coords(&self) -> PyResult<(Vec<f64>, Vec<f64>, Vec<f64>)> {
-        let coords = self.file.as_ref()
-            .ok_or_else(|| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>("File closed"))?
-            .get_coords()
-            .into_py()?;
-
+        let coords = self.file_ref()?.coords::<f64>().into_py()?;
         Ok((coords.x, coords.y, coords.z))
-    }
-
-    /// Read coordinate names
-    fn get_coord_names(&self) -> PyResult<Vec<String>> {
-        self.file.as_ref()
-            .ok_or_else(|| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>("File closed"))?
-            .get_coord_names()
-            .into_py()
     }
 }
 
@@ -107,15 +75,7 @@ impl ExodusReader {
     /// Example:
     ///     >>> x, y, z = reader.get_coords()
     fn get_coords(&self) -> PyResult<(Vec<f64>, Vec<f64>, Vec<f64>)> {
-        let coords = self.file_ref().get_coords().into_py()?;
+        let coords = self.file_ref().coords::<f64>().into_py()?;
         Ok((coords.x, coords.y, coords.z))
-    }
-
-    /// Read coordinate names
-    ///
-    /// Returns:
-    ///     List of coordinate names
-    fn get_coord_names(&self) -> PyResult<Vec<String>> {
-        self.file_ref().get_coord_names().into_py()
     }
 }
