@@ -82,7 +82,6 @@ def test_put_and_get_coords_3d():
             os.unlink(tmp_path)
 
 
-@pytest.mark.skip(reason="Coordinate names not yet implemented in bindings")
 def test_coord_names():
     """Test setting and reading coordinate names"""
     with tempfile.NamedTemporaryFile(suffix=".exo", delete=False) as tmp:

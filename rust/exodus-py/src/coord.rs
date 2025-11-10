@@ -34,6 +34,19 @@ impl ExodusWriter {
             .into_py()?;
         Ok(())
     }
+
+    /// Write coordinate names
+    ///
+    /// Args:
+    ///     names: List of coordinate names (length must match num_dim)
+    ///
+    /// Example:
+    ///     >>> writer.put_coord_names(["X", "Y", "Z"])
+    fn put_coord_names(&mut self, names: Vec<String>) -> PyResult<()> {
+        let names_str: Vec<&str> = names.iter().map(|s| s.as_str()).collect();
+        self.file_mut()?.put_coord_names(&names_str).into_py()?;
+        Ok(())
+    }
 }
 
 #[pymethods]
@@ -110,5 +123,18 @@ impl ExodusReader {
     ///     >>> z = reader.get_coord_z()
     fn get_coord_z(&self) -> PyResult<Vec<f64>> {
         self.file_ref().get_coord_z::<f64>().into_py()
+    }
+
+    /// Read coordinate names
+    ///
+    /// Returns:
+    ///     List of coordinate names (e.g., ["X", "Y", "Z"])
+    ///     Empty list if not present in file
+    ///
+    /// Example:
+    ///     >>> names = reader.get_coord_names()
+    ///     >>> print(names)  # ["X", "Y", "Z"]
+    fn get_coord_names(&self) -> PyResult<Vec<String>> {
+        self.file_ref().coord_names().into_py()
     }
 }

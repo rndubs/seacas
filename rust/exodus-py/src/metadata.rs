@@ -13,20 +13,30 @@ impl ExodusWriter {
         Ok(())
     }
 
-    /// Write QA records (NOTE: Not yet implemented in exodus-rs)
-    fn put_qa_records(&mut self, _qa_records: Vec<QaRecord>) -> PyResult<()> {
-        Err(PyErr::new::<pyo3::exceptions::PyNotImplementedError, _>(
-            "put_qa_records not yet implemented in exodus-rs"
-        ))
+    /// Write QA records
+    ///
+    /// Args:
+    ///     qa_records: List of QaRecord objects containing code provenance info
+    ///
+    /// Example:
+    ///     >>> qa = QaRecord("MyApp", "1.0", "2025-01-15", "10:30:00")
+    ///     >>> writer.put_qa_records([qa])
+    fn put_qa_records(&mut self, qa_records: Vec<QaRecord>) -> PyResult<()> {
+        let rust_records: Vec<exodus_rs::types::QaRecord> = qa_records
+            .iter()
+            .map(|qa| qa.to_rust())
+            .collect();
+        self.file_mut()?.put_qa_records(&rust_records).into_py()?;
+        Ok(())
     }
 }
 
 #[pymethods]
 impl ExodusAppender {
-    /// Read QA records (NOTE: Not yet implemented in exodus-rs)
+    /// Read QA records (NOTE: Not available in Append mode - use ExodusReader instead)
     fn get_qa_records(&self) -> PyResult<Vec<QaRecord>> {
         Err(PyErr::new::<pyo3::exceptions::PyNotImplementedError, _>(
-            "get_qa_records not yet implemented in exodus-rs"
+            "get_qa_records not available in Append mode - use ExodusReader instead"
         ))
     }
 
@@ -40,11 +50,22 @@ impl ExodusAppender {
 
 #[pymethods]
 impl ExodusReader {
-    /// Read QA records (NOTE: Not yet implemented in exodus-rs)
+    /// Read QA records
+    ///
+    /// Returns:
+    ///     List of QaRecord objects with code provenance information
+    ///
+    /// Example:
+    ///     >>> reader = ExodusReader.open("mesh.exo")
+    ///     >>> qa_records = reader.get_qa_records()
+    ///     >>> for qa in qa_records:
+    ///     ...     print(f"{qa.code_name} {qa.code_version}")
     fn get_qa_records(&self) -> PyResult<Vec<QaRecord>> {
-        Err(PyErr::new::<pyo3::exceptions::PyNotImplementedError, _>(
-            "get_qa_records not yet implemented in exodus-rs"
-        ))
+        let rust_records = self.file.qa_records().into_py()?;
+        Ok(rust_records
+            .iter()
+            .map(|qa| QaRecord::from_rust(qa))
+            .collect())
     }
 
     /// Read information records
