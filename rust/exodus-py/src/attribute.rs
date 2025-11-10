@@ -7,15 +7,10 @@ use crate::file::{ExodusWriter, ExodusAppender, ExodusReader};
 use crate::types::{EntityType, AttributeType};
 
 /// Python wrapper for AttributeData
-#[pyclass]
+#[pyclass(name = "AttributeData")]
 #[derive(Clone)]
-pub enum AttributeData {
-    /// Integer attribute values
-    Integer { values: Vec<i64> },
-    /// Double precision attribute values
-    Double { values: Vec<f64> },
-    /// Character string attribute value
-    Char { value: String },
+pub struct AttributeData {
+    inner: RustAttributeData,
 }
 
 #[pymethods]
@@ -23,25 +18,31 @@ impl AttributeData {
     /// Create an integer attribute
     #[staticmethod]
     fn integer(values: Vec<i64>) -> Self {
-        AttributeData::Integer { values }
+        AttributeData {
+            inner: RustAttributeData::Integer(values),
+        }
     }
 
     /// Create a double attribute
     #[staticmethod]
     fn double(values: Vec<f64>) -> Self {
-        AttributeData::Double { values }
+        AttributeData {
+            inner: RustAttributeData::Double(values),
+        }
     }
 
     /// Create a character/string attribute
     #[staticmethod]
     fn char(value: String) -> Self {
-        AttributeData::Char { value }
+        AttributeData {
+            inner: RustAttributeData::Char(value),
+        }
     }
 
     /// Get the integer values (if this is an integer attribute)
     fn as_integer(&self) -> PyResult<Vec<i64>> {
-        match self {
-            AttributeData::Integer { values } => Ok(values.clone()),
+        match &self.inner {
+            RustAttributeData::Integer(values) => Ok(values.clone()),
             _ => Err(PyErr::new::<pyo3::exceptions::PyTypeError, _>(
                 "Attribute is not an integer type"
             )),
@@ -50,8 +51,8 @@ impl AttributeData {
 
     /// Get the double values (if this is a double attribute)
     fn as_double(&self) -> PyResult<Vec<f64>> {
-        match self {
-            AttributeData::Double { values } => Ok(values.clone()),
+        match &self.inner {
+            RustAttributeData::Double(values) => Ok(values.clone()),
             _ => Err(PyErr::new::<pyo3::exceptions::PyTypeError, _>(
                 "Attribute is not a double type"
             )),
@@ -60,8 +61,8 @@ impl AttributeData {
 
     /// Get the string value (if this is a character attribute)
     fn as_char(&self) -> PyResult<String> {
-        match self {
-            AttributeData::Char { value } => Ok(value.clone()),
+        match &self.inner {
+            RustAttributeData::Char(value) => Ok(value.clone()),
             _ => Err(PyErr::new::<pyo3::exceptions::PyTypeError, _>(
                 "Attribute is not a character type"
             )),
@@ -69,28 +70,22 @@ impl AttributeData {
     }
 
     fn __repr__(&self) -> String {
-        match self {
-            AttributeData::Integer { values } => format!("AttributeData.Integer({:?})", values),
-            AttributeData::Double { values } => format!("AttributeData.Double({:?})", values),
-            AttributeData::Char { value } => format!("AttributeData.Char('{}')", value),
+        match &self.inner {
+            RustAttributeData::Integer(values) => format!("AttributeData.Integer({:?})", values),
+            RustAttributeData::Double(values) => format!("AttributeData.Double({:?})", values),
+            RustAttributeData::Char(value) => format!("AttributeData.Char('{}')", value),
         }
     }
 }
 
 impl AttributeData {
     pub fn to_rust(&self) -> RustAttributeData {
-        match self {
-            AttributeData::Integer { values } => RustAttributeData::Integer(values.clone()),
-            AttributeData::Double { values } => RustAttributeData::Double(values.clone()),
-            AttributeData::Char { value } => RustAttributeData::Char(value.clone()),
-        }
+        self.inner.clone()
     }
 
     pub fn from_rust(data: &RustAttributeData) -> Self {
-        match data {
-            RustAttributeData::Integer(values) => AttributeData::Integer { values: values.clone() },
-            RustAttributeData::Double(values) => AttributeData::Double { values: values.clone() },
-            RustAttributeData::Char(value) => AttributeData::Char { value: value.clone() },
+        AttributeData {
+            inner: data.clone(),
         }
     }
 }

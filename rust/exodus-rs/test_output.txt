@@ -1,0 +1,521 @@
+   Compiling hdf5-metno-sys v0.10.1
+   Compiling thiserror v1.0.69
+   Compiling netcdf-sys v0.8.3
+   Compiling netcdf v0.11.1
+   Compiling exodus-rs v0.1.0 (/home/user/seacas/rust/exodus-rs)
+warning: unused import: `ExodusError`
+ --> src/file.rs:6:20
+  |
+6 | use crate::error::{ExodusError, Result};
+  |                    ^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused import: `netcdf`
+  --> src/map.rs:14:5
+   |
+14 | use netcdf;
+   |     ^^^^^^
+
+error[E0599]: no method named `put_attribute` found for struct `Variable<'g>` in the current scope
+   --> src/attribute.rs:89:29
+    |
+ 89 |                         var.put_attribute(name, values[0])
+    |                             ^^^^^^^^^^^^^
+    |
+help: there is a method `attribute` with a similar name, but with different arguments
+   --> /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/netcdf-0.11.1/src/variable.rs:124:5
+    |
+124 |     pub fn attribute<'a>(&'a self, name: &str) -> Option<Attribute<'a>> {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+error[E0599]: no method named `put_attribute` found for struct `Variable<'g>` in the current scope
+   --> src/attribute.rs:92:29
+    |
+ 92 |                         var.put_attribute(name, &values[..])
+    |                             ^^^^^^^^^^^^^
+    |
+help: there is a method `attribute` with a similar name, but with different arguments
+   --> /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/netcdf-0.11.1/src/variable.rs:124:5
+    |
+124 |     pub fn attribute<'a>(&'a self, name: &str) -> Option<Attribute<'a>> {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+error[E0599]: no method named `put_attribute` found for struct `Variable<'g>` in the current scope
+   --> src/attribute.rs:98:29
+    |
+ 98 |                         var.put_attribute(name, values[0])
+    |                             ^^^^^^^^^^^^^
+    |
+help: there is a method `attribute` with a similar name, but with different arguments
+   --> /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/netcdf-0.11.1/src/variable.rs:124:5
+    |
+124 |     pub fn attribute<'a>(&'a self, name: &str) -> Option<Attribute<'a>> {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+error[E0599]: no method named `put_attribute` found for struct `Variable<'g>` in the current scope
+   --> src/attribute.rs:101:29
+    |
+101 |                         var.put_attribute(name, &values[..])
+    |                             ^^^^^^^^^^^^^
+    |
+help: there is a method `attribute` with a similar name, but with different arguments
+   --> /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/netcdf-0.11.1/src/variable.rs:124:5
+    |
+124 |     pub fn attribute<'a>(&'a self, name: &str) -> Option<Attribute<'a>> {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+error[E0599]: no method named `put_attribute` found for struct `Variable<'g>` in the current scope
+   --> src/attribute.rs:106:25
+    |
+106 |                     var.put_attribute(name, value.as_str())
+    |                         ^^^^^^^^^^^^^
+    |
+help: there is a method `attribute` with a similar name, but with different arguments
+   --> /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/netcdf-0.11.1/src/variable.rs:124:5
+    |
+124 |     pub fn attribute<'a>(&'a self, name: &str) -> Option<Attribute<'a>> {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+error[E0599]: no method named `elem_block_ids` found for reference `&ExodusFile<mode::Write>` in the current scope
+   --> src/attribute.rs:158:43
+    |
+158 |             EntityType::ElemBlock => self.elem_block_ids()?,
+    |                                           ^^^^^^^^^^^^^^
+    |
+help: there is a method `block_ids` with a similar name, but with different arguments
+   --> src/block.rs:289:5
+    |
+289 |     pub fn block_ids(&self, entity_type: EntityType) -> Result<Vec<EntityId>> {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+error[E0599]: no method named `edge_block_ids` found for reference `&ExodusFile<mode::Write>` in the current scope
+   --> src/attribute.rs:159:43
+    |
+159 |             EntityType::EdgeBlock => self.edge_block_ids()?,
+    |                                           ^^^^^^^^^^^^^^
+    |
+help: there is a method `block_ids` with a similar name, but with different arguments
+   --> src/block.rs:289:5
+    |
+289 |     pub fn block_ids(&self, entity_type: EntityType) -> Result<Vec<EntityId>> {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+error[E0599]: no method named `face_block_ids` found for reference `&ExodusFile<mode::Write>` in the current scope
+   --> src/attribute.rs:160:43
+    |
+160 |             EntityType::FaceBlock => self.face_block_ids()?,
+    |                                           ^^^^^^^^^^^^^^
+    |
+help: there is a method `block_ids` with a similar name, but with different arguments
+   --> src/block.rs:289:5
+    |
+289 |     pub fn block_ids(&self, entity_type: EntityType) -> Result<Vec<EntityId>> {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+error[E0599]: no method named `node_set_ids` found for reference `&ExodusFile<mode::Write>` in the current scope
+   --> src/attribute.rs:161:41
+    |
+161 |             EntityType::NodeSet => self.node_set_ids()?,
+    |                                         ^^^^^^^^^^^^
+    |
+help: there is a method `set_ids` with a similar name, but with different arguments
+   --> src/set.rs:31:5
+    |
+ 31 |     pub fn set_ids(&self, entity_type: EntityType) -> Result<Vec<EntityId>> {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+error[E0599]: no method named `edge_set_ids` found for reference `&ExodusFile<mode::Write>` in the current scope
+   --> src/attribute.rs:162:41
+    |
+162 |             EntityType::EdgeSet => self.edge_set_ids()?,
+    |                                         ^^^^^^^^^^^^
+    |
+help: there is a method `set_ids` with a similar name, but with different arguments
+   --> src/set.rs:31:5
+    |
+ 31 |     pub fn set_ids(&self, entity_type: EntityType) -> Result<Vec<EntityId>> {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+error[E0599]: no method named `face_set_ids` found for reference `&ExodusFile<mode::Write>` in the current scope
+   --> src/attribute.rs:163:41
+    |
+163 |             EntityType::FaceSet => self.face_set_ids()?,
+    |                                         ^^^^^^^^^^^^
+    |
+help: there is a method `set_ids` with a similar name, but with different arguments
+   --> src/set.rs:31:5
+    |
+ 31 |     pub fn set_ids(&self, entity_type: EntityType) -> Result<Vec<EntityId>> {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+error[E0599]: no method named `side_set_ids` found for reference `&ExodusFile<mode::Write>` in the current scope
+   --> src/attribute.rs:164:41
+    |
+164 |             EntityType::SideSet => self.side_set_ids()?,
+    |                                         ^^^^^^^^^^^^
+    |
+help: there is a method `set_ids` with a similar name, but with different arguments
+   --> src/set.rs:31:5
+    |
+ 31 |     pub fn set_ids(&self, entity_type: EntityType) -> Result<Vec<EntityId>> {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+error[E0599]: no method named `elem_set_ids` found for reference `&ExodusFile<mode::Write>` in the current scope
+   --> src/attribute.rs:165:41
+    |
+165 |             EntityType::ElemSet => self.elem_set_ids()?,
+    |                                         ^^^^^^^^^^^^
+    |
+help: there is a method `set_ids` with a similar name, but with different arguments
+   --> src/set.rs:31:5
+    |
+ 31 |     pub fn set_ids(&self, entity_type: EntityType) -> Result<Vec<EntityId>> {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+error[E0599]: no method named `elem_block_ids` found for reference `&ExodusFile<mode::Read>` in the current scope
+   --> src/attribute.rs:355:43
+    |
+355 |             EntityType::ElemBlock => self.elem_block_ids()?,
+    |                                           ^^^^^^^^^^^^^^
+    |
+help: there is a method `block_ids` with a similar name, but with different arguments
+   --> src/block.rs:318:5
+    |
+318 |     pub fn block_ids(&self, entity_type: EntityType) -> Result<Vec<EntityId>> {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+error[E0599]: no method named `edge_block_ids` found for reference `&ExodusFile<mode::Read>` in the current scope
+   --> src/attribute.rs:356:43
+    |
+356 |             EntityType::EdgeBlock => self.edge_block_ids()?,
+    |                                           ^^^^^^^^^^^^^^
+    |
+help: there is a method `block_ids` with a similar name, but with different arguments
+   --> src/block.rs:318:5
+    |
+318 |     pub fn block_ids(&self, entity_type: EntityType) -> Result<Vec<EntityId>> {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+error[E0599]: no method named `face_block_ids` found for reference `&ExodusFile<mode::Read>` in the current scope
+   --> src/attribute.rs:357:43
+    |
+357 |             EntityType::FaceBlock => self.face_block_ids()?,
+    |                                           ^^^^^^^^^^^^^^
+    |
+help: there is a method `block_ids` with a similar name, but with different arguments
+   --> src/block.rs:318:5
+    |
+318 |     pub fn block_ids(&self, entity_type: EntityType) -> Result<Vec<EntityId>> {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+error[E0599]: no method named `node_set_ids` found for reference `&ExodusFile<mode::Read>` in the current scope
+   --> src/attribute.rs:358:41
+    |
+358 |             EntityType::NodeSet => self.node_set_ids()?,
+    |                                         ^^^^^^^^^^^^
+    |
+help: there is a method `node_set` with a similar name, but with different arguments
+   --> src/set.rs:519:5
+    |
+519 |     pub fn node_set(&self, set_id: EntityId) -> Result<NodeSet> {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+error[E0599]: no method named `edge_set_ids` found for reference `&ExodusFile<mode::Read>` in the current scope
+   --> src/attribute.rs:359:41
+    |
+359 |             EntityType::EdgeSet => self.edge_set_ids()?,
+    |                                         ^^^^^^^^^^^^
+    |
+help: there is a method `set_ids` with a similar name, but with different arguments
+   --> src/set.rs:31:5
+    |
+ 31 |     pub fn set_ids(&self, entity_type: EntityType) -> Result<Vec<EntityId>> {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+error[E0599]: no method named `face_set_ids` found for reference `&ExodusFile<mode::Read>` in the current scope
+   --> src/attribute.rs:360:41
+    |
+360 |             EntityType::FaceSet => self.face_set_ids()?,
+    |                                         ^^^^^^^^^^^^
+    |
+help: there is a method `set_ids` with a similar name, but with different arguments
+   --> src/set.rs:31:5
+    |
+ 31 |     pub fn set_ids(&self, entity_type: EntityType) -> Result<Vec<EntityId>> {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+error[E0599]: no method named `side_set_ids` found for reference `&ExodusFile<mode::Read>` in the current scope
+   --> src/attribute.rs:361:41
+    |
+361 |             EntityType::SideSet => self.side_set_ids()?,
+    |                                         ^^^^^^^^^^^^
+    |
+help: there is a method `side_set` with a similar name, but with different arguments
+   --> src/set.rs:569:5
+    |
+569 |     pub fn side_set(&self, set_id: EntityId) -> Result<SideSet> {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+error[E0599]: no method named `elem_set_ids` found for reference `&ExodusFile<mode::Read>` in the current scope
+   --> src/attribute.rs:362:41
+    |
+362 |             EntityType::ElemSet => self.elem_set_ids()?,
+    |                                         ^^^^^^^^^^^^
+    |
+help: there is a method `set_ids` with a similar name, but with different arguments
+   --> src/set.rs:31:5
+    |
+ 31 |     pub fn set_ids(&self, entity_type: EntityType) -> Result<Vec<EntityId>> {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused variable: `entity_type`
+   --> src/block.rs:238:31
+    |
+238 |     fn get_block_index(&self, entity_type: EntityType, _block_id: EntityId) -> Result<usize> {
+    |                               ^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_entity_type`
+    |
+    = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused variable: `set`
+   --> src/set.rs:531:13
+    |
+531 |         let set = self.set(EntityType::NodeSet, set_id)?;
+    |             ^^^ help: if this is intentional, prefix it with an underscore: `_set`
+
+warning: unused variable: `set`
+   --> src/set.rs:581:13
+    |
+581 |         let set = self.set(EntityType::SideSet, set_id)?;
+    |             ^^^ help: if this is intentional, prefix it with an underscore: `_set`
+
+warning: unused variable: `i`
+  --> src/metadata.rs:52:14
+   |
+52 |         for (i, qa) in qa_records.iter().enumerate() {
+   |              ^
+   |
+help: if this is intentional, prefix it with an underscore
+   |
+52 |         for (_i, qa) in qa_records.iter().enumerate() {
+   |              +
+help: you might have meant to pattern match on the similarly named constant `MAX_INFO_STRING_LENGTH`
+   |
+52 -         for (i, qa) in qa_records.iter().enumerate() {
+52 +         for (utils::constants::MAX_INFO_STRING_LENGTH, qa) in qa_records.iter().enumerate() {
+   |
+
+warning: unused variable: `i`
+   --> src/metadata.rs:155:14
+    |
+155 |         for (i, line) in info_records.iter().enumerate() {
+    |              ^
+    |
+help: if this is intentional, prefix it with an underscore
+    |
+155 |         for (_i, line) in info_records.iter().enumerate() {
+    |              +
+help: you might have meant to pattern match on the similarly named constant `MAX_INFO_STRING_LENGTH`
+    |
+155 -         for (i, line) in info_records.iter().enumerate() {
+155 +         for (utils::constants::MAX_INFO_STRING_LENGTH, line) in info_records.iter().enumerate() {
+    |
+
+For more information about this error, try `rustc --explain E0599`.
+warning: `exodus-rs` (lib) generated 7 warnings
+error: could not compile `exodus-rs` (lib) due to 21 previous errors; 7 warnings emitted
+warning: build failed, waiting for other jobs to finish...
+error[E0599]: no method named `elem_block_ids` found for reference `&file::ExodusFile<mode::Write>` in the current scope
+   --> src/attribute.rs:158:43
+    |
+158 |             EntityType::ElemBlock => self.elem_block_ids()?,
+    |                                           ^^^^^^^^^^^^^^
+    |
+help: there is a method `block_ids` with a similar name, but with different arguments
+   --> src/block.rs:289:5
+    |
+289 |     pub fn block_ids(&self, entity_type: EntityType) -> Result<Vec<EntityId>> {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+error[E0599]: no method named `edge_block_ids` found for reference `&file::ExodusFile<mode::Write>` in the current scope
+   --> src/attribute.rs:159:43
+    |
+159 |             EntityType::EdgeBlock => self.edge_block_ids()?,
+    |                                           ^^^^^^^^^^^^^^
+    |
+help: there is a method `block_ids` with a similar name, but with different arguments
+   --> src/block.rs:289:5
+    |
+289 |     pub fn block_ids(&self, entity_type: EntityType) -> Result<Vec<EntityId>> {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+error[E0599]: no method named `face_block_ids` found for reference `&file::ExodusFile<mode::Write>` in the current scope
+   --> src/attribute.rs:160:43
+    |
+160 |             EntityType::FaceBlock => self.face_block_ids()?,
+    |                                           ^^^^^^^^^^^^^^
+    |
+help: there is a method `block_ids` with a similar name, but with different arguments
+   --> src/block.rs:289:5
+    |
+289 |     pub fn block_ids(&self, entity_type: EntityType) -> Result<Vec<EntityId>> {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+error[E0599]: no method named `node_set_ids` found for reference `&file::ExodusFile<mode::Write>` in the current scope
+   --> src/attribute.rs:161:41
+    |
+161 |             EntityType::NodeSet => self.node_set_ids()?,
+    |                                         ^^^^^^^^^^^^
+    |
+help: there is a method `set_ids` with a similar name, but with different arguments
+   --> src/set.rs:31:5
+    |
+ 31 |     pub fn set_ids(&self, entity_type: EntityType) -> Result<Vec<EntityId>> {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+error[E0599]: no method named `edge_set_ids` found for reference `&file::ExodusFile<mode::Write>` in the current scope
+   --> src/attribute.rs:162:41
+    |
+162 |             EntityType::EdgeSet => self.edge_set_ids()?,
+    |                                         ^^^^^^^^^^^^
+    |
+help: there is a method `set_ids` with a similar name, but with different arguments
+   --> src/set.rs:31:5
+    |
+ 31 |     pub fn set_ids(&self, entity_type: EntityType) -> Result<Vec<EntityId>> {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+error[E0599]: no method named `face_set_ids` found for reference `&file::ExodusFile<mode::Write>` in the current scope
+   --> src/attribute.rs:163:41
+    |
+163 |             EntityType::FaceSet => self.face_set_ids()?,
+    |                                         ^^^^^^^^^^^^
+    |
+help: there is a method `set_ids` with a similar name, but with different arguments
+   --> src/set.rs:31:5
+    |
+ 31 |     pub fn set_ids(&self, entity_type: EntityType) -> Result<Vec<EntityId>> {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+error[E0599]: no method named `side_set_ids` found for reference `&file::ExodusFile<mode::Write>` in the current scope
+   --> src/attribute.rs:164:41
+    |
+164 |             EntityType::SideSet => self.side_set_ids()?,
+    |                                         ^^^^^^^^^^^^
+    |
+help: there is a method `set_ids` with a similar name, but with different arguments
+   --> src/set.rs:31:5
+    |
+ 31 |     pub fn set_ids(&self, entity_type: EntityType) -> Result<Vec<EntityId>> {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+error[E0599]: no method named `elem_set_ids` found for reference `&file::ExodusFile<mode::Write>` in the current scope
+   --> src/attribute.rs:165:41
+    |
+165 |             EntityType::ElemSet => self.elem_set_ids()?,
+    |                                         ^^^^^^^^^^^^
+    |
+help: there is a method `set_ids` with a similar name, but with different arguments
+   --> src/set.rs:31:5
+    |
+ 31 |     pub fn set_ids(&self, entity_type: EntityType) -> Result<Vec<EntityId>> {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+error[E0599]: no method named `elem_block_ids` found for reference `&file::ExodusFile<mode::Read>` in the current scope
+   --> src/attribute.rs:355:43
+    |
+355 |             EntityType::ElemBlock => self.elem_block_ids()?,
+    |                                           ^^^^^^^^^^^^^^
+    |
+help: there is a method `block_ids` with a similar name, but with different arguments
+   --> src/block.rs:318:5
+    |
+318 |     pub fn block_ids(&self, entity_type: EntityType) -> Result<Vec<EntityId>> {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+error[E0599]: no method named `edge_block_ids` found for reference `&file::ExodusFile<mode::Read>` in the current scope
+   --> src/attribute.rs:356:43
+    |
+356 |             EntityType::EdgeBlock => self.edge_block_ids()?,
+    |                                           ^^^^^^^^^^^^^^
+    |
+help: there is a method `block_ids` with a similar name, but with different arguments
+   --> src/block.rs:318:5
+    |
+318 |     pub fn block_ids(&self, entity_type: EntityType) -> Result<Vec<EntityId>> {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+error[E0599]: no method named `face_block_ids` found for reference `&file::ExodusFile<mode::Read>` in the current scope
+   --> src/attribute.rs:357:43
+    |
+357 |             EntityType::FaceBlock => self.face_block_ids()?,
+    |                                           ^^^^^^^^^^^^^^
+    |
+help: there is a method `block_ids` with a similar name, but with different arguments
+   --> src/block.rs:318:5
+    |
+318 |     pub fn block_ids(&self, entity_type: EntityType) -> Result<Vec<EntityId>> {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+error[E0599]: no method named `node_set_ids` found for reference `&file::ExodusFile<mode::Read>` in the current scope
+   --> src/attribute.rs:358:41
+    |
+358 |             EntityType::NodeSet => self.node_set_ids()?,
+    |                                         ^^^^^^^^^^^^
+    |
+help: there is a method `node_set` with a similar name, but with different arguments
+   --> src/set.rs:519:5
+    |
+519 |     pub fn node_set(&self, set_id: EntityId) -> Result<NodeSet> {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+error[E0599]: no method named `edge_set_ids` found for reference `&file::ExodusFile<mode::Read>` in the current scope
+   --> src/attribute.rs:359:41
+    |
+359 |             EntityType::EdgeSet => self.edge_set_ids()?,
+    |                                         ^^^^^^^^^^^^
+    |
+help: there is a method `set_ids` with a similar name, but with different arguments
+   --> src/set.rs:31:5
+    |
+ 31 |     pub fn set_ids(&self, entity_type: EntityType) -> Result<Vec<EntityId>> {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+error[E0599]: no method named `face_set_ids` found for reference `&file::ExodusFile<mode::Read>` in the current scope
+   --> src/attribute.rs:360:41
+    |
+360 |             EntityType::FaceSet => self.face_set_ids()?,
+    |                                         ^^^^^^^^^^^^
+    |
+help: there is a method `set_ids` with a similar name, but with different arguments
+   --> src/set.rs:31:5
+    |
+ 31 |     pub fn set_ids(&self, entity_type: EntityType) -> Result<Vec<EntityId>> {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+error[E0599]: no method named `side_set_ids` found for reference `&file::ExodusFile<mode::Read>` in the current scope
+   --> src/attribute.rs:361:41
+    |
+361 |             EntityType::SideSet => self.side_set_ids()?,
+    |                                         ^^^^^^^^^^^^
+    |
+help: there is a method `side_set` with a similar name, but with different arguments
+   --> src/set.rs:569:5
+    |
+569 |     pub fn side_set(&self, set_id: EntityId) -> Result<SideSet> {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+error[E0599]: no method named `elem_set_ids` found for reference `&file::ExodusFile<mode::Read>` in the current scope
+   --> src/attribute.rs:362:41
+    |
+362 |             EntityType::ElemSet => self.elem_set_ids()?,
+    |                                         ^^^^^^^^^^^^
+    |
+help: there is a method `set_ids` with a similar name, but with different arguments
+   --> src/set.rs:31:5
+    |
+ 31 |     pub fn set_ids(&self, entity_type: EntityType) -> Result<Vec<EntityId>> {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: `exodus-rs` (lib test) generated 7 warnings (7 duplicates)
+error: could not compile `exodus-rs` (lib test) due to 21 previous errors; 7 warnings emitted
