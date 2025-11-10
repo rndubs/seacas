@@ -146,27 +146,64 @@ fn main() -> Result<()> {
         }
 
         Commands::All => {
-            let tests = [
-                ("basic_mesh_2d.exo", basic_mesh::generate_2d as fn(&PathBuf) -> Result<()>),
-                ("basic_mesh_3d.exo", basic_mesh::generate_3d),
-                ("multiple_blocks.exo", element_blocks::generate_multiple_blocks),
-                ("node_sets.exo", sets::generate_node_sets),
-                ("side_sets.exo", sets::generate_side_sets),
-                ("element_sets.exo", sets::generate_element_sets),
-                ("all_sets.exo", sets::generate_all_sets),
-                ("global_variables.exo", variables::generate_global_variables),
-                ("nodal_variables.exo", variables::generate_nodal_variables),
-                ("element_variables.exo", variables::generate_element_variables),
-                ("all_variables.exo", variables::generate_all_variables),
-            ];
+            let mut count = 0;
 
-            for (filename, generator) in tests {
-                let path = cli.output_dir.join(filename);
-                generator(&path)?;
-                println!("✓ Generated: {}", path.display());
-            }
+            let path = cli.output_dir.join("basic_mesh_2d.exo");
+            basic_mesh::generate_2d(&path)?;
+            println!("✓ Generated: {}", path.display());
+            count += 1;
 
-            println!("\n✓ All {} test files generated successfully!", tests.len());
+            let path = cli.output_dir.join("basic_mesh_3d.exo");
+            basic_mesh::generate_3d(&path)?;
+            println!("✓ Generated: {}", path.display());
+            count += 1;
+
+            let path = cli.output_dir.join("multiple_blocks.exo");
+            element_blocks::generate_multiple_blocks(&path)?;
+            println!("✓ Generated: {}", path.display());
+            count += 1;
+
+            let path = cli.output_dir.join("node_sets.exo");
+            sets::generate_node_sets(&path)?;
+            println!("✓ Generated: {}", path.display());
+            count += 1;
+
+            let path = cli.output_dir.join("side_sets.exo");
+            sets::generate_side_sets(&path)?;
+            println!("✓ Generated: {}", path.display());
+            count += 1;
+
+            let path = cli.output_dir.join("element_sets.exo");
+            sets::generate_element_sets(&path)?;
+            println!("✓ Generated: {}", path.display());
+            count += 1;
+
+            let path = cli.output_dir.join("all_sets.exo");
+            sets::generate_all_sets(&path)?;
+            println!("✓ Generated: {}", path.display());
+            count += 1;
+
+            let path = cli.output_dir.join("global_variables.exo");
+            variables::generate_global_variables(&path)?;
+            println!("✓ Generated: {}", path.display());
+            count += 1;
+
+            let path = cli.output_dir.join("nodal_variables.exo");
+            variables::generate_nodal_variables(&path)?;
+            println!("✓ Generated: {}", path.display());
+            count += 1;
+
+            let path = cli.output_dir.join("element_variables.exo");
+            variables::generate_element_variables(&path)?;
+            println!("✓ Generated: {}", path.display());
+            count += 1;
+
+            let path = cli.output_dir.join("all_variables.exo");
+            variables::generate_all_variables(&path)?;
+            println!("✓ Generated: {}", path.display());
+            count += 1;
+
+            println!("\n✓ All {} test files generated successfully!", count);
         }
     }
 
