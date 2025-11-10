@@ -1,0 +1,54 @@
+# Docker build context ignore file
+# This file excludes unnecessary files from the Docker build context
+# to speed up builds and reduce image size
+
+# Git
+.git/
+.gitignore
+.gitattributes
+
+# Rust build artifacts
+target/
+**/target/
+*.rs.bk
+Cargo.lock
+
+# Python artifacts
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+*.egg-info/
+dist/
+build/
+*.whl
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Documentation build artifacts
+book/
+docs/_build/
+
+# Test artifacts
+*.exo
+*.nc
+test_output/
+*.log
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+# CI/CD
+.github/
+.gitlab-ci.yml
