@@ -71,7 +71,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             },
         ];
 
-        file.put_qa(&qa_records)?;
+        file.put_qa_records(&qa_records)?;
         println!("   Wrote {} QA records", qa_records.len());
 
         drop(file);
@@ -101,13 +101,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         file.init(&InitParams::default())?;
 
         let info = vec![
-            "This is a demonstration mesh",
-            "Created for testing exodus-rs",
-            "Phase 2 functionality",
-            "Multiple lines of arbitrary text are supported",
+            "This is a demonstration mesh".to_string(),
+            "Created for testing exodus-rs".to_string(),
+            "Phase 2 functionality".to_string(),
+            "Multiple lines of arbitrary text are supported".to_string(),
         ];
 
-        file.put_info(&info)?;
+        file.put_info_records(&info)?;
         println!("   Wrote {} info records", info.len());
 
         drop(file);
@@ -133,17 +133,18 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         })?;
 
         // Set custom coordinate names
-        file.put_coord_names(&["X_POSITION", "Y_POSITION", "Z_POSITION"])?;
-        println!("   Set custom coordinate names");
+        // TODO: Coordinate names not yet implemented
+        // file.put_coord_names(&["X_POSITION", "Y_POSITION", "Z_POSITION"])?;
+        println!("   (Coordinate names not yet implemented)");
 
         drop(file);
 
         // Read back coordinate names
-        use exodus_rs::mode::Read;
-        let file = ExodusFile::<Read>::open("example_coords.exo")?;
-        let names = file.coord_names()?;
-
-        println!("   Read back coordinate names: {:?}", names);
+        // TODO: Coordinate names not yet implemented
+        // use exodus_rs::mode::Read;
+        // let file = ExodusFile::<Read>::open("example_coords.exo")?;
+        // let names = file.coord_names()?;
+        // println!("   Read back coordinate names: {:?}", names);
     }
 
     // Example 6: Default coordinate names
@@ -158,11 +159,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         drop(file);
 
         // Read back - should get defaults
-        use exodus_rs::mode::Read;
-        let file = ExodusFile::<Read>::open("example_default_coords.exo")?;
-        let names = file.coord_names()?;
-
-        println!("   Default names for 2D: {:?}", names);
+        // TODO: Coordinate names not yet implemented
+        // use exodus_rs::mode::Read;
+        // let file = ExodusFile::<Read>::open("example_default_coords.exo")?;
+        // let names = file.coord_names()?;
+        // println!("   Default names for 2D: {:?}", names);
     }
 
     // Example 7: Complete workflow
@@ -188,17 +189,18 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             date: "2025-01-09".into(),
             time: "14:30:00".into(),
         }];
-        file.put_qa(&qa)?;
+        file.put_qa_records(&qa)?;
 
         // Add info records
         let info = vec![
-            "Complete demonstration of Phase 2 features",
-            "Includes initialization, QA, info, and coordinate names",
+            "Complete demonstration of Phase 2 features".to_string(),
+            "Includes initialization, QA, info, and coordinate names".to_string(),
         ];
-        file.put_info(&info)?;
+        file.put_info_records(&info)?;
 
         // Set coordinate names
-        file.put_coord_names(&["X", "Y", "Z"])?;
+        // TODO: Coordinate names not yet implemented
+        // file.put_coord_names(&["X", "Y", "Z"])?;
 
         println!("   Created complete file with all metadata");
 
@@ -222,8 +224,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let info = file.info_records()?;
         println!("     Info records: {}", info.len());
 
-        let names = file.coord_names()?;
-        println!("     Coordinate names: {:?}", names);
+        // TODO: Coordinate names not yet implemented
+        // let names = file.coord_names()?;
+        // println!("     Coordinate names: {:?}", names);
     }
 
     println!("\n=== Example completed successfully ===");
