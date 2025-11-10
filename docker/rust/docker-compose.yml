@@ -1,0 +1,58 @@
+version: '3.8'
+
+services:
+  # Main development environment
+  seacas-rust:
+    build:
+      context: ../..
+      dockerfile: docker/rust/Dockerfile
+    image: seacas-rust:latest
+    container_name: seacas-rust-dev
+    volumes:
+      # Mount the entire repository
+      - ../..:/workspace
+      # Optionally mount cargo cache for faster builds
+      - rust-cargo-cache:/usr/local/cargo/registry
+      - rust-target-cache:/workspace/rust/target
+    working_dir: /workspace
+    stdin_open: true
+    tty: true
+    environment:
+      # Set Rust backtrace for better error messages
+      - RUST_BACKTRACE=1
+      # Cargo build settings
+      - CARGO_INCREMENTAL=1
+    command: /bin/bash
+
+  # CI/CD test runner (non-interactive)
+  seacas-rust-ci:
+    build:
+      context: ../..
+      dockerfile: docker/rust/Dockerfile
+    image: seacas-rust:latest
+    volumes:
+      - ../..:/workspace
+    working_dir: /workspace
+    environment:
+      - RUST_BACKTRACE=1
+      - CI=true
+    command: >
+      bash -c "
+      echo 'Running CI/CD pipeline...' &&
+      cd /workspace/rust/exodus-rs &&
+      echo 'Building exodus-rs...' &&
+      cargo build --features netcdf4 &&
+      echo 'Running tests...' &&
+      cargo test --features netcdf4 -- --test-threads=1 &&
+      echo 'Building Python bindings...' &&
+      cd /workspace/rust/exodus-py &&
+      maturin build --release &&
+      echo 'All builds complete!'
+      "
+
+volumes:
+  # Persistent volumes for caching (speeds up rebuilds)
+  rust-cargo-cache:
+    driver: local
+  rust-target-cache:
+    driver: local
