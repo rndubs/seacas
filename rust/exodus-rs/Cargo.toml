@@ -32,6 +32,7 @@ serde = { version = "1.0", optional = true, features = ["derive"] }
 approx = "0.5"        # Floating point comparisons
 tempfile = "3.8"      # Temporary test files
 proptest = "1.4"      # Property-based testing
+criterion = "0.5"     # Benchmarking
 
 [features]
 default = ["netcdf4"]
@@ -44,3 +45,19 @@ serde = ["dep:serde"]
 [package.metadata.docs.rs]
 all-features = true
 rustdoc-args = ["--cfg", "docsrs"]
+
+[[bench]]
+name = "file_ops"
+harness = false
+
+[[bench]]
+name = "coordinates"
+harness = false
+
+[[bench]]
+name = "connectivity"
+harness = false
+
+[[bench]]
+name = "variables"
+harness = false
