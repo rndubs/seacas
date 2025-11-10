@@ -78,4 +78,37 @@ impl ExodusReader {
         let coords = self.file_ref().coords::<f64>().into_py()?;
         Ok((coords.x, coords.y, coords.z))
     }
+
+    /// Read only X coordinates
+    ///
+    /// Returns:
+    ///     List of X coordinates
+    ///
+    /// Example:
+    ///     >>> x = reader.get_coord_x()
+    fn get_coord_x(&self) -> PyResult<Vec<f64>> {
+        self.file_ref().get_coord_x::<f64>().into_py()
+    }
+
+    /// Read only Y coordinates
+    ///
+    /// Returns:
+    ///     List of Y coordinates
+    ///
+    /// Example:
+    ///     >>> y = reader.get_coord_y()
+    fn get_coord_y(&self) -> PyResult<Vec<f64>> {
+        self.file_ref().get_coord_y::<f64>().into_py()
+    }
+
+    /// Read only Z coordinates
+    ///
+    /// Returns:
+    ///     List of Z coordinates
+    ///
+    /// Example:
+    ///     >>> z = reader.get_coord_z()
+    fn get_coord_z(&self) -> PyResult<Vec<f64>> {
+        self.file_ref().get_coord_z::<f64>().into_py()
+    }
 }
