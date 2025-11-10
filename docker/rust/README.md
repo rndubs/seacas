@@ -14,9 +14,9 @@ This Docker container provides a complete build environment for all Rust compone
 - **Python 3.11+**: CPython interpreter with development headers
 
 ### Rust Toolchain
-- **Rust 1.75+**: Rust compiler and cargo build system
+- **Rust 1.85+**: Rust compiler and cargo build system
 - **cargo-watch**: Auto-rebuild on file changes
-- **cargo-tree**: Dependency tree visualization
+- **cargo tree**: Dependency tree visualization (built into cargo)
 
 ### Python Tools
 - **maturin 1.0+**: Build tool for Rust/Python bindings
@@ -188,8 +188,13 @@ docker run --rm -v $(pwd):/workspace seacas-rust:latest \
 
 ### Development with Auto-Rebuild
 
+Note: `cargo-watch` is not pre-installed in the image to avoid version compatibility issues. If you need it, install it in your container session:
+
 ```bash
 docker run -it --rm -v $(pwd):/workspace seacas-rust:latest bash
+
+# Install cargo-watch if needed
+cargo install cargo-watch
 
 cd /workspace/rust/exodus-rs
 cargo watch -x 'test --features netcdf4'
@@ -375,10 +380,10 @@ rust-build:
 ## Version Information
 
 - **Docker Image Version**: 0.1.0
-- **Rust Version**: 1.75+
+- **Rust Version**: 1.85+
 - **Python Version**: 3.11+
-- **HDF5 Version**: 1.10.10
-- **NetCDF Version**: 4.9.2
+- **HDF5 Version**: 1.10.8
+- **NetCDF Version**: 4.9.0
 
 ## License
 
