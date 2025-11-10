@@ -4,7 +4,7 @@
 # - exodus-py (Python bindings via PyO3)
 # - compat-tests (C/Rust compatibility tests)
 
-FROM rust:1.75-bookworm
+FROM rust:1.85-bookworm
 
 LABEL maintainer="SEACAS Development Team"
 LABEL description="Build environment for SEACAS Rust components"
@@ -47,16 +47,16 @@ RUN pkg-config --modversion hdf5 && \
 # - maturin: Build tool for PyO3 Rust/Python bindings
 # - pytest: Testing framework for Python bindings
 # - numpy: Required for array operations in exodus-py
-RUN pip3 install --no-cache-dir \
-    maturin>=1.0,<2.0 \
-    pytest>=7.0 \
-    pytest-cov>=4.0 \
-    numpy>=1.20
+RUN pip3 install --break-system-packages --no-cache-dir \
+    "maturin>=1.0,<2.0" \
+    "pytest>=7.0" \
+    "pytest-cov>=4.0" \
+    "numpy>=1.20"
 
 # Install Rust tooling for development
-# - cargo-watch: Auto-rebuild on file changes (development convenience)
-# - cargo-tree: Dependency tree visualization
-RUN cargo install cargo-watch cargo-tree
+# Note: cargo-tree is built into cargo since 1.44
+# Note: cargo-watch can be installed later if needed: cargo install cargo-watch
+# Skipping cargo-watch installation during image build to avoid compatibility issues
 
 # Set up working directory
 WORKDIR /workspace
