@@ -194,7 +194,6 @@ def test_side_set_with_dist_factors():
             os.unlink(tmp_path)
 
 
-@pytest.mark.skip(reason="Element sets not yet fully implemented in bindings")
 def test_elem_set():
     """Test creating and reading element sets"""
     with tempfile.NamedTemporaryFile(suffix=".exo", delete=False) as tmp:
@@ -227,6 +226,7 @@ def test_elem_set():
 
         # Define element set
         elem_ids = [1, 3]
+        writer.put_set(EntityType.ElemSet, 1, 2, 0)  # Define set before writing data
         writer.put_entity_set(EntityType.ElemSet, 1, elem_ids)
         writer.close()
 

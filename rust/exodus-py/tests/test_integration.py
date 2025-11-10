@@ -243,7 +243,6 @@ def test_multi_timestep_workflow():
             os.unlink(tmp_path)
 
 
-@pytest.mark.skip(reason="Element sets not yet fully implemented in bindings")
 def test_complex_mesh_with_sets():
     """Test complex mesh with multiple blocks and sets"""
     with tempfile.NamedTemporaryFile(suffix=".exo", delete=False) as tmp:
@@ -290,6 +289,7 @@ def test_complex_mesh_with_sets():
         writer.put_node_set(1, [1, 2, 3], None)
         writer.put_node_set(2, [10, 11, 12], None)
         writer.put_side_set(1, [1, 2], [1, 1], None)
+        writer.put_set(EntityType.ElemSet, 1, 2, 0)  # Define set before writing data
         writer.put_entity_set(EntityType.ElemSet, 1, [1, 3])
 
         # Name everything using generic naming API

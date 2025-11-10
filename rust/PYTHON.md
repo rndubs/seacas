@@ -796,7 +796,15 @@ Phases 12-13, 15 (NumPy, enhanced testing, distribution) remain as optional enha
 - **Added:** `ExodusReader.get_coord_z()` - Read only Z coordinates
 - **Impact:** More efficient memory usage when only one dimension is needed
 
-### Test Results (November 2025)
+**6. Critical Bug Fixed: InitParams Kwargs Not Extracted**
+- **Issue:** InitParams constructor was not extracting several kwargs parameters
+- **Missing fields:** num_elem_sets, num_edge_sets, num_face_sets, num_node_maps, num_edge_maps, num_face_maps, num_elem_maps
+- **Fix:** Added all missing kwargs extraction in InitParams.__new__()
+- **Impact:** Element sets, edge sets, face sets, and all map types now work correctly
+- **Tests fixed:** 2 previously skipped element set tests now passing
+- **Location:** `rust/exodus-py/src/types.rs`
+
+### Test Results (November 2025 - Updated)
 
 ```
 ============================= test session starts ==============================
@@ -804,18 +812,18 @@ collected 50 items
 
 tests/test_blocks.py::test_define_and_get_elem_block PASSED              [  2%]
 tests/test_blocks.py::test_elem_block_connectivity PASSED                [  4%]
-... [43 more passing tests]
+... [45 more passing tests]
+tests/test_sets.py::test_elem_set PASSED                                 [ 84%]
+tests/test_integration.py::test_complex_mesh_with_sets PASSED            [ 66%]
 
 tests/test_coordinates.py::test_coord_names SKIPPED (Coordinate names...)  [ 30%]
-tests/test_integration.py::test_complex_mesh_with_sets SKIPPED (Element sets...) [ 66%]
 tests/test_metadata.py::test_qa_record_creation SKIPPED (QA records...)   [ 68%]
 tests/test_metadata.py::test_multiple_qa_records SKIPPED (QA records...)  [ 70%]
-tests/test_sets.py::test_elem_set SKIPPED (Element sets not yet full...) [ 84%]
 
-======================== 45 passed, 5 skipped in 0.43s =========================
+======================== 47 passed, 3 skipped in 0.36s =========================
 ```
 
-**Status:** ✅ **PASSING** - 90% test pass rate
+**Status:** ✅ **PASSING** - 94% test pass rate (up from 90%!)
 
 ---
 
@@ -831,18 +839,18 @@ tests/test_sets.py::test_elem_set SKIPPED (Element sets not yet full...) [ 84%]
 
 **2. Extended Set Operations**
 - `set()`, `sets()` - Query set information
-- `entity_set()` - Read edge/face/element sets generically
 - **Impact:** Would provide more flexible set querying
+- **Note:** Element/edge/face sets now fully working via `put_entity_set()` and `get_entity_set()`
 
 **3. Appender Mode Read Operations**
 - Some read operations intentionally blocked in Append mode
 - Could be enabled if use cases emerge
 - **Impact:** Minor convenience improvement
 
-**4. QA Records Support**
-- Waiting on Rust exodus-rs implementation
-- Python bindings ready to support once available
-- **Impact:** Full metadata compatibility with C library
+**4. Features Requiring Rust Implementation**
+- **QA Records:** Python bindings ready but needs Rust implementation first
+- **Coordinate Names:** `put_coord_names()` / `get_coord_names()` not in Rust yet
+- **Impact:** Full metadata compatibility with C library once implemented
 
 ---
 
