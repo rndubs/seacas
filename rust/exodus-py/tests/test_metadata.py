@@ -22,6 +22,9 @@ def test_qa_record_creation():
     with tempfile.NamedTemporaryFile(suffix=".exo", delete=False) as tmp:
         tmp_path = tmp.name
 
+    # Delete the empty file so ExodusWriter can create it
+    os.unlink(tmp_path)
+
     try:
         writer = ExodusWriter.create(tmp_path)
         params = InitParams(title="QA Test", num_dim=2, num_nodes=4)
@@ -60,6 +63,9 @@ def test_multiple_qa_records():
     with tempfile.NamedTemporaryFile(suffix=".exo", delete=False) as tmp:
         tmp_path = tmp.name
 
+    # Delete the empty file so ExodusWriter can create it
+    os.unlink(tmp_path)
+
     try:
         writer = ExodusWriter.create(tmp_path)
         params = InitParams(title="Multi QA", num_dim=2, num_nodes=4)
@@ -95,6 +101,9 @@ def test_info_records():
     with tempfile.NamedTemporaryFile(suffix=".exo", delete=False) as tmp:
         tmp_path = tmp.name
 
+    # Delete the empty file so ExodusWriter can create it
+    os.unlink(tmp_path)
+
     try:
         writer = ExodusWriter.create(tmp_path)
         params = InitParams(title="Info Test", num_dim=2, num_nodes=4)
@@ -125,6 +134,9 @@ def test_combined_metadata():
     """Test combining info records"""
     with tempfile.NamedTemporaryFile(suffix=".exo", delete=False) as tmp:
         tmp_path = tmp.name
+
+    # Delete the empty file so ExodusWriter can create it
+    os.unlink(tmp_path)
 
     try:
         writer = ExodusWriter.create(tmp_path)

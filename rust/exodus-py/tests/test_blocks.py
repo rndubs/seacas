@@ -22,6 +22,9 @@ def test_define_and_get_elem_block():
     with tempfile.NamedTemporaryFile(suffix=".exo", delete=False) as tmp:
         tmp_path = tmp.name
 
+    # Delete the empty file so ExodusWriter can create it
+    os.unlink(tmp_path)
+
     try:
         # Create file with element block
         writer = ExodusWriter.create(tmp_path)
@@ -63,6 +66,9 @@ def test_elem_block_connectivity():
     """Test writing and reading element connectivity"""
     with tempfile.NamedTemporaryFile(suffix=".exo", delete=False) as tmp:
         tmp_path = tmp.name
+
+    # Delete the empty file so ExodusWriter can create it
+    os.unlink(tmp_path)
 
     try:
         writer = ExodusWriter.create(tmp_path)
@@ -107,6 +113,9 @@ def test_multiple_elem_blocks():
     """Test multiple element blocks"""
     with tempfile.NamedTemporaryFile(suffix=".exo", delete=False) as tmp:
         tmp_path = tmp.name
+
+    # Delete the empty file so ExodusWriter can create it
+    os.unlink(tmp_path)
 
     try:
         writer = ExodusWriter.create(tmp_path)
@@ -175,6 +184,9 @@ def test_elem_block_attributes():
     with tempfile.NamedTemporaryFile(suffix=".exo", delete=False) as tmp:
         tmp_path = tmp.name
 
+    # Delete the empty file so ExodusWriter can create it
+    os.unlink(tmp_path)
+
     try:
         writer = ExodusWriter.create(tmp_path)
         params = InitParams(
@@ -222,6 +234,9 @@ def test_elem_block_names():
     with tempfile.NamedTemporaryFile(suffix=".exo", delete=False) as tmp:
         tmp_path = tmp.name
 
+    # Delete the empty file so ExodusWriter can create it
+    os.unlink(tmp_path)
+
     try:
         writer = ExodusWriter.create(tmp_path)
         params = InitParams(
@@ -264,6 +279,9 @@ def test_edge_blocks():
     with tempfile.NamedTemporaryFile(suffix=".exo", delete=False) as tmp:
         tmp_path = tmp.name
 
+    # Delete the empty file so ExodusWriter can create it
+    os.unlink(tmp_path)
+
     try:
         writer = ExodusWriter.create(tmp_path)
         params = InitParams(
@@ -303,6 +321,9 @@ def test_face_blocks():
     """Test face blocks"""
     with tempfile.NamedTemporaryFile(suffix=".exo", delete=False) as tmp:
         tmp_path = tmp.name
+
+    # Delete the empty file so ExodusWriter can create it
+    os.unlink(tmp_path)
 
     try:
         writer = ExodusWriter.create(tmp_path)

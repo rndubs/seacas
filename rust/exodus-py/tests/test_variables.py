@@ -24,6 +24,9 @@ def test_global_variables():
     with tempfile.NamedTemporaryFile(suffix=".exo", delete=False) as tmp:
         tmp_path = tmp.name
 
+    # Delete the empty file so ExodusWriter can create it
+    os.unlink(tmp_path)
+
     try:
         # Create file and define global variables
         writer = ExodusWriter.create(tmp_path)
@@ -78,6 +81,9 @@ def test_nodal_variables():
     with tempfile.NamedTemporaryFile(suffix=".exo", delete=False) as tmp:
         tmp_path = tmp.name
 
+    # Delete the empty file so ExodusWriter can create it
+    os.unlink(tmp_path)
+
     try:
         writer = ExodusWriter.create(tmp_path)
         params = InitParams(title="Nodal Vars", num_dim=2, num_nodes=4)
@@ -116,6 +122,9 @@ def test_element_variables():
     """Test element variables"""
     with tempfile.NamedTemporaryFile(suffix=".exo", delete=False) as tmp:
         tmp_path = tmp.name
+
+    # Delete the empty file so ExodusWriter can create it
+    os.unlink(tmp_path)
 
     try:
         writer = ExodusWriter.create(tmp_path)
@@ -173,6 +182,9 @@ def test_multiple_time_steps():
     with tempfile.NamedTemporaryFile(suffix=".exo", delete=False) as tmp:
         tmp_path = tmp.name
 
+    # Delete the empty file so ExodusWriter can create it
+    os.unlink(tmp_path)
+
     try:
         writer = ExodusWriter.create(tmp_path)
         params = InitParams(title="Multi Time", num_dim=2, num_nodes=4)
@@ -213,6 +225,9 @@ def test_multiple_nodal_variables():
     """Test multiple nodal variables"""
     with tempfile.NamedTemporaryFile(suffix=".exo", delete=False) as tmp:
         tmp_path = tmp.name
+
+    # Delete the empty file so ExodusWriter can create it
+    os.unlink(tmp_path)
 
     try:
         writer = ExodusWriter.create(tmp_path)
@@ -260,6 +275,9 @@ def test_element_variable_truth_table():
     """Test element variable truth table with multiple blocks"""
     with tempfile.NamedTemporaryFile(suffix=".exo", delete=False) as tmp:
         tmp_path = tmp.name
+
+    # Delete the empty file so ExodusWriter can create it
+    os.unlink(tmp_path)
 
     try:
         writer = ExodusWriter.create(tmp_path)

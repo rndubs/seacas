@@ -25,6 +25,9 @@ def test_complete_workflow():
     with tempfile.NamedTemporaryFile(suffix=".exo", delete=False) as tmp:
         tmp_path = tmp.name
 
+    # Delete the empty file so ExodusWriter can create it
+    os.unlink(tmp_path)
+
     try:
         # Step 1: Create file with mesh
         writer = ExodusWriter.create(tmp_path)
@@ -125,6 +128,9 @@ def test_builder_and_reader_integration():
     with tempfile.NamedTemporaryFile(suffix=".exo", delete=False) as tmp:
         tmp_path = tmp.name
 
+    # Delete the empty file so MeshBuilder can create it
+    os.unlink(tmp_path)
+
     try:
         # Create with builder API
         (
@@ -183,6 +189,9 @@ def test_multi_timestep_workflow():
     """Test workflow with multiple time steps"""
     with tempfile.NamedTemporaryFile(suffix=".exo", delete=False) as tmp:
         tmp_path = tmp.name
+
+    # Delete the empty file so ExodusWriter can create it
+    os.unlink(tmp_path)
 
     try:
         # Create file
@@ -244,6 +253,9 @@ def test_complex_mesh_with_sets():
     """Test complex mesh with multiple blocks and sets"""
     with tempfile.NamedTemporaryFile(suffix=".exo", delete=False) as tmp:
         tmp_path = tmp.name
+
+    # Delete the empty file so ExodusWriter can create it
+    os.unlink(tmp_path)
 
     try:
         writer = ExodusWriter.create(tmp_path)

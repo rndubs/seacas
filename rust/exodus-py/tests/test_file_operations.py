@@ -47,6 +47,9 @@ def test_writer_create_simple_file():
     with tempfile.NamedTemporaryFile(suffix=".exo", delete=False) as tmp:
         tmp_path = tmp.name
 
+    # Delete the empty file so ExodusWriter can create it
+    os.unlink(tmp_path)
+
     try:
         # Create file with writer
         writer = ExodusWriter.create(tmp_path)
@@ -82,6 +85,9 @@ def test_writer_with_options():
     with tempfile.NamedTemporaryFile(suffix=".exo", delete=False) as tmp:
         tmp_path = tmp.name
 
+    # Delete the empty file so ExodusWriter can create it
+    os.unlink(tmp_path)
+
     try:
         opts = CreateOptions(mode=CreateMode.Clobber, float_size=FloatSize.Float64)
         writer = ExodusWriter.create_with_options(tmp_path, opts)
@@ -107,6 +113,9 @@ def test_reader_open_existing():
     with tempfile.NamedTemporaryFile(suffix=".exo", delete=False) as tmp:
         tmp_path = tmp.name
 
+    # Delete the empty file so ExodusWriter can create it
+    os.unlink(tmp_path)
+
     try:
         # Create a file first
         writer = ExodusWriter.create(tmp_path)
@@ -130,6 +139,9 @@ def test_appender_modify_existing():
     """Test appending to existing file with ExodusAppender"""
     with tempfile.NamedTemporaryFile(suffix=".exo", delete=False) as tmp:
         tmp_path = tmp.name
+
+    # Delete the empty file so ExodusWriter can create it
+    os.unlink(tmp_path)
 
     try:
         # Create initial file
@@ -179,6 +191,9 @@ def test_context_manager_reader():
     """Test ExodusReader with context manager"""
     with tempfile.NamedTemporaryFile(suffix=".exo", delete=False) as tmp:
         tmp_path = tmp.name
+
+    # Delete the empty file so ExodusWriter can create it
+    os.unlink(tmp_path)
 
     try:
         # Create file

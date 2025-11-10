@@ -25,6 +25,9 @@ def test_node_set():
     with tempfile.NamedTemporaryFile(suffix=".exo", delete=False) as tmp:
         tmp_path = tmp.name
 
+    # Delete the empty file so ExodusWriter can create it
+    os.unlink(tmp_path)
+
     try:
         writer = ExodusWriter.create(tmp_path)
         params = InitParams(
@@ -43,8 +46,8 @@ def test_node_set():
         # Read back
         reader = ExodusReader.open(tmp_path)
         node_set = reader.get_node_set(1)
-        assert len(node_set) == 4
-        assert node_set == node_ids
+        assert len(node_set.nodes) == 4
+        assert node_set.nodes == node_ids
         reader.close()
 
     finally:
@@ -56,6 +59,9 @@ def test_node_set_with_dist_factors():
     """Test node set with distribution factors"""
     with tempfile.NamedTemporaryFile(suffix=".exo", delete=False) as tmp:
         tmp_path = tmp.name
+
+    # Delete the empty file so ExodusWriter can create it
+    os.unlink(tmp_path)
 
     try:
         writer = ExodusWriter.create(tmp_path)
@@ -94,6 +100,9 @@ def test_side_set():
     """Test creating and reading side sets"""
     with tempfile.NamedTemporaryFile(suffix=".exo", delete=False) as tmp:
         tmp_path = tmp.name
+
+    # Delete the empty file so ExodusWriter can create it
+    os.unlink(tmp_path)
 
     try:
         writer = ExodusWriter.create(tmp_path)
@@ -142,6 +151,9 @@ def test_side_set_with_dist_factors():
     """Test side set with distribution factors"""
     with tempfile.NamedTemporaryFile(suffix=".exo", delete=False) as tmp:
         tmp_path = tmp.name
+
+    # Delete the empty file so ExodusWriter can create it
+    os.unlink(tmp_path)
 
     try:
         writer = ExodusWriter.create(tmp_path)
@@ -192,6 +204,9 @@ def test_elem_set():
     with tempfile.NamedTemporaryFile(suffix=".exo", delete=False) as tmp:
         tmp_path = tmp.name
 
+    # Delete the empty file so ExodusWriter can create it
+    os.unlink(tmp_path)
+
     try:
         writer = ExodusWriter.create(tmp_path)
         params = InitParams(
@@ -236,6 +251,9 @@ def test_multiple_node_sets():
     with tempfile.NamedTemporaryFile(suffix=".exo", delete=False) as tmp:
         tmp_path = tmp.name
 
+    # Delete the empty file so ExodusWriter can create it
+    os.unlink(tmp_path)
+
     try:
         writer = ExodusWriter.create(tmp_path)
         params = InitParams(
@@ -273,6 +291,9 @@ def test_set_names():
     """Test setting and reading set names"""
     with tempfile.NamedTemporaryFile(suffix=".exo", delete=False) as tmp:
         tmp_path = tmp.name
+
+    # Delete the empty file so ExodusWriter can create it
+    os.unlink(tmp_path)
 
     try:
         writer = ExodusWriter.create(tmp_path)
