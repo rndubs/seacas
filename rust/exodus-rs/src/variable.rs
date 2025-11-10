@@ -49,12 +49,30 @@ impl<M: FileMode> ExodusFile<M> {
         match self.nc_file.variable(var_name_var) {
             Some(var) => {
                 // Read as 2D array of chars and convert to strings
-                let num_vars = var.len();
+                // CRITICAL: var.len() returns TOTAL elements (num_vars * len_string)
+                // We need the first dimension size (num_vars) instead
+                let num_vars = if let Some(dim) = var.dimensions().first() {
+                    dim.len()
+                } else {
+                    return Ok(Vec::new());
+                };
+
+                if num_vars == 0 {
+                    return Ok(Vec::new());
+                }
+
+                // Get the len_string dimension size to know how many chars per name
+                let len_string = self.nc_file.dimension("len_string")
+                    .ok_or_else(|| ExodusError::Other(
+                        "len_string dimension not found when reading variable names".to_string()
+                    ))?
+                    .len();
+
                 let mut names = Vec::new();
 
                 for i in 0..num_vars {
-                    // Read one name at a time
-                    let name_chars: Vec<u8> = var.get_values((i..i+1, ..))?;
+                    // Read one name at a time with explicit dimension bounds
+                    let name_chars: Vec<u8> = var.get_values((i..i+1, 0..len_string))?;
                     // Convert to string, trimming null bytes and whitespace
                     let name = String::from_utf8_lossy(&name_chars)
                         .trim_end_matches('\0')
@@ -135,17 +153,20 @@ impl ExodusFile<mode::Write> {
         self.nc_file.add_dimension(num_var_dim, num_vars)?;
 
         // Add variable name storage (2D char array)
-        let max_name_len = names
-            .iter()
-            .map(|n| n.as_ref().len())
-            .max()
-            .unwrap_or(32)
-            .max(32); // Minimum 32 characters
+        // Standard Exodus II uses 32 characters for variable names for compatibility
+        const STANDARD_NAME_LEN: usize = 32;
 
-        // Create or get len_string dimension
+        // Use existing len_string if it exists, otherwise use 32
+        let len_string = if let Some(dim) = self.nc_file.dimension("len_string") {
+            dim.len()
+        } else {
+            STANDARD_NAME_LEN
+        };
+
+        // Create len_string dimension if it doesn't exist
         if self.nc_file.dimension("len_string").is_none() {
             self.nc_file
-                .add_dimension("len_string", max_name_len)?;
+                .add_dimension("len_string", len_string)?;
         }
 
         // Create time_step dimension if it doesn't exist (needed for all variables)
@@ -190,16 +211,35 @@ impl ExodusFile<mode::Write> {
         }
 
         // Now write the variable names (after all dimensions and variables are created)
-        if let Some(mut var) = self.nc_file.variable_mut(var_name_var) {
-            for (i, name) in names.iter().enumerate() {
-                let name_str = name.as_ref();
-                let mut buf = vec![0u8; max_name_len];
-                let bytes = name_str.as_bytes();
-                let copy_len = bytes.len().min(max_name_len);
-                buf[..copy_len].copy_from_slice(&bytes[..copy_len]);
-                var.put_values(&buf, (i..i + 1, ..))?;
-            }
+        // CRITICAL: Use the actual len_string dimension size, not max_name_len!
+        // The buffer size must match the variable's second dimension size
+        let actual_len_string = self.nc_file.dimension("len_string")
+            .ok_or_else(|| ExodusError::Other(
+                "len_string dimension not found after creation".to_string()
+            ))?
+            .len();
+
+        // CRITICAL: Must write the variable names or reading will fail!
+        let mut var = self.nc_file.variable_mut(var_name_var)
+            .ok_or_else(|| ExodusError::Other(format!(
+                "Cannot get mutable reference to variable '{}' after creation. \
+                This indicates a NetCDF define/data mode issue.",
+                var_name_var
+            )))?;
+
+        for (i, name) in names.iter().enumerate() {
+            let name_str = name.as_ref();
+            // Use actual dimension size for buffer
+            let mut buf = vec![0u8; actual_len_string];
+            let bytes = name_str.as_bytes();
+            let copy_len = bytes.len().min(actual_len_string);
+            buf[..copy_len].copy_from_slice(&bytes[..copy_len]);
+            var.put_values(&buf, (i..i + 1, ..))?;
         }
+
+        // Force sync to ensure all data is written and file is in consistent state
+        // This is critical for proper NetCDF define/data mode transitions
+        self.nc_file.sync()?;
 
         Ok(())
     }
@@ -371,9 +411,9 @@ impl ExodusFile<mode::Write> {
         }
 
         let (num_blocks_dim, num_vars_dim) = match var_type {
-            EntityType::ElemBlock => ("num_elem_blocks", "num_elem_var"),
-            EntityType::EdgeBlock => ("num_edge_blocks", "num_edge_var"),
-            EntityType::FaceBlock => ("num_face_blocks", "num_face_var"),
+            EntityType::ElemBlock => ("num_el_blk", "num_elem_var"),
+            EntityType::EdgeBlock => ("num_ed_blk", "num_edge_var"),
+            EntityType::FaceBlock => ("num_fa_blk", "num_face_var"),
             _ => unreachable!(),
         };
 
