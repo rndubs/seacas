@@ -13,6 +13,9 @@ from exodus import (
     ExodusReader,
     ExodusAppender,
     InitParams,
+    EntityType,
+    Block,
+    TruthTable,
 )
 
 
@@ -27,35 +30,41 @@ def test_global_variables():
         params = InitParams(title="Global Vars", num_dim=2, num_nodes=4)
         writer.put_init_params(params)
 
-        # Define 2 global variables
+        # Define 2 global variables using modern generic API
         var_names = ["Temperature", "Pressure"]
-        writer.put_global_var_names(var_names)
+        writer.define_variables(EntityType.Global, var_names)
         writer.close()
 
         # Open for appending to write time steps
         appender = ExodusAppender.open(tmp_path)
 
-        # Write time step 1
+        # Write time step 1 - for global vars: entity_id=0, var_index=0 for first var
         appender.put_time(1, 0.0)
-        appender.put_global_vars(1, [100.0, 200.0])
+        appender.put_var(1, EntityType.Global, 0, 0, [100.0])  # Temperature
+        appender.put_var(1, EntityType.Global, 0, 1, [200.0])  # Pressure
 
         # Write time step 2
         appender.put_time(2, 1.0)
-        appender.put_global_vars(2, [110.0, 210.0])
+        appender.put_var(2, EntityType.Global, 0, 0, [110.0])
+        appender.put_var(2, EntityType.Global, 0, 1, [210.0])
         appender.close()
 
         # Read back
         reader = ExodusReader.open(tmp_path)
-        names = reader.get_global_var_names()
+        names = reader.variable_names(EntityType.Global)
         assert names == var_names
 
-        # Read time step 1
-        vals1 = reader.get_global_vars(1)
-        assert vals1 == pytest.approx([100.0, 200.0], abs=1e-6)
+        # Read time step 1 - read each variable separately
+        temp1 = reader.var(1, EntityType.Global, 0, 0)
+        press1 = reader.var(1, EntityType.Global, 0, 1)
+        assert temp1 == pytest.approx([100.0], abs=1e-6)
+        assert press1 == pytest.approx([200.0], abs=1e-6)
 
         # Read time step 2
-        vals2 = reader.get_global_vars(2)
-        assert vals2 == pytest.approx([110.0, 210.0], abs=1e-6)
+        temp2 = reader.var(2, EntityType.Global, 0, 0)
+        press2 = reader.var(2, EntityType.Global, 0, 1)
+        assert temp2 == pytest.approx([110.0], abs=1e-6)
+        assert press2 == pytest.approx([210.0], abs=1e-6)
 
         reader.close()
 
@@ -74,9 +83,9 @@ def test_nodal_variables():
         params = InitParams(title="Nodal Vars", num_dim=2, num_nodes=4)
         writer.put_init_params(params)
 
-        # Define nodal variable
+        # Define nodal variable using modern generic API
         var_names = ["Displacement"]
-        writer.put_nodal_var_names(var_names)
+        writer.define_variables(EntityType.Nodal, var_names)
         writer.close()
 
         # Write time step data
@@ -84,16 +93,17 @@ def test_nodal_variables():
         appender.put_time(1, 0.0)
 
         # Write nodal variable for all 4 nodes
+        # For nodal vars: entity_id=0, var_index=0 for first variable
         displacements = [0.1, 0.2, 0.3, 0.4]
-        appender.put_nodal_var(1, 1, displacements)
+        appender.put_var(1, EntityType.Nodal, 0, 0, displacements)
         appender.close()
 
         # Read back
         reader = ExodusReader.open(tmp_path)
-        names = reader.get_nodal_var_names()
+        names = reader.variable_names(EntityType.Nodal)
         assert names == var_names
 
-        vals = reader.get_nodal_var(1, 1)
+        vals = reader.var(1, EntityType.Nodal, 0, 0)
         assert vals == pytest.approx(displacements, abs=1e-6)
         reader.close()
 
@@ -118,12 +128,20 @@ def test_element_variables():
         )
         writer.put_init_params(params)
 
-        # Define element block
-        writer.put_elem_block(1, "QUAD4", 2, 4, 0)
+        # Define element block using Block object
+        block = Block(
+            id=1,
+            entity_type=EntityType.ElemBlock,
+            topology="QUAD4",
+            num_entries=2,
+            num_nodes_per_entry=4,
+            num_attributes=0,
+        )
+        writer.put_block(block)
 
-        # Define element variable
+        # Define element variable using modern generic API
         var_names = ["Stress"]
-        writer.put_elem_var_names(var_names)
+        writer.define_variables(EntityType.ElemBlock, var_names)
         writer.close()
 
         # Write time step data
@@ -131,16 +149,17 @@ def test_element_variables():
         appender.put_time(1, 0.0)
 
         # Write element variable for block 1
+        # For element vars: entity_id=block_id, var_index=0 for first variable
         stresses = [100.0, 200.0]
-        appender.put_elem_var(1, 1, 1, stresses)
+        appender.put_var(1, EntityType.ElemBlock, 1, 0, stresses)
         appender.close()
 
         # Read back
         reader = ExodusReader.open(tmp_path)
-        names = reader.get_elem_var_names()
+        names = reader.variable_names(EntityType.ElemBlock)
         assert names == var_names
 
-        vals = reader.get_elem_var(1, 1, 1)
+        vals = reader.var(1, EntityType.ElemBlock, 1, 0)
         assert vals == pytest.approx(stresses, abs=1e-6)
         reader.close()
 
@@ -159,14 +178,14 @@ def test_multiple_time_steps():
         params = InitParams(title="Multi Time", num_dim=2, num_nodes=4)
         writer.put_init_params(params)
 
-        writer.put_global_var_names(["Energy"])
+        writer.define_variables(EntityType.Global, ["Energy"])
         writer.close()
 
         # Write multiple time steps
         appender = ExodusAppender.open(tmp_path)
         for i in range(5):
             appender.put_time(i + 1, float(i) * 0.1)
-            appender.put_global_vars(i + 1, [float(i * 10)])
+            appender.put_var(i + 1, EntityType.Global, 0, 0, [float(i * 10)])
         appender.close()
 
         # Read back
@@ -174,13 +193,13 @@ def test_multiple_time_steps():
         num_steps = reader.num_time_steps()
         assert num_steps == 5
 
-        times = reader.get_times()
+        times = reader.times()
         assert len(times) == 5
         assert times == pytest.approx([0.0, 0.1, 0.2, 0.3, 0.4], abs=1e-6)
 
         # Check each time step
         for i in range(5):
-            vals = reader.get_global_vars(i + 1)
+            vals = reader.var(i + 1, EntityType.Global, 0, 0)
             assert vals == pytest.approx([float(i * 10)], abs=1e-6)
 
         reader.close()
@@ -202,28 +221,29 @@ def test_multiple_nodal_variables():
 
         # Define multiple nodal variables
         var_names = ["DisplacementX", "DisplacementY", "Temperature"]
-        writer.put_nodal_var_names(var_names)
+        writer.define_variables(EntityType.Nodal, var_names)
         writer.close()
 
         # Write data
         appender = ExodusAppender.open(tmp_path)
         appender.put_time(1, 0.0)
 
-        appender.put_nodal_var(1, 1, [0.1, 0.2, 0.3, 0.4])
-        appender.put_nodal_var(1, 2, [0.5, 0.6, 0.7, 0.8])
-        appender.put_nodal_var(1, 3, [100.0, 200.0, 300.0, 400.0])
+        # Write each variable separately (var_index 0, 1, 2)
+        appender.put_var(1, EntityType.Nodal, 0, 0, [0.1, 0.2, 0.3, 0.4])
+        appender.put_var(1, EntityType.Nodal, 0, 1, [0.5, 0.6, 0.7, 0.8])
+        appender.put_var(1, EntityType.Nodal, 0, 2, [100.0, 200.0, 300.0, 400.0])
         appender.close()
 
         # Read back
         reader = ExodusReader.open(tmp_path)
-        names = reader.get_nodal_var_names()
+        names = reader.variable_names(EntityType.Nodal)
         assert len(names) == 3
         assert names == var_names
 
         # Verify each variable
-        var1 = reader.get_nodal_var(1, 1)
-        var2 = reader.get_nodal_var(1, 2)
-        var3 = reader.get_nodal_var(1, 3)
+        var1 = reader.var(1, EntityType.Nodal, 0, 0)
+        var2 = reader.var(1, EntityType.Nodal, 0, 1)
+        var3 = reader.var(1, EntityType.Nodal, 0, 2)
 
         assert var1 == pytest.approx([0.1, 0.2, 0.3, 0.4], abs=1e-6)
         assert var2 == pytest.approx([0.5, 0.6, 0.7, 0.8], abs=1e-6)
@@ -252,24 +272,51 @@ def test_element_variable_truth_table():
         )
         writer.put_init_params(params)
 
-        # Define two element blocks
-        writer.put_elem_block(1, "QUAD4", 1, 4, 0)
-        writer.put_elem_block(2, "QUAD4", 1, 4, 0)
+        # Define two element blocks using Block objects
+        block1 = Block(
+            id=1,
+            entity_type=EntityType.ElemBlock,
+            topology="QUAD4",
+            num_entries=1,
+            num_nodes_per_entry=4,
+            num_attributes=0,
+        )
+        block2 = Block(
+            id=2,
+            entity_type=EntityType.ElemBlock,
+            topology="QUAD4",
+            num_entries=1,
+            num_nodes_per_entry=4,
+            num_attributes=0,
+        )
+        writer.put_block(block1)
+        writer.put_block(block2)
 
         # Define element variables
-        writer.put_elem_var_names(["Stress", "Strain"])
+        writer.define_variables(EntityType.ElemBlock, ["Stress", "Strain"])
 
-        # Set truth table: Stress on block 1, Strain on block 2
-        # Truth table is 2 variables x 2 blocks = 4 entries
-        # [var1_block1, var1_block2, var2_block1, var2_block2]
-        truth_table = [1, 0, 0, 1]  # Stress on block 1, Strain on block 2
-        writer.put_elem_var_truth_table(truth_table)
+        # Create truth table: Stress on block 1, Strain on block 2
+        # num_entities=2 blocks, num_variables=2 vars
+        truth_table = TruthTable.new(EntityType.ElemBlock, 2, 2)
+        # Set which blocks have which variables (0-indexed)
+        truth_table.set(0, 0, True)   # Block 1 (idx 0) has Stress (var 0)
+        truth_table.set(0, 1, False)  # Block 1 doesn't have Strain
+        truth_table.set(1, 0, False)  # Block 2 doesn't have Stress
+        truth_table.set(1, 1, True)   # Block 2 (idx 1) has Strain (var 1)
+
+        writer.put_truth_table(EntityType.ElemBlock, truth_table)
         writer.close()
 
         # Read back
         reader = ExodusReader.open(tmp_path)
-        tt_read = reader.get_elem_var_truth_table()
-        assert tt_read == truth_table
+        tt_read = reader.truth_table(EntityType.ElemBlock)
+
+        # Verify the truth table entries
+        assert tt_read.get(0, 0) == True   # Block 1 has Stress
+        assert tt_read.get(0, 1) == False  # Block 1 doesn't have Strain
+        assert tt_read.get(1, 0) == False  # Block 2 doesn't have Stress
+        assert tt_read.get(1, 1) == True   # Block 2 has Strain
+
         reader.close()
 
     finally:

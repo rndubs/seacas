@@ -15,6 +15,8 @@ from exodus import (
     NodeSet,
     SideSet,
     EntitySet,
+    Block,
+    EntityType,
 )
 
 
@@ -106,7 +108,15 @@ def test_side_set():
         writer.put_init_params(params)
 
         # Define element block first
-        writer.put_elem_block(1, "QUAD4", 1, 4, 0)
+        block = Block(
+            id=1,
+            entity_type=EntityType.ElemBlock,
+            topology="QUAD4",
+            num_entries=1,
+            num_nodes_per_entry=4,
+            num_attributes=0,
+        )
+        writer.put_block(block)
 
         # Define side set
         elem_ids = [1]
@@ -145,7 +155,15 @@ def test_side_set_with_dist_factors():
         )
         writer.put_init_params(params)
 
-        writer.put_elem_block(1, "QUAD4", 1, 4, 0)
+        block = Block(
+            id=1,
+            entity_type=EntityType.ElemBlock,
+            topology="QUAD4",
+            num_entries=1,
+            num_nodes_per_entry=4,
+            num_attributes=0,
+        )
+        writer.put_block(block)
 
         # Define side set
         elem_ids = [1, 1]
@@ -186,7 +204,15 @@ def test_elem_set():
         )
         writer.put_init_params(params)
 
-        writer.put_elem_block(1, "QUAD4", 4, 4, 0)
+        block = Block(
+            id=1,
+            entity_type=EntityType.ElemBlock,
+            topology="QUAD4",
+            num_entries=4,
+            num_nodes_per_entry=4,
+            num_attributes=0,
+        )
+        writer.put_block(block)
 
         # Define element set
         elem_ids = [1, 3]
