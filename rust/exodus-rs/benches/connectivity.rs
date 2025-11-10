@@ -17,7 +17,7 @@ fn benchmark_write_connectivity(c: &mut Criterion) {
 
                 b.iter(|| {
                     let temp = NamedTempFile::new().unwrap();
-                    let mut file = ExodusFile::create(temp.path(), CreateOptions::default()).unwrap();
+                    let mut file = ExodusFile::create(temp.path(), { let mut opts = CreateOptions::default(); opts.mode = CreateMode::Clobber; opts }).unwrap();
 
                     let params = InitParams {
                         title: "Benchmark".to_string(),
@@ -62,7 +62,7 @@ fn benchmark_read_connectivity(c: &mut Criterion) {
         // Setup: create a file with connectivity
         let temp = NamedTempFile::new().unwrap();
         {
-            let mut file = ExodusFile::create(temp.path(), CreateOptions::default()).unwrap();
+            let mut file = ExodusFile::create(temp.path(), { let mut opts = CreateOptions::default(); opts.mode = CreateMode::Clobber; opts }).unwrap();
             let params = InitParams {
                 title: "Benchmark".to_string(),
                 num_dim: 3,
@@ -116,7 +116,7 @@ fn benchmark_multiple_blocks(c: &mut Criterion) {
 
                 b.iter(|| {
                     let temp = NamedTempFile::new().unwrap();
-                    let mut file = ExodusFile::create(temp.path(), CreateOptions::default()).unwrap();
+                    let mut file = ExodusFile::create(temp.path(), { let mut opts = CreateOptions::default(); opts.mode = CreateMode::Clobber; opts }).unwrap();
 
                     let params = InitParams {
                         title: "Benchmark".to_string(),
