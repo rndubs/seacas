@@ -503,7 +503,76 @@ Comprehensive testing and documentation.
 
 ---
 
-### Phase 14: Build and Distribution
+### Phase 14: Attribute Operations (NEWLY ADDED) ✅ **COMPLETED**
+Expose attribute read/write functionality.
+
+**Tasks:**
+- [x] Implement AttributeData Python class
+  - [x] `AttributeData.integer()` static method
+  - [x] `AttributeData.double()` static method
+  - [x] `AttributeData.char()` static method
+  - [x] `as_integer()`, `as_double()`, `as_char()` conversion methods
+  - [x] `__repr__()` for debugging
+
+- [x] Implement attribute write operations
+  - [x] `put_attribute()` method for ExodusWriter
+  - [x] Support all three attribute types (Integer, Double, Char)
+  - [x] Validation for attribute names
+
+- [x] Implement attribute read operations
+  - [x] `get_attribute()` method for ExodusReader
+  - [x] `get_attribute_names()` method
+  - [x] Type-safe conversion from Rust to Python
+
+**Files created:**
+- `./rust/exodus-py/src/attribute.rs` - Attribute operations (196 lines)
+
+**Example usage:**
+```python
+from exodus import ExodusWriter, AttributeData, AttributeType, EntityType
+
+with ExodusWriter.create("mesh.exo") as exo:
+    # Write an integer attribute
+    exo.put_attribute(
+        EntityType.ELEM_BLOCK,
+        100,
+        "material_id",
+        AttributeType.INTEGER,
+        AttributeData.integer([42])
+    )
+
+    # Write a double attribute
+    exo.put_attribute(
+        EntityType.ELEM_BLOCK,
+        100,
+        "density",
+        AttributeType.DOUBLE,
+        AttributeData.double([7.85])
+    )
+
+    # Write a string attribute
+    exo.put_attribute(
+        EntityType.ELEM_BLOCK,
+        100,
+        "material_name",
+        AttributeType.CHAR,
+        AttributeData.char("Steel")
+    )
+
+# Read attributes
+with ExodusReader.open("mesh.exo") as exo:
+    names = exo.get_attribute_names(EntityType.ELEM_BLOCK, 100)
+    for name in names:
+        attr = exo.get_attribute(EntityType.ELEM_BLOCK, 100, name)
+        if name == "material_id":
+            material_id = attr.as_integer()[0]
+```
+
+**Actual time:** 1 hour
+
+---
+
+### Phase 15: Build and Distribution
 Prepare for distribution and installation.
 
 **Tasks:**
@@ -536,12 +605,13 @@ Prepare for distribution and installation.
 
 ## Total Estimated Time
 
-- **Core implementation (Phases 1-10):** ~35 hours
+- **Core implementation (Phases 1-10):** ~35 hours (COMPLETE)
+- **Attributes (Phase 14):** ~1 hour (COMPLETE)
 - **Optional features (Phase 11):** ~6 hours
 - **Testing & docs (Phase 12-13):** ~9 hours
-- **Distribution (Phase 14):** ~4 hours
-- **Total (minimum viable product):** ~48 hours
-- **Total (with variables):** ~54 hours
+- **Distribution (Phase 15):** ~4 hours
+- **Total (minimum viable product with attributes):** ~49 hours
+- **Total (with variables):** ~55 hours
 
 ## Success Criteria
 
@@ -555,7 +625,7 @@ Prepare for distribution and installation.
 
 ## Implementation Progress
 
-### ✅ Completed Features (Phases 1-10)
+### ✅ Completed Features (Phases 1-10, 14)
 - [x] Planning and research (PYTHON.md)
 - [x] Phase 1: Project setup with PyO3 and maturin
 - [x] Phase 2: All core type bindings (EntityType, InitParams, Block, Set, Assembly, Blob, QaRecord)
@@ -567,11 +637,12 @@ Prepare for distribution and installation.
 - [x] Phase 8: Metadata operations (QA and info records)
 - [x] Phase 9: Map operations (ID maps)
 - [x] Phase 10: Assembly and blob operations
+- [x] Phase 14: **Attribute operations** (Integer, Double, Char attributes for entities) ⭐
 
 ### Current Status
-**Core implementation complete!** All essential phases (1-10) implemented.
+**Core implementation complete!** All essential phases (1-10, 14) implemented.
 
-Phases 11-14 (variables, NumPy, testing, distribution) are optional enhancements.
+Phases 11-13, 15 (variables, NumPy, testing, distribution) are optional enhancements.
 
 ### Next Steps
 1. ~~Build with maturin to test compilation~~ (user to test)

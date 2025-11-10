@@ -93,6 +93,7 @@ pub use types::{
 pub use set::SetIterator;
 pub use coord::{CoordValue, Coordinates};
 pub use builder::{BlockBuilder, MeshBuilder};
+pub use attribute::AttributeData;
 
 // File mode types
 /// Type-state pattern for file modes
