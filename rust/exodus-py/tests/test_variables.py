@@ -11,7 +11,6 @@ pytest.importorskip("exodus")
 from exodus import (
     ExodusWriter,
     ExodusReader,
-    ExodusAppender,
     InitParams,
     EntityType,
     Block,
@@ -36,36 +35,33 @@ def test_global_variables():
         # Define 2 global variables using modern generic API
         var_names = ["Temperature", "Pressure"]
         writer.define_variables(EntityType.Global, var_names)
+
+        # Write time series data using the same writer (0-based step indexing)
+        # Write time step 0 - for global vars: entity_id=0, var_index=0 for first var
+        writer.put_time(0, 0.0)
+        writer.put_var(0, EntityType.Global, 0, 0, [100.0])  # Temperature
+        writer.put_var(0, EntityType.Global, 0, 1, [200.0])  # Pressure
+
+        # Write time step 1
+        writer.put_time(1, 1.0)
+        writer.put_var(1, EntityType.Global, 0, 0, [110.0])
+        writer.put_var(1, EntityType.Global, 0, 1, [210.0])
         writer.close()
-
-        # Open for appending to write time steps
-        appender = ExodusAppender.append(tmp_path)
-
-        # Write time step 1 - for global vars: entity_id=0, var_index=0 for first var
-        appender.put_time(1, 0.0)
-        appender.put_var(1, EntityType.Global, 0, 0, [100.0])  # Temperature
-        appender.put_var(1, EntityType.Global, 0, 1, [200.0])  # Pressure
-
-        # Write time step 2
-        appender.put_time(2, 1.0)
-        appender.put_var(2, EntityType.Global, 0, 0, [110.0])
-        appender.put_var(2, EntityType.Global, 0, 1, [210.0])
-        appender.close()
 
         # Read back
         reader = ExodusReader.open(tmp_path)
         names = reader.variable_names(EntityType.Global)
         assert names == var_names
 
-        # Read time step 1 - read each variable separately
-        temp1 = reader.var(1, EntityType.Global, 0, 0)
-        press1 = reader.var(1, EntityType.Global, 0, 1)
+        # Read time step 0 - read each variable separately
+        temp1 = reader.var(0, EntityType.Global, 0, 0)
+        press1 = reader.var(0, EntityType.Global, 0, 1)
         assert temp1 == pytest.approx([100.0], abs=1e-6)
         assert press1 == pytest.approx([200.0], abs=1e-6)
 
-        # Read time step 2
-        temp2 = reader.var(2, EntityType.Global, 0, 0)
-        press2 = reader.var(2, EntityType.Global, 0, 1)
+        # Read time step 1
+        temp2 = reader.var(1, EntityType.Global, 0, 0)
+        press2 = reader.var(1, EntityType.Global, 0, 1)
         assert temp2 == pytest.approx([110.0], abs=1e-6)
         assert press2 == pytest.approx([210.0], abs=1e-6)
 
@@ -92,24 +88,22 @@ def test_nodal_variables():
         # Define nodal variable using modern generic API
         var_names = ["Displacement"]
         writer.define_variables(EntityType.Nodal, var_names)
-        writer.close()
 
-        # Write time step data
-        appender = ExodusAppender.append(tmp_path)
-        appender.put_time(1, 0.0)
+        # Write time step data using the same writer (0-based step indexing)
+        writer.put_time(0, 0.0)
 
         # Write nodal variable for all 4 nodes
         # For nodal vars: entity_id=0, var_index=0 for first variable
         displacements = [0.1, 0.2, 0.3, 0.4]
-        appender.put_var(1, EntityType.Nodal, 0, 0, displacements)
-        appender.close()
+        writer.put_var(0, EntityType.Nodal, 0, 0, displacements)
+        writer.close()
 
         # Read back
         reader = ExodusReader.open(tmp_path)
         names = reader.variable_names(EntityType.Nodal)
         assert names == var_names
 
-        vals = reader.var(1, EntityType.Nodal, 0, 0)
+        vals = reader.var(0, EntityType.Nodal, 0, 0)
         assert vals == pytest.approx(displacements, abs=1e-6)
         reader.close()
 
@@ -151,24 +145,22 @@ def test_element_variables():
         # Define element variable using modern generic API
         var_names = ["Stress"]
         writer.define_variables(EntityType.ElemBlock, var_names)
-        writer.close()
 
-        # Write time step data
-        appender = ExodusAppender.append(tmp_path)
-        appender.put_time(1, 0.0)
+        # Write time step data using the same writer (0-based step indexing)
+        writer.put_time(0, 0.0)
 
         # Write element variable for block 1
         # For element vars: entity_id=block_id, var_index=0 for first variable
         stresses = [100.0, 200.0]
-        appender.put_var(1, EntityType.ElemBlock, 1, 0, stresses)
-        appender.close()
+        writer.put_var(0, EntityType.ElemBlock, 1, 0, stresses)
+        writer.close()
 
         # Read back
         reader = ExodusReader.open(tmp_path)
         names = reader.variable_names(EntityType.ElemBlock)
         assert names == var_names
 
-        vals = reader.var(1, EntityType.ElemBlock, 1, 0)
+        vals = reader.var(0, EntityType.ElemBlock, 1, 0)
         assert vals == pytest.approx(stresses, abs=1e-6)
         reader.close()
 
@@ -191,14 +183,12 @@ def test_multiple_time_steps():
         writer.put_init_params(params)
 
         writer.define_variables(EntityType.Global, ["Energy"])
-        writer.close()
 
-        # Write multiple time steps
-        appender = ExodusAppender.append(tmp_path)
+        # Write multiple time steps using the same writer (0-based indexing)
         for i in range(5):
-            appender.put_time(i + 1, float(i) * 0.1)
-            appender.put_var(i + 1, EntityType.Global, 0, 0, [float(i * 10)])
-        appender.close()
+            writer.put_time(i, float(i) * 0.1)
+            writer.put_var(i, EntityType.Global, 0, 0, [float(i * 10)])
+        writer.close()
 
         # Read back
         reader = ExodusReader.open(tmp_path)
@@ -209,9 +199,9 @@ def test_multiple_time_steps():
         assert len(times) == 5
         assert times == pytest.approx([0.0, 0.1, 0.2, 0.3, 0.4], abs=1e-6)
 
-        # Check each time step
+        # Check each time step (0-based indexing)
         for i in range(5):
-            vals = reader.var(i + 1, EntityType.Global, 0, 0)
+            vals = reader.var(i, EntityType.Global, 0, 0)
             assert vals == pytest.approx([float(i * 10)], abs=1e-6)
 
         reader.close()
@@ -237,17 +227,15 @@ def test_multiple_nodal_variables():
         # Define multiple nodal variables
         var_names = ["DisplacementX", "DisplacementY", "Temperature"]
         writer.define_variables(EntityType.Nodal, var_names)
-        writer.close()
 
-        # Write data
-        appender = ExodusAppender.append(tmp_path)
-        appender.put_time(1, 0.0)
+        # Write data using the same writer (0-based step indexing)
+        writer.put_time(0, 0.0)
 
         # Write each variable separately (var_index 0, 1, 2)
-        appender.put_var(1, EntityType.Nodal, 0, 0, [0.1, 0.2, 0.3, 0.4])
-        appender.put_var(1, EntityType.Nodal, 0, 1, [0.5, 0.6, 0.7, 0.8])
-        appender.put_var(1, EntityType.Nodal, 0, 2, [100.0, 200.0, 300.0, 400.0])
-        appender.close()
+        writer.put_var(0, EntityType.Nodal, 0, 0, [0.1, 0.2, 0.3, 0.4])
+        writer.put_var(0, EntityType.Nodal, 0, 1, [0.5, 0.6, 0.7, 0.8])
+        writer.put_var(0, EntityType.Nodal, 0, 2, [100.0, 200.0, 300.0, 400.0])
+        writer.close()
 
         # Read back
         reader = ExodusReader.open(tmp_path)
@@ -256,9 +244,9 @@ def test_multiple_nodal_variables():
         assert names == var_names
 
         # Verify each variable
-        var1 = reader.var(1, EntityType.Nodal, 0, 0)
-        var2 = reader.var(1, EntityType.Nodal, 0, 1)
-        var3 = reader.var(1, EntityType.Nodal, 0, 2)
+        var1 = reader.var(0, EntityType.Nodal, 0, 0)
+        var2 = reader.var(0, EntityType.Nodal, 0, 1)
+        var3 = reader.var(0, EntityType.Nodal, 0, 2)
 
         assert var1 == pytest.approx([0.1, 0.2, 0.3, 0.4], abs=1e-6)
         assert var2 == pytest.approx([0.5, 0.6, 0.7, 0.8], abs=1e-6)
