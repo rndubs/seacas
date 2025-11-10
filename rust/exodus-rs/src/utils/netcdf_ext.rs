@@ -33,6 +33,7 @@ use netcdf::{AttributeValue, Variable};
 ///     println!("ID: {}", id);
 /// }
 /// ```
+#[allow(dead_code)]
 #[cfg(feature = "netcdf4")]
 pub fn attr_value_to_i64(value: &AttributeValue) -> Option<i64> {
     match value {
@@ -72,6 +73,7 @@ pub fn attr_value_to_i64(value: &AttributeValue) -> Option<i64> {
 ///     println!("Name: {}", name);
 /// }
 /// ```
+#[allow(dead_code)]
 #[cfg(feature = "netcdf4")]
 pub fn attr_value_to_string(value: &AttributeValue) -> Option<String> {
     match value {
@@ -104,6 +106,7 @@ pub fn attr_value_to_string(value: &AttributeValue) -> Option<String> {
 ///     println!("Scale: {}", scale);
 /// }
 /// ```
+#[allow(dead_code)]
 #[cfg(feature = "netcdf4")]
 pub fn attr_value_to_f64(value: &AttributeValue) -> Option<f64> {
     match value {
@@ -143,6 +146,7 @@ pub fn attr_value_to_f64(value: &AttributeValue) -> Option<f64> {
 /// let id = get_attr_i64(&variable, "id")?;
 /// println!("ID: {}", id);
 /// ```
+#[allow(dead_code)]
 #[cfg(feature = "netcdf4")]
 pub fn get_attr_i64(var: &Variable<'_>, attr_name: &str) -> Result<i64> {
     let attr = var.attribute(attr_name).ok_or_else(|| ExodusError::Other(
@@ -179,6 +183,7 @@ pub fn get_attr_i64(var: &Variable<'_>, attr_name: &str) -> Result<i64> {
 /// let name = get_attr_string(&variable, "name")?;
 /// println!("Name: {}", name);
 /// ```
+#[allow(dead_code)]
 #[cfg(feature = "netcdf4")]
 pub fn get_attr_string(var: &Variable<'_>, attr_name: &str) -> Result<String> {
     let attr = var.attribute(attr_name).ok_or_else(|| ExodusError::Other(
@@ -215,6 +220,7 @@ pub fn get_attr_string(var: &Variable<'_>, attr_name: &str) -> Result<String> {
 /// let scale = get_attr_f64(&variable, "scale")?;
 /// println!("Scale: {}", scale);
 /// ```
+#[allow(dead_code)]
 #[cfg(feature = "netcdf4")]
 pub fn get_attr_f64(var: &Variable<'_>, attr_name: &str) -> Result<f64> {
     let attr = var.attribute(attr_name).ok_or_else(|| ExodusError::Other(
@@ -253,6 +259,7 @@ pub fn get_attr_f64(var: &Variable<'_>, attr_name: &str) -> Result<f64> {
 ///     println!("No ID attribute");
 /// }
 /// ```
+#[allow(dead_code)]
 #[cfg(feature = "netcdf4")]
 pub fn try_get_attr_i64(var: &Variable<'_>, attr_name: &str) -> Option<i64> {
     let attr = var.attribute(attr_name)?;
@@ -282,6 +289,7 @@ pub fn try_get_attr_i64(var: &Variable<'_>, attr_name: &str) -> Option<i64> {
 /// let name = try_get_attr_string(&variable, "name").unwrap_or_else(|| "unnamed".to_string());
 /// println!("Name: {}", name);
 /// ```
+#[allow(dead_code)]
 #[cfg(feature = "netcdf4")]
 pub fn try_get_attr_string(var: &Variable<'_>, attr_name: &str) -> Option<String> {
     let attr = var.attribute(attr_name)?;
@@ -314,6 +322,7 @@ pub fn try_get_attr_string(var: &Variable<'_>, attr_name: &str) -> Option<String
 ///     println!("Using default scale");
 /// }
 /// ```
+#[allow(dead_code)]
 #[cfg(feature = "netcdf4")]
 pub fn try_get_attr_f64(var: &Variable<'_>, attr_name: &str) -> Option<f64> {
     let attr = var.attribute(attr_name)?;

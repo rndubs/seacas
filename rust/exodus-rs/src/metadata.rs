@@ -49,7 +49,7 @@ impl ExodusFile<mode::Write> {
         let num_qa = qa_records.len();
 
         // Validate field lengths
-        for (i, qa) in qa_records.iter().enumerate() {
+        for (_i, qa) in qa_records.iter().enumerate() {
             if qa.code_name.len() > MAX_STR_LENGTH {
                 return Err(ExodusError::StringTooLong {
                     max: MAX_STR_LENGTH,
@@ -152,7 +152,7 @@ impl ExodusFile<mode::Write> {
         let num_info = info_records.len();
 
         // Validate line lengths
-        for (i, line) in info_records.iter().enumerate() {
+        for (_i, line) in info_records.iter().enumerate() {
             if line.len() > MAX_LINE_LENGTH {
                 return Err(ExodusError::StringTooLong {
                     max: MAX_LINE_LENGTH,

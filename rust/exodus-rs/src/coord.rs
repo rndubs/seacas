@@ -496,7 +496,7 @@ impl ExodusFile<mode::Write> {
         }
 
         // Validate name lengths
-        for (i, name) in names.iter().enumerate() {
+        for (_i, name) in names.iter().enumerate() {
             if name.len() > MAX_NAME_LENGTH {
                 return Err(ExodusError::StringTooLong {
                     max: MAX_NAME_LENGTH,
@@ -843,8 +843,6 @@ impl ExodusFile<mode::Read> {
     /// # Ok::<(), exodus_rs::ExodusError>(())
     /// ```
     pub fn coord_names(&self) -> Result<Vec<String>> {
-        const MAX_NAME_LENGTH: usize = 32;
-
         // Check if coor_names variable exists
         match self.nc_file.variable("coor_names") {
             Some(var) => {

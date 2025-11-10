@@ -236,7 +236,7 @@ impl ExodusFile<mode::Write> {
     }
 
     // Helper methods
-    fn get_block_index(&self, entity_type: EntityType, _block_id: EntityId) -> Result<usize> {
+    fn get_block_index(&self, _entity_type: EntityType, _block_id: EntityId) -> Result<usize> {
         // Count how many blocks have been written by checking for connectivity variables
         let mut count = 0;
         loop {
