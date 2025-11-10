@@ -90,7 +90,9 @@ impl<T: CoordValue> Coordinates<T> {
         if i >= self.x.len() {
             return None;
         }
-        Some([self.x[i], self.y[i], self.z[i]])
+        let y_val = self.y.get(i).copied().unwrap_or_default();
+        let z_val = self.z.get(i).copied().unwrap_or_default();
+        Some([self.x[i], y_val, z_val])
     }
 
     /// Iterator over coordinates
@@ -184,13 +186,23 @@ impl ExodusFile<mode::Write> {
             return Err(ExodusError::NotInitialized);
         }
 
-        // Get number of nodes and dimensions
-        let num_nodes = self.metadata.dim_cache.get("num_nodes").copied().ok_or(
-            ExodusError::Other("num_nodes dimension not found".to_string()),
-        )?;
+        // Get number of nodes (may be 0, in which case dimension doesn't exist)
+        let num_nodes = self.metadata.dim_cache.get("num_nodes").copied().unwrap_or(0);
         let num_dim = self.metadata.num_dim.ok_or(ExodusError::Other(
             "num_dim not set in metadata".to_string(),
         ))?;
+
+        // If num_nodes is 0, just return Ok if coordinate arrays are empty
+        if num_nodes == 0 {
+            if x.is_empty() && y.map_or(true, |v| v.is_empty()) && z.map_or(true, |v| v.is_empty()) {
+                return Ok(());
+            } else {
+                return Err(ExodusError::InvalidArrayLength {
+                    expected: 0,
+                    actual: x.len(),
+                });
+            }
+        }
 
         // Validate array lengths
         if x.len() != num_nodes {
@@ -466,12 +478,12 @@ impl ExodusFile<mode::Read> {
     /// # Ok::<(), exodus_rs::ExodusError>(())
     /// ```
     pub fn coords<T: CoordValue>(&self) -> Result<Coordinates<T>> {
-        // Get num_nodes from dimensions
+        // Handle the case where num_nodes is 0 (dimension may not exist)
         let num_nodes = self
             .nc_file
             .dimension("num_nodes")
-            .ok_or_else(|| ExodusError::Other("num_nodes dimension not found".to_string()))?
-            .len();
+            .map(|d| d.len())
+            .unwrap_or(0);
 
         let num_dim = self
             .nc_file
@@ -479,21 +491,31 @@ impl ExodusFile<mode::Read> {
             .ok_or_else(|| ExodusError::Other("num_dim dimension not found".to_string()))?
             .len();
 
+        // Return empty vectors if num_nodes is 0
+        if num_nodes == 0 {
+            return Ok(Coordinates {
+                x: vec![],
+                y: vec![],
+                z: vec![],
+                num_dim,
+            });
+        }
+
         // Read X coordinates
         let x = self.get_coord_x::<T>()?;
 
-        // Read Y coordinates if num_dim >= 2
+        // Read Y coordinates if num_dim >= 2, otherwise return empty vector
         let y = if num_dim >= 2 {
             self.get_coord_y::<T>()?
         } else {
-            vec![T::default(); num_nodes]
+            vec![]
         };
 
-        // Read Z coordinates if num_dim >= 3
+        // Read Z coordinates if num_dim >= 3, otherwise return empty vector
         let z = if num_dim >= 3 {
             self.get_coord_z::<T>()?
         } else {
-            vec![T::default(); num_nodes]
+            vec![]
         };
 
         Ok(Coordinates { x, y, z, num_dim })
@@ -829,11 +851,12 @@ impl ExodusFile<mode::Append> {
 
     /// Read all coordinates (append mode)
     pub fn coords<T: CoordValue>(&self) -> Result<Coordinates<T>> {
+        // Handle the case where num_nodes is 0 (dimension may not exist)
         let num_nodes = self
             .nc_file
             .dimension("num_nodes")
-            .ok_or_else(|| ExodusError::Other("num_nodes dimension not found".to_string()))?
-            .len();
+            .map(|d| d.len())
+            .unwrap_or(0);
 
         let num_dim = self
             .nc_file
@@ -841,16 +864,26 @@ impl ExodusFile<mode::Append> {
             .ok_or_else(|| ExodusError::Other("num_dim dimension not found".to_string()))?
             .len();
 
+        // Return empty vectors if num_nodes is 0
+        if num_nodes == 0 {
+            return Ok(Coordinates {
+                x: vec![],
+                y: vec![],
+                z: vec![],
+                num_dim,
+            });
+        }
+
         let x = self.get_coord_x::<T>()?;
         let y = if num_dim >= 2 {
             self.get_coord_y::<T>()?
         } else {
-            vec![T::default(); num_nodes]
+            vec![]
         };
         let z = if num_dim >= 3 {
             self.get_coord_z::<T>()?
         } else {
-            vec![T::default(); num_nodes]
+            vec![]
         };
 
         Ok(Coordinates { x, y, z, num_dim })

@@ -963,12 +963,12 @@ mod set_tests {
             };
             file.put_node_set(node_set.id, &node_set.nodes, None).unwrap();
 
-            file.put_name(EntityType::NodeSet, 100, "BoundaryNodes")
+            file.put_name(EntityType::NodeSet, 0, "BoundaryNodes")
                 .unwrap();
         }
 
         let file = ExodusFile::<mode::Read>::open(path).unwrap();
-        let name = file.name(EntityType::NodeSet, 100).unwrap();
+        let name = file.name(EntityType::NodeSet, 0).unwrap();
 
         assert_eq!(name, "BoundaryNodes");
     }

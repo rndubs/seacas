@@ -148,7 +148,8 @@ impl ExodusFile<mode::Write> {
     /// # Ok::<(), exodus_rs::ExodusError>(())
     /// ```
     pub fn put_connectivity(&mut self, block_id: EntityId, connectivity: &[i64]) -> Result<()> {
-        let block_index = self.find_block_index(EntityType::ElemBlock, block_id)?;
+        // Try to find the block in all block types (ElemBlock, EdgeBlock, FaceBlock)
+        let (block_index, _entity_type) = self.find_block_in_any_type(block_id)?;
         let conn_var_name = format!("connect{}", block_index + 1);
 
         let mut var = self.nc_file.variable_mut(&conn_var_name).ok_or_else(|| {
@@ -180,7 +181,7 @@ impl ExodusFile<mode::Write> {
     /// - Array length mismatch
     /// - Block has no attributes defined
     pub fn put_block_attributes(&mut self, block_id: EntityId, attributes: &[f64]) -> Result<()> {
-        let block_index = self.find_block_index(EntityType::ElemBlock, block_id)?;
+        let (block_index, _entity_type) = self.find_block_in_any_type(block_id)?;
         let attr_var_name = format!("attrib{}", block_index + 1);
 
         let mut var = self.nc_file.variable_mut(&attr_var_name).ok_or_else(|| {
@@ -275,6 +276,27 @@ impl ExodusFile<mode::Write> {
                 id: block_id,
             })
         }
+    }
+
+    /// Find a block by ID across all block types (ElemBlock, EdgeBlock, FaceBlock)
+    fn find_block_in_any_type(&self, block_id: EntityId) -> Result<(usize, EntityType)> {
+        // Try ElemBlock first
+        if let Ok(index) = self.find_block_index(EntityType::ElemBlock, block_id) {
+            return Ok((index, EntityType::ElemBlock));
+        }
+        // Try EdgeBlock
+        if let Ok(index) = self.find_block_index(EntityType::EdgeBlock, block_id) {
+            return Ok((index, EntityType::EdgeBlock));
+        }
+        // Try FaceBlock
+        if let Ok(index) = self.find_block_index(EntityType::FaceBlock, block_id) {
+            return Ok((index, EntityType::FaceBlock));
+        }
+        // Not found in any block type
+        Err(ExodusError::EntityNotFound {
+            entity_type: "block (elem/edge/face)".to_string(),
+            id: block_id,
+        })
     }
 
     /// Get all block IDs of a given type
