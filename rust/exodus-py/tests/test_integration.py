@@ -70,7 +70,7 @@ def test_complete_workflow():
         writer.close()
 
         # Step 2: Append time step data
-        appender = ExodusAppender.open(tmp_path)
+        appender = ExodusAppender.append(tmp_path)
         appender.put_time(1, 0.0)
         appender.put_var(1, EntityType.Global, 0, 0, [100.0])
         appender.put_var(1, EntityType.Nodal, 0, 0, [20.0, 21.0, 22.0, 23.0])
@@ -207,7 +207,7 @@ def test_multi_timestep_workflow():
         writer.close()
 
         # Write multiple time steps
-        appender = ExodusAppender.open(tmp_path)
+        appender = ExodusAppender.append(tmp_path)
         for step in range(1, 11):
             time_val = float(step) * 0.1
             appender.put_time(step, time_val)

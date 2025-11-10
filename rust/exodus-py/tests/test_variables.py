@@ -39,7 +39,7 @@ def test_global_variables():
         writer.close()
 
         # Open for appending to write time steps
-        appender = ExodusAppender.open(tmp_path)
+        appender = ExodusAppender.append(tmp_path)
 
         # Write time step 1 - for global vars: entity_id=0, var_index=0 for first var
         appender.put_time(1, 0.0)
@@ -95,7 +95,7 @@ def test_nodal_variables():
         writer.close()
 
         # Write time step data
-        appender = ExodusAppender.open(tmp_path)
+        appender = ExodusAppender.append(tmp_path)
         appender.put_time(1, 0.0)
 
         # Write nodal variable for all 4 nodes
@@ -154,7 +154,7 @@ def test_element_variables():
         writer.close()
 
         # Write time step data
-        appender = ExodusAppender.open(tmp_path)
+        appender = ExodusAppender.append(tmp_path)
         appender.put_time(1, 0.0)
 
         # Write element variable for block 1
@@ -194,7 +194,7 @@ def test_multiple_time_steps():
         writer.close()
 
         # Write multiple time steps
-        appender = ExodusAppender.open(tmp_path)
+        appender = ExodusAppender.append(tmp_path)
         for i in range(5):
             appender.put_time(i + 1, float(i) * 0.1)
             appender.put_var(i + 1, EntityType.Global, 0, 0, [float(i * 10)])
@@ -240,7 +240,7 @@ def test_multiple_nodal_variables():
         writer.close()
 
         # Write data
-        appender = ExodusAppender.open(tmp_path)
+        appender = ExodusAppender.append(tmp_path)
         appender.put_time(1, 0.0)
 
         # Write each variable separately (var_index 0, 1, 2)

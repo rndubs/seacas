@@ -157,7 +157,7 @@ def test_appender_modify_existing():
         writer.close()
 
         # Open with appender
-        appender = ExodusAppender.open(tmp_path)
+        appender = ExodusAppender.append(tmp_path)
         read_params = appender.init_params()
         assert read_params.title == "Appender Test"
         appender.close()
