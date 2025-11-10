@@ -59,8 +59,9 @@ impl<M: FileMode> ExodusFile<M> {
             Some(var) => {
                 // Read the IDs
                 let ids: Vec<i64> = var.get_values(..)?;
-                // Filter out zeros (uninitialized values)
-                Ok(ids.into_iter().filter(|&id| id != 0).collect())
+                // Filter out zeros and NetCDF fill values (uninitialized values)
+                // NetCDF uses NC_FILL_INT64 = -9223372036854775806 as the default fill value
+                Ok(ids.into_iter().filter(|&id| id > 0).collect())
             }
             None => {
                 // Variable doesn't exist, return empty vector
@@ -302,8 +303,13 @@ impl ExodusFile<mode::Write> {
                 };
                 self.put_set(&set)?;
 
-                // Return the index (should be at the end)
-                self.set_ids(EntityType::NodeSet)?.len() - 1
+                // Count dimensions directly to get the actual index
+                // (set_ids() filters fill values, so its length doesn't match the array index)
+                let mut count: usize = 0;
+                while self.nc_file.dimension(&format!("num_nod_ns{}", count + 1)).is_some() {
+                    count += 1;
+                }
+                count.saturating_sub(1)
             }
         };
 
@@ -377,8 +383,13 @@ impl ExodusFile<mode::Write> {
                 };
                 self.put_set(&set)?;
 
-                // Return the index (should be at the end)
-                self.set_ids(EntityType::SideSet)?.len() - 1
+                // Count dimensions directly to get the actual index
+                // (set_ids() filters fill values, so its length doesn't match the array index)
+                let mut count: usize = 0;
+                while self.nc_file.dimension(&format!("num_side_ss{}", count + 1)).is_some() {
+                    count += 1;
+                }
+                count.saturating_sub(1)
             }
         };
 
@@ -467,16 +478,19 @@ impl ExodusFile<mode::Write> {
             });
         }
 
-        // Create and write entity variable
-        let (var_name, dim_name) = match entity_type {
-            EntityType::EdgeSet => (format!("edge_es{}", index + 1), format!("num_edge_es{}", index + 1)),
-            EntityType::FaceSet => (format!("face_fs{}", index + 1), format!("num_face_fs{}", index + 1)),
-            EntityType::ElemSet => (format!("elem_els{}", index + 1), format!("num_ele_els{}", index + 1)),
-            _ => unreachable!(),
-        };
+        // Only create and write variables if the set is not empty
+        if !entities.is_empty() {
+            // Create and write entity variable
+            let (var_name, dim_name) = match entity_type {
+                EntityType::EdgeSet => (format!("edge_es{}", index + 1), format!("num_edge_es{}", index + 1)),
+                EntityType::FaceSet => (format!("face_fs{}", index + 1), format!("num_face_fs{}", index + 1)),
+                EntityType::ElemSet => (format!("elem_els{}", index + 1), format!("num_ele_els{}", index + 1)),
+                _ => unreachable!(),
+            };
 
-        let mut var = self.nc_file.add_variable::<i64>(&var_name, &[&dim_name])?;
-        var.put_values(entities, ..)?;
+            let mut var = self.nc_file.add_variable::<i64>(&var_name, &[&dim_name])?;
+            var.put_values(entities, ..)?;
+        }
 
         Ok(())
     }
@@ -634,7 +648,7 @@ impl ExodusFile<mode::Read> {
                 id: set_id,
             })?;
 
-        // Read entity IDs
+        // Read entity IDs (empty if variable doesn't exist for empty sets)
         let var_name = match entity_type {
             EntityType::EdgeSet => format!("edge_es{}", index + 1),
             EntityType::FaceSet => format!("face_fs{}", index + 1),
@@ -642,11 +656,10 @@ impl ExodusFile<mode::Read> {
             _ => unreachable!(),
         };
 
-        let entities: Vec<i64> = self
-            .nc_file
-            .variable(&var_name)
-            .ok_or_else(|| ExodusError::VariableNotDefined(var_name.clone()))?
-            .get_values(..)?;
+        let entities: Vec<i64> = match self.nc_file.variable(&var_name) {
+            Some(var) => var.get_values(..)?,
+            None => Vec::new(), // Empty set
+        };
 
         Ok(EntitySet {
             id: set_id,
