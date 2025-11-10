@@ -37,7 +37,7 @@ def test_create_options_with_sizes():
     opts = CreateOptions(
         mode=CreateMode.Clobber,
         float_size=FloatSize.Float64,
-        int64_mode=Int64Mode.All,
+        int64_mode=Int64Mode.Int64,
     )
     assert opts is not None
 
@@ -90,7 +90,7 @@ def test_writer_with_options():
 
     try:
         opts = CreateOptions(mode=CreateMode.Clobber, float_size=FloatSize.Float64)
-        writer = ExodusWriter.create_with_options(tmp_path, opts)
+        writer = ExodusWriter.create(tmp_path, opts)
         params = InitParams(
             title="Test Options",
             num_dim=3,
@@ -220,10 +220,8 @@ def test_float_size_enum():
 
 def test_int64_mode_enum():
     """Test Int64Mode enum values"""
-    assert Int64Mode.Default is not None
-    assert Int64Mode.All is not None
-    assert Int64Mode.BulkData is not None
-    assert Int64Mode.Maps is not None
+    assert Int64Mode.Int32 is not None
+    assert Int64Mode.Int64 is not None
 
 
 def test_create_mode_enum():
