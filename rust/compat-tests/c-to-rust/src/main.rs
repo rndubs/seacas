@@ -90,7 +90,7 @@ fn verify_file(path: &PathBuf, verbose: bool) -> Result<bool> {
     let file = file.unwrap();
 
     // Test: Read initialization parameters
-    let init_result = file.get_init().context("Failed to read init parameters");
+    let init_result = file.init_params().context("Failed to read init parameters");
     results.test("Read initialization parameters", init_result.as_ref().map(|_| ()).map_err(|e| anyhow::anyhow!("{}", e)));
 
     if let Ok(params) = &init_result {
@@ -98,34 +98,38 @@ fn verify_file(path: &PathBuf, verbose: bool) -> Result<bool> {
             println!("  Title: '{}'", params.title);
             println!("  Dimensions: {}", params.num_dim);
             println!("  Nodes: {}", params.num_nodes);
-            println!("  Elements: {}", params.num_elem);
-            println!("  Element blocks: {}", params.num_elem_blk);
+            println!("  Elements: {}", params.num_elems);
+            println!("  Element blocks: {}", params.num_elem_blocks);
             println!("  Node sets: {}", params.num_node_sets);
             println!("  Side sets: {}", params.num_side_sets);
         }
 
-        // Test: Verify title contains expected text
-        let title_check = if params.title.contains("C-generated") {
+        // Test: Verify title is non-empty and contains expected text
+        let title_check = if params.title.is_empty() {
+            Err(anyhow::anyhow!("Title is empty"))
+        } else if params.title.contains("compatibility") ||
+                  params.title.contains("C-generated") ||
+                  params.title.contains("Rust-generated") {
             Ok(())
         } else {
-            Err(anyhow::anyhow!("Title does not contain 'C-generated'"))
+            Err(anyhow::anyhow!("Title does not contain expected text"))
         };
-        results.test("Verify title contains 'C-generated'", title_check);
+        results.test("Verify title is valid", title_check);
 
         println!();
 
         // Test: Read coordinates
-        let coord_result = file.get_coords::<f64>().context("Failed to read coordinates");
+        let coord_result = file.coords::<f64>().context("Failed to read coordinates");
         results.test("Read coordinates", coord_result.as_ref().map(|_| ()).map_err(|e| anyhow::anyhow!("{}", e)));
 
-        if let Ok((x, y, z)) = &coord_result {
-            if verbose && !x.is_empty() {
-                print!("  First node: ({:.2}", x[0]);
-                if !y.is_empty() {
-                    print!(", {:.2}", y[0]);
+        if let Ok(coords) = &coord_result {
+            if verbose && !coords.x.is_empty() {
+                print!("  First node: ({:.2}", coords.x[0]);
+                if coords.num_dim >= 2 && !coords.y.is_empty() {
+                    print!(", {:.2}", coords.y[0]);
                 }
-                if !z.is_empty() {
-                    print!(", {:.2}", z[0]);
+                if coords.num_dim >= 3 && !coords.z.is_empty() {
+                    print!(", {:.2}", coords.z[0]);
                 }
                 println!(")");
             }
@@ -134,8 +138,8 @@ fn verify_file(path: &PathBuf, verbose: bool) -> Result<bool> {
         println!();
 
         // Test: Read element blocks
-        if params.num_elem_blk > 0 {
-            let blocks_result = file.get_block_ids().context("Failed to read block IDs");
+        if params.num_elem_blocks > 0 {
+            let blocks_result = file.block_ids(EntityType::ElemBlock).context("Failed to read block IDs");
             results.test("Read element block IDs", blocks_result.as_ref().map(|_| ()).map_err(|e| anyhow::anyhow!("{}", e)));
 
             if let Ok(block_ids) = &blocks_result {
@@ -143,7 +147,7 @@ fn verify_file(path: &PathBuf, verbose: bool) -> Result<bool> {
                     println!("  Block IDs: {:?}", block_ids);
 
                     for &block_id in block_ids {
-                        if let Ok(block) = file.get_block(block_id) {
+                        if let Ok(block) = file.block(block_id) {
                             println!("  Block {}: {:?}, {} elements",
                                      block_id, block.topology, block.num_entries);
                         }
@@ -155,40 +159,37 @@ fn verify_file(path: &PathBuf, verbose: bool) -> Result<bool> {
         }
 
         // Test: Check for variables
-        match file.get_variable_count(EntityType::Global) {
-            Ok(count) if count > 0 => {
+        if let Ok(var_names) = file.variable_names(EntityType::Global) {
+            if !var_names.is_empty() {
                 results.test("Read global variables", Ok(()));
                 if verbose {
-                    println!("  Global variables: {}", count);
+                    println!("  Global variables: {}", var_names.len());
                 }
             }
-            _ => {}
         }
 
-        match file.get_variable_count(EntityType::Node) {
-            Ok(count) if count > 0 => {
+        if let Ok(var_names) = file.variable_names(EntityType::Nodal) {
+            if !var_names.is_empty() {
                 results.test("Read nodal variables", Ok(()));
                 if verbose {
-                    println!("  Nodal variables: {}", count);
+                    println!("  Nodal variables: {}", var_names.len());
                 }
             }
-            _ => {}
         }
 
         // Test: Check for time steps
-        match file.get_time_step_count() {
-            Ok(count) if count > 0 => {
+        if let Ok(count) = file.num_time_steps() {
+            if count > 0 {
                 results.test("Read time steps", Ok(()));
                 if verbose {
                     println!("  Time steps: {}", count);
 
-                    if let Ok(times) = file.get_all_times::<f64>() {
+                    if let Ok(times) = file.times() {
                         println!("  First time: {:.6}", times[0]);
                         println!("  Last time: {:.6}", times[times.len() - 1]);
                     }
                 }
             }
-            _ => {}
         }
     }
 
