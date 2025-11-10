@@ -34,7 +34,7 @@ impl ExodusAppender {
     }
 
     /// Read a blob (NOTE: Not available in Append mode)
-    fn get_blob(&self, _blob_id: i64) -> PyResult<Blob> {
+    fn get_blob(&self, _blob_id: i64) -> PyResult<(Blob, Vec<u8>)> {
         Err(PyErr::new::<pyo3::exceptions::PyNotImplementedError, _>(
             "get_blob not available in Append mode - use ExodusReader instead"
         ))
@@ -63,10 +63,13 @@ impl ExodusReader {
         Ok(Assembly::from_rust(&asm))
     }
 
-    /// Read a blob (returns blob metadata only, not the data)
-    fn get_blob(&self, blob_id: i64) -> PyResult<Blob> {
-        let (blob, _data) = self.file_ref().blob(blob_id).into_py()?;
-        Ok(Blob::from_rust(&blob))
+    /// Read a blob (returns tuple of blob metadata and binary data)
+    ///
+    /// Returns:
+    ///     tuple: (Blob, bytes) - Blob metadata and binary data
+    fn get_blob(&self, blob_id: i64) -> PyResult<(Blob, Vec<u8>)> {
+        let (blob, data) = self.file_ref().blob(blob_id).into_py()?;
+        Ok((Blob::from_rust(&blob), data))
     }
 
     /// Get all assembly IDs

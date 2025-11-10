@@ -50,6 +50,33 @@ impl ExodusReader {
         self.file.path().to_string_lossy().to_string()
     }
 
+    /// Get Exodus file format version
+    ///
+    /// Returns:
+    ///     tuple: (major_version, minor_version) as integers
+    ///
+    /// Example:
+    ///     >>> reader = ExodusReader.open("mesh.exo")
+    ///     >>> version = reader.version()
+    ///     >>> print(f"Exodus version: {version[0]}.{version[1]}")
+    fn version(&self) -> PyResult<(u32, u32)> {
+        self.file.version().into_py()
+    }
+
+    /// Get NetCDF file format information
+    ///
+    /// Returns:
+    ///     str: File format as string (e.g., "NetCDF4", "NetCDF3", etc.)
+    ///
+    /// Example:
+    ///     >>> reader = ExodusReader.open("mesh.exo")
+    ///     >>> fmt = reader.format()
+    ///     >>> print(f"File format: {fmt}")
+    fn format(&self) -> PyResult<String> {
+        let fmt = self.file.format().into_py()?;
+        Ok(format!("{:?}", fmt))
+    }
+
     /// Close the file (no-op for readers, file closes automatically when dropped)
     ///
     /// This method is provided for API consistency with ExodusWriter.
@@ -144,6 +171,26 @@ impl ExodusWriter {
     fn path(&self) -> PyResult<String> {
         if let Some(ref file) = self.file {
             Ok(file.path().to_string_lossy().to_string())
+        } else {
+            Err(PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(
+                "File already closed",
+            ))
+        }
+    }
+
+    /// Explicitly flush buffered data to disk
+    ///
+    /// This ensures all data is written to the file system.
+    /// Useful for ensuring data persistence before continuing operations.
+    ///
+    /// Example:
+    ///     >>> writer = ExodusWriter.create("mesh.exo")
+    ///     >>> writer.put_init_params(params)
+    ///     >>> writer.sync()  # Ensure data is flushed to disk
+    fn sync(&mut self) -> PyResult<()> {
+        if let Some(ref mut file) = self.file {
+            file.sync().into_py()?;
+            Ok(())
         } else {
             Err(PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(
                 "File already closed",

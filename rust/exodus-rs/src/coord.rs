@@ -448,6 +448,86 @@ impl ExodusFile<mode::Write> {
 
         Ok(())
     }
+
+    /// Write coordinate names
+    ///
+    /// # Arguments
+    ///
+    /// * `names` - Array of coordinate names (e.g., ["X", "Y", "Z"])
+    ///   Length should match num_dim (1, 2, or 3)
+    ///
+    /// # Returns
+    ///
+    /// `Ok(())` on success, or an error if:
+    /// - The file is not initialized
+    /// - Array length doesn't match num_dim
+    /// - Any name exceeds 32 characters
+    /// - NetCDF write fails
+    ///
+    /// # Example
+    ///
+    /// ```rust,ignore
+    /// use exodus_rs::ExodusFile;
+    ///
+    /// let mut file = ExodusFile::create_default("mesh.exo")?;
+    /// file.builder().dimensions(3).nodes(8).finish()?;
+    ///
+    /// file.put_coord_names(&["X", "Y", "Z"])?;
+    /// # Ok::<(), exodus_rs::ExodusError>(())
+    /// ```
+    pub fn put_coord_names(&mut self, names: &[&str]) -> Result<()> {
+        const MAX_NAME_LENGTH: usize = 32;
+
+        // Validate that file is initialized
+        if !self.metadata.initialized {
+            return Err(ExodusError::NotInitialized);
+        }
+
+        let num_dim = self.metadata.num_dim.ok_or(ExodusError::Other(
+            "num_dim not set in metadata".to_string(),
+        ))?;
+
+        // Validate array length
+        if names.len() != num_dim {
+            return Err(ExodusError::InvalidArrayLength {
+                expected: num_dim,
+                actual: names.len(),
+            });
+        }
+
+        // Validate name lengths
+        for (i, name) in names.iter().enumerate() {
+            if name.len() > MAX_NAME_LENGTH {
+                return Err(ExodusError::StringTooLong {
+                    max: MAX_NAME_LENGTH,
+                    actual: name.len(),
+                });
+            }
+        }
+
+        // Create or get len_name dimension
+        if self.nc_file.dimension("len_name").is_none() {
+            self.nc_file.add_dimension("len_name", MAX_NAME_LENGTH)?;
+        }
+
+        // Create coordinate names variable: coor_names(num_dim, len_name)
+        if self.nc_file.variable("coor_names").is_none() {
+            self.nc_file.add_variable::<u8>("coor_names", &["num_dim", "len_name"])?;
+        }
+
+        // Write each coordinate name
+        if let Some(mut var) = self.nc_file.variable_mut("coor_names") {
+            for (i, name) in names.iter().enumerate() {
+                let mut buf = vec![0u8; MAX_NAME_LENGTH];
+                let bytes = name.as_bytes();
+                let copy_len = bytes.len().min(MAX_NAME_LENGTH);
+                buf[..copy_len].copy_from_slice(&bytes[..copy_len]);
+                var.put_values(&buf, (i..i + 1, ..))?;
+            }
+        }
+
+        Ok(())
+    }
 }
 
 // Reader methods
@@ -739,6 +819,53 @@ impl ExodusFile<mode::Read> {
 
         // Convert to target type
         Ok(data.iter().map(|&v| T::from_f64(v)).collect())
+    }
+
+    /// Read coordinate names
+    ///
+    /// # Returns
+    ///
+    /// Vector of coordinate names, or empty vector if not present.
+    /// Length will be num_dim (1, 2, or 3).
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if NetCDF read fails
+    ///
+    /// # Example
+    ///
+    /// ```rust,ignore
+    /// use exodus_rs::ExodusFile;
+    ///
+    /// let file = ExodusFile::<mode::Read>::open("mesh.exo")?;
+    /// let names = file.coord_names()?;
+    /// println!("Coordinate names: {:?}", names);
+    /// # Ok::<(), exodus_rs::ExodusError>(())
+    /// ```
+    pub fn coord_names(&self) -> Result<Vec<String>> {
+        const MAX_NAME_LENGTH: usize = 32;
+
+        // Check if coor_names variable exists
+        match self.nc_file.variable("coor_names") {
+            Some(var) => {
+                let num_dim = self.metadata.num_dim.unwrap_or(3);
+
+                let mut names = Vec::with_capacity(num_dim);
+
+                // Read each coordinate name
+                for i in 0..num_dim {
+                    let name_chars: Vec<u8> = var.get_values((i..i + 1, ..))?;
+                    let name = String::from_utf8_lossy(&name_chars)
+                        .trim_end_matches('\0')
+                        .trim()
+                        .to_string();
+                    names.push(name);
+                }
+
+                Ok(names)
+            }
+            None => Ok(Vec::new()),
+        }
     }
 }
 

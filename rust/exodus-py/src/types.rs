@@ -348,6 +348,27 @@ impl InitParams {
             if let Some(val) = kw.get_item("num_side_sets")? {
                 params.num_side_sets = val.extract()?;
             }
+            if let Some(val) = kw.get_item("num_edge_sets")? {
+                params.num_edge_sets = val.extract()?;
+            }
+            if let Some(val) = kw.get_item("num_face_sets")? {
+                params.num_face_sets = val.extract()?;
+            }
+            if let Some(val) = kw.get_item("num_elem_sets")? {
+                params.num_elem_sets = val.extract()?;
+            }
+            if let Some(val) = kw.get_item("num_node_maps")? {
+                params.num_node_maps = val.extract()?;
+            }
+            if let Some(val) = kw.get_item("num_edge_maps")? {
+                params.num_edge_maps = val.extract()?;
+            }
+            if let Some(val) = kw.get_item("num_face_maps")? {
+                params.num_face_maps = val.extract()?;
+            }
+            if let Some(val) = kw.get_item("num_elem_maps")? {
+                params.num_elem_maps = val.extract()?;
+            }
             if let Some(val) = kw.get_item("num_assemblies")? {
                 params.num_assemblies = val.extract()?;
             }

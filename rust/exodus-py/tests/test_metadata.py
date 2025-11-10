@@ -16,7 +16,6 @@ from exodus import (
 )
 
 
-@pytest.mark.skip(reason="QA records not yet implemented in exodus-rs")
 def test_qa_record_creation():
     """Test creating QA records"""
     with tempfile.NamedTemporaryFile(suffix=".exo", delete=False) as tmp:
@@ -57,7 +56,6 @@ def test_qa_record_creation():
             os.unlink(tmp_path)
 
 
-@pytest.mark.skip(reason="QA records not yet implemented in exodus-rs")
 def test_multiple_qa_records():
     """Test multiple QA records"""
     with tempfile.NamedTemporaryFile(suffix=".exo", delete=False) as tmp:
