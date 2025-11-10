@@ -86,103 +86,53 @@ impl ExodusWriter {
 
 #[pymethods]
 impl ExodusAppender {
-    /// Read entity ID map
-    ///
-    /// Args:
-    ///     entity_type (str): Type of entity ('node', 'elem', 'edge', or 'face')
-    ///
-    /// Returns:
-    ///     list[int]: Entity ID map
-    fn get_id_map(&self, entity_type: &str) -> PyResult<Vec<i64>> {
-        let entity_type = match entity_type {
-            "node" => EntityType::NodeMap,
-            "elem" => EntityType::ElemMap,
-            "edge" => EntityType::EdgeMap,
-            "face" => EntityType::FaceMap,
-            _ => return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(
-                format!("Invalid entity_type: {}", entity_type)
-            )),
-        };
-        let file = self.file.as_ref().ok_or_else(|| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>("File has been closed"))?;
-        file.id_map(entity_type).into_py()
+    /// Read entity ID map (NOTE: Not available in Append mode)
+    fn get_id_map(&self, _entity_type: &str) -> PyResult<Vec<i64>> {
+        Err(PyErr::new::<pyo3::exceptions::PyNotImplementedError, _>(
+            "get_id_map not available in Append mode - use ExodusReader instead"
+        ))
     }
 
-    /// Read element order map
-    ///
-    /// Returns:
-    ///     list[int]: Element order map
+    /// Read element order map (NOTE: Not available in Append mode)
     fn get_elem_order_map(&self) -> PyResult<Vec<i64>> {
-        let file = self.file.as_ref().ok_or_else(|| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>("File has been closed"))?;
-        file.elem_order_map().into_py()
+        Err(PyErr::new::<pyo3::exceptions::PyNotImplementedError, _>(
+            "get_elem_order_map not available in Append mode - use ExodusReader instead"
+        ))
     }
 
-    /// Get name for a single entity
-    ///
-    /// Args:
-    ///     entity_type (str): Type of entity
-    ///     entity_index (int): 0-based index of the entity
-    ///
-    /// Returns:
-    ///     str: Entity name
-    fn get_name(&self, entity_type: &str, entity_index: usize) -> PyResult<String> {
-        let entity_type = parse_entity_type(entity_type)?;
-        let file = self.file.as_ref().ok_or_else(|| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>("File has been closed"))?;
-        file.name(entity_type, entity_index).into_py()
+    /// Get name for a single entity (NOTE: Not available in Append mode)
+    fn get_name(&self, _entity_type: &str, _entity_index: usize) -> PyResult<String> {
+        Err(PyErr::new::<pyo3::exceptions::PyNotImplementedError, _>(
+            "get_name not available in Append mode - use ExodusReader instead"
+        ))
     }
 
-    /// Get all names for entity type
-    ///
-    /// Args:
-    ///     entity_type (str): Type of entity
-    ///
-    /// Returns:
-    ///     list[str]: Vector of entity names
-    fn get_names(&self, entity_type: &str) -> PyResult<Vec<String>> {
-        let entity_type = parse_entity_type(entity_type)?;
-        let file = self.file.as_ref().ok_or_else(|| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>("File has been closed"))?;
-        file.names(entity_type).into_py()
+    /// Get all names for entity type (NOTE: Not available in Append mode)
+    fn get_names(&self, _entity_type: &str) -> PyResult<Vec<String>> {
+        Err(PyErr::new::<pyo3::exceptions::PyNotImplementedError, _>(
+            "get_names not available in Append mode - use ExodusReader instead"
+        ))
     }
 
-    /// Get property value for a single entity
-    ///
-    /// Args:
-    ///     entity_type (str): Type of entity
-    ///     entity_id (int): Entity ID (not index)
-    ///     prop_name (str): Property name
-    ///
-    /// Returns:
-    ///     int: Property value
-    fn get_property(&self, entity_type: &str, entity_id: i64, prop_name: &str) -> PyResult<i64> {
-        let entity_type = parse_entity_type(entity_type)?;
-        let file = self.file.as_ref().ok_or_else(|| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>("File has been closed"))?;
-        file.property(entity_type, entity_id, prop_name).into_py()
+    /// Get property value for a single entity (NOTE: Not available in Append mode)
+    fn get_property(&self, _entity_type: &str, _entity_id: i64, _prop_name: &str) -> PyResult<i64> {
+        Err(PyErr::new::<pyo3::exceptions::PyNotImplementedError, _>(
+            "get_property not available in Append mode - use ExodusReader instead"
+        ))
     }
 
-    /// Get property array for all entities of a type
-    ///
-    /// Args:
-    ///     entity_type (str): Type of entity
-    ///     prop_name (str): Property name
-    ///
-    /// Returns:
-    ///     list[int]: Vector of property values
-    fn get_property_array(&self, entity_type: &str, prop_name: &str) -> PyResult<Vec<i64>> {
-        let entity_type = parse_entity_type(entity_type)?;
-        let file = self.file.as_ref().ok_or_else(|| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>("File has been closed"))?;
-        file.property_array(entity_type, prop_name).into_py()
+    /// Get property array for all entities of a type (NOTE: Not available in Append mode)
+    fn get_property_array(&self, _entity_type: &str, _prop_name: &str) -> PyResult<Vec<i64>> {
+        Err(PyErr::new::<pyo3::exceptions::PyNotImplementedError, _>(
+            "get_property_array not available in Append mode - use ExodusReader instead"
+        ))
     }
 
-    /// Get all property names for an entity type
-    ///
-    /// Args:
-    ///     entity_type (str): Type of entity
-    ///
-    /// Returns:
-    ///     list[str]: Vector of property names
-    fn get_property_names(&self, entity_type: &str) -> PyResult<Vec<String>> {
-        let entity_type = parse_entity_type(entity_type)?;
-        let file = self.file.as_ref().ok_or_else(|| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>("File has been closed"))?;
-        file.property_names(entity_type).into_py()
+    /// Get all property names for an entity type (NOTE: Not available in Append mode)
+    fn get_property_names(&self, _entity_type: &str) -> PyResult<Vec<String>> {
+        Err(PyErr::new::<pyo3::exceptions::PyNotImplementedError, _>(
+            "get_property_names not available in Append mode - use ExodusReader instead"
+        ))
     }
 }
 

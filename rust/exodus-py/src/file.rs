@@ -50,6 +50,14 @@ impl ExodusReader {
         self.file.path().to_string_lossy().to_string()
     }
 
+    /// Close the file (no-op for readers, file closes automatically when dropped)
+    ///
+    /// This method is provided for API consistency with ExodusWriter.
+    fn close(&self) -> PyResult<()> {
+        // No-op: file closes automatically when dropped
+        Ok(())
+    }
+
     /// Enter context manager (for 'with' statement)
     fn __enter__(slf: Py<Self>) -> Py<Self> {
         slf
@@ -120,8 +128,8 @@ impl ExodusWriter {
     ///     ...     num_elems=1,
     ///     ...     num_elem_blocks=1
     ///     ... )
-    ///     >>> writer.init(params)
-    fn init(&mut self, params: &InitParams) -> PyResult<()> {
+    ///     >>> writer.put_init_params(params)
+    fn put_init_params(&mut self, params: &InitParams) -> PyResult<()> {
         if let Some(ref mut file) = self.file {
             file.init(&params.to_rust()).into_py()?;
             Ok(())

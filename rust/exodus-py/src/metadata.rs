@@ -30,10 +30,10 @@ impl ExodusAppender {
         ))
     }
 
-    /// Read information records (NOTE: Not yet implemented in exodus-rs)
+    /// Read information records (NOTE: Not available in Append mode - use ExodusReader instead)
     fn get_info_records(&self) -> PyResult<Vec<String>> {
         Err(PyErr::new::<pyo3::exceptions::PyNotImplementedError, _>(
-            "get_info_records not yet implemented in exodus-rs"
+            "get_info_records not available in Append mode - use ExodusReader instead"
         ))
     }
 }
@@ -47,10 +47,8 @@ impl ExodusReader {
         ))
     }
 
-    /// Read information records (NOTE: Not yet implemented in exodus-rs)
+    /// Read information records
     fn get_info_records(&self) -> PyResult<Vec<String>> {
-        Err(PyErr::new::<pyo3::exceptions::PyNotImplementedError, _>(
-            "get_info_records not yet implemented in exodus-rs"
-        ))
+        self.file.info_records().into_py()
     }
 }
