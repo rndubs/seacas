@@ -169,6 +169,50 @@ impl ExodusFile<mode::Write> {
 
         Ok(())
     }
+
+    /// Ensure all metadata and dimensions are written to the file
+    ///
+    /// This method can be called after defining all dimensions, variables, and metadata
+    /// to ensure they are committed to the file before writing data. While NetCDF-4
+    /// generally handles this automatically, calling this explicitly can help with
+    /// certain workflow patterns.
+    ///
+    /// # Returns
+    ///
+    /// `Ok(())` on success
+    ///
+    /// # Note
+    ///
+    /// NetCDF-4 format generally allows interleaving definition and data operations.
+    /// However, for best compatibility and performance, it's recommended to:
+    /// 1. Initialize the file with `init()`
+    /// 2. Define all blocks, sets, and variables
+    /// 3. Call `sync()` (optional but recommended)
+    /// 4. Write all data values
+    ///
+    /// # Example
+    ///
+    /// ```rust,ignore
+    /// # use exodus_rs::*;
+    /// let mut file = ExodusFile::create_default("mesh.exo")?;
+    ///
+    /// // Define structure
+    /// file.init(&params)?;
+    /// file.put_block(&block)?;
+    /// file.define_variables(EntityType::Nodal, &["Temp"])?;
+    ///
+    /// // Sync definitions
+    /// file.sync()?;
+    ///
+    /// // Write data
+    /// file.put_coords(&x, &y, &z)?;
+    /// file.put_var(0, EntityType::Nodal, 0, 0, &values)?;
+    /// # Ok::<(), ExodusError>(())
+    /// ```
+    pub fn sync(&mut self) -> Result<()> {
+        self.nc_file.sync()?;
+        Ok(())
+    }
 }
 
 #[cfg(feature = "netcdf4")]
@@ -339,8 +383,13 @@ impl<M: FileMode> ExodusFile<M> {
 #[cfg(feature = "netcdf4")]
 impl<M: FileMode> Drop for ExodusFile<M> {
     fn drop(&mut self) {
+        // Sync the file to ensure all data and metadata are written
+        // This is especially important for NetCDF define mode changes
+        // For read-only files, this will be a no-op
+        // Ignore errors in drop - we're already cleaning up
+        let _ = self.nc_file.sync();
+
         // NetCDF file is automatically closed by its Drop implementation
-        // We don't need to do anything here, but this makes the cleanup explicit
     }
 }
 
