@@ -777,24 +777,30 @@ impl ExodusFile<mode::Write> {
 
     /// Internal helper to get entity IDs
     fn entity_ids_internal(&self, entity_type: EntityType) -> Result<Vec<i64>> {
-        let _var_name = match entity_type {
-            EntityType::ElemBlock => "eb_status",
-            EntityType::NodeSet => "ns_status",
-            EntityType::SideSet => "ss_status",
-            EntityType::EdgeBlock => "ed_status",
-            EntityType::FaceBlock => "fa_status",
-            EntityType::ElemSet => "els_status",
-            EntityType::EdgeSet => "edges_status",
-            EntityType::FaceSet => "faces_status",
+        let var_name = match entity_type {
+            EntityType::ElemBlock => "eb_prop1",
+            EntityType::EdgeBlock => "ed_prop1",
+            EntityType::FaceBlock => "fa_prop1",
+            EntityType::NodeSet => "ns_prop1",
+            EntityType::SideSet => "ss_prop1",
+            EntityType::ElemSet => "els_prop1",
+            EntityType::EdgeSet => "es_prop1",
+            EntityType::FaceSet => "fs_prop1",
             _ => return Err(ExodusError::InvalidEntityType(format!(
                 "Cannot get IDs for entity type {:?}",
                 entity_type
             ))),
         };
 
-        // For now, return error - this would need to be implemented properly
-        // to fetch actual entity IDs from the appropriate variables
-        Err(ExodusError::Other("Entity ID lookup not yet implemented".to_string()))
+        // Try to get the variable
+        if let Some(var) = self.nc_file.variable(var_name) {
+            let ids: Vec<i64> = var.get_values(..)
+                .map_err(|e| ExodusError::NetCdf(e))?;
+            // Filter out zeros and NetCDF fill values
+            Ok(ids.into_iter().filter(|&id| id > 0).collect())
+        } else {
+            Ok(Vec::new())
+        }
     }
 }
 
@@ -828,9 +834,13 @@ impl ExodusFile<mode::Read> {
     ) -> Result<i64> {
         let props = self.property_array(entity_type, prop_name)?;
 
-        // Find the entity index from ID (simplified - would need proper ID lookup)
-        // For now, just use entity_id as index
-        let index = (entity_id - 1) as usize;
+        // Get entity IDs to find the index
+        let ids = self.entity_ids_internal(entity_type)?;
+        let index = ids.iter().position(|&id| id == entity_id)
+            .ok_or_else(|| ExodusError::EntityNotFound {
+                entity_type: entity_type.to_string(),
+                id: entity_id,
+            })?;
 
         props.get(index)
             .copied()
@@ -944,6 +954,34 @@ impl ExodusFile<mode::Read> {
         };
 
         Ok(format!("{}_{}", prefix, prop_name.to_lowercase().replace(' ', "_")))
+    }
+
+    /// Internal helper to get entity IDs
+    fn entity_ids_internal(&self, entity_type: EntityType) -> Result<Vec<i64>> {
+        let var_name = match entity_type {
+            EntityType::ElemBlock => "eb_prop1",
+            EntityType::EdgeBlock => "ed_prop1",
+            EntityType::FaceBlock => "fa_prop1",
+            EntityType::NodeSet => "ns_prop1",
+            EntityType::SideSet => "ss_prop1",
+            EntityType::ElemSet => "els_prop1",
+            EntityType::EdgeSet => "es_prop1",
+            EntityType::FaceSet => "fs_prop1",
+            _ => return Err(ExodusError::InvalidEntityType(format!(
+                "Cannot get IDs for entity type {:?}",
+                entity_type
+            ))),
+        };
+
+        // Try to get the variable
+        if let Some(var) = self.nc_file.variable(var_name) {
+            let ids: Vec<i64> = var.get_values(..)
+                .map_err(|e| ExodusError::NetCdf(e))?;
+            // Filter out zeros and NetCDF fill values
+            Ok(ids.into_iter().filter(|&id| id > 0).collect())
+        } else {
+            Ok(Vec::new())
+        }
     }
 }
 
