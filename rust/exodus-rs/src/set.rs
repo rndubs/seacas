@@ -59,7 +59,8 @@ impl<M: FileMode> ExodusFile<M> {
             Some(var) => {
                 // Read the IDs
                 let ids: Vec<i64> = var.get_values(..)?;
-                Ok(ids)
+                // Filter out zeros (uninitialized values)
+                Ok(ids.into_iter().filter(|&id| id != 0).collect())
             }
             None => {
                 // Variable doesn't exist, return empty vector
@@ -177,8 +178,11 @@ impl ExodusFile<mode::Write> {
         };
 
         if set.num_entries > 0 {
-            self.nc_file
-                .add_dimension(&entries_dim_name, set.num_entries)?;
+            // Try to add dimension, ignore error if it already exists
+            if self.nc_file.dimension(&entries_dim_name).is_none() {
+                self.nc_file
+                    .add_dimension(&entries_dim_name, set.num_entries)?;
+            }
         }
 
         // Create dimension for distribution factors if needed
@@ -192,8 +196,11 @@ impl ExodusFile<mode::Write> {
                 _ => unreachable!(),
             };
 
-            self.nc_file
-                .add_dimension(&df_dim_name, set.num_dist_factors)?;
+            // Try to add dimension, ignore error if it already exists
+            if self.nc_file.dimension(&df_dim_name).is_none() {
+                self.nc_file
+                    .add_dimension(&df_dim_name, set.num_dist_factors)?;
+            }
         }
 
         // Create or update the ID property array
@@ -262,7 +269,7 @@ impl ExodusFile<mode::Write> {
     /// # Errors
     ///
     /// Returns an error if:
-    /// - The set has not been defined
+    /// - The set has not been defined (auto-creates if needed)
     /// - Array lengths don't match set parameters
     /// - NetCDF write fails
     pub fn put_node_set(
@@ -271,52 +278,56 @@ impl ExodusFile<mode::Write> {
         nodes: &[i64],
         dist_factors: Option<&[f64]>,
     ) -> Result<()> {
-        // Find the set index
-        let ids = self.set_ids(EntityType::NodeSet)?;
-        let index = ids
-            .iter()
-            .position(|&id| id == set_id)
-            .ok_or_else(|| ExodusError::EntityNotFound {
-                entity_type: EntityType::NodeSet.to_string(),
-                id: set_id,
-            })?;
-
-        // Get the set parameters to validate
-        let set = self.set(EntityType::NodeSet, set_id)?;
-
-        // Validate node array length
-        if nodes.len() != set.num_entries {
-            return Err(ExodusError::InvalidArrayLength {
-                expected: set.num_entries,
-                actual: nodes.len(),
-            });
-        }
-
-        // Create and write node variable
-        let node_var_name = format!("node_ns{}", index + 1);
-        let entries_dim_name = format!("num_nod_ns{}", index + 1);
-
-        let mut node_var = self
-            .nc_file
-            .add_variable::<i64>(&node_var_name, &[&entries_dim_name])?;
-        node_var.put_values(nodes, ..)?;
-
-        // Write distribution factors if provided
+        // Validate distribution factors length matches nodes
         if let Some(df) = dist_factors {
-            if df.len() != set.num_dist_factors {
+            if df.len() != nodes.len() {
                 return Err(ExodusError::InvalidArrayLength {
-                    expected: set.num_dist_factors,
+                    expected: nodes.len(),
                     actual: df.len(),
                 });
             }
+        }
 
-            let df_var_name = format!("dist_fact_ns{}", index + 1);
-            let df_dim_name = format!("num_df_ns{}", index + 1);
+        // Find the set index, or create the set if it doesn't exist
+        let ids = self.set_ids(EntityType::NodeSet)?;
+        let index = match ids.iter().position(|&id| id == set_id) {
+            Some(idx) => idx,
+            None => {
+                // Auto-create the set if it doesn't exist
+                let set = Set {
+                    id: set_id,
+                    entity_type: EntityType::NodeSet,
+                    num_entries: nodes.len(),
+                    num_dist_factors: dist_factors.map_or(0, |df| df.len()),
+                };
+                self.put_set(&set)?;
 
-            let mut df_var = self
+                // Return the index (should be at the end)
+                self.set_ids(EntityType::NodeSet)?.len() - 1
+            }
+        };
+
+        // Only create and write variables if the set is not empty
+        if !nodes.is_empty() {
+            // Create and write node variable
+            let node_var_name = format!("node_ns{}", index + 1);
+            let entries_dim_name = format!("num_nod_ns{}", index + 1);
+
+            let mut node_var = self
                 .nc_file
-                .add_variable::<f64>(&df_var_name, &[&df_dim_name])?;
-            df_var.put_values(df, ..)?;
+                .add_variable::<i64>(&node_var_name, &[&entries_dim_name])?;
+            node_var.put_values(nodes, ..)?;
+
+            // Write distribution factors if provided
+            if let Some(df) = dist_factors {
+                let df_var_name = format!("dist_fact_ns{}", index + 1);
+                let df_dim_name = format!("num_df_ns{}", index + 1);
+
+                let mut df_var = self
+                    .nc_file
+                    .add_variable::<f64>(&df_var_name, &[&df_dim_name])?;
+                df_var.put_values(df, ..)?;
+            }
         }
 
         Ok(())
@@ -334,7 +345,7 @@ impl ExodusFile<mode::Write> {
     /// # Errors
     ///
     /// Returns an error if:
-    /// - The set has not been defined
+    /// - The set has not been defined (auto-creates if needed)
     /// - Array lengths don't match set parameters
     /// - NetCDF write fails
     pub fn put_side_set(
@@ -344,65 +355,60 @@ impl ExodusFile<mode::Write> {
         sides: &[i64],
         dist_factors: Option<&[f64]>,
     ) -> Result<()> {
-        // Find the set index
-        let ids = self.set_ids(EntityType::SideSet)?;
-        let index = ids
-            .iter()
-            .position(|&id| id == set_id)
-            .ok_or_else(|| ExodusError::EntityNotFound {
-                entity_type: EntityType::SideSet.to_string(),
-                id: set_id,
-            })?;
-
-        // Get the set parameters to validate
-        let set = self.set(EntityType::SideSet, set_id)?;
-
-        // Validate element and side array lengths
-        if elements.len() != set.num_entries {
+        // Validate element and side array lengths match
+        if elements.len() != sides.len() {
             return Err(ExodusError::InvalidArrayLength {
-                expected: set.num_entries,
-                actual: elements.len(),
-            });
-        }
-
-        if sides.len() != set.num_entries {
-            return Err(ExodusError::InvalidArrayLength {
-                expected: set.num_entries,
+                expected: elements.len(),
                 actual: sides.len(),
             });
         }
 
-        // Create and write element variable
-        let elem_var_name = format!("elem_ss{}", index + 1);
-        let side_var_name = format!("side_ss{}", index + 1);
-        let entries_dim_name = format!("num_side_ss{}", index + 1);
+        // Find the set index, or create the set if it doesn't exist
+        let ids = self.set_ids(EntityType::SideSet)?;
+        let index = match ids.iter().position(|&id| id == set_id) {
+            Some(idx) => idx,
+            None => {
+                // Auto-create the set if it doesn't exist
+                let set = Set {
+                    id: set_id,
+                    entity_type: EntityType::SideSet,
+                    num_entries: elements.len(),
+                    num_dist_factors: dist_factors.map_or(0, |df| df.len()),
+                };
+                self.put_set(&set)?;
 
-        let mut elem_var = self
-            .nc_file
-            .add_variable::<i64>(&elem_var_name, &[&entries_dim_name])?;
-        elem_var.put_values(elements, ..)?;
-
-        let mut side_var = self
-            .nc_file
-            .add_variable::<i64>(&side_var_name, &[&entries_dim_name])?;
-        side_var.put_values(sides, ..)?;
-
-        // Write distribution factors if provided
-        if let Some(df) = dist_factors {
-            if df.len() != set.num_dist_factors {
-                return Err(ExodusError::InvalidArrayLength {
-                    expected: set.num_dist_factors,
-                    actual: df.len(),
-                });
+                // Return the index (should be at the end)
+                self.set_ids(EntityType::SideSet)?.len() - 1
             }
+        };
 
-            let df_var_name = format!("dist_fact_ss{}", index + 1);
-            let df_dim_name = format!("num_df_ss{}", index + 1);
+        // Only create and write variables if the set is not empty
+        if !elements.is_empty() {
+            // Create and write element variable
+            let elem_var_name = format!("elem_ss{}", index + 1);
+            let side_var_name = format!("side_ss{}", index + 1);
+            let entries_dim_name = format!("num_side_ss{}", index + 1);
 
-            let mut df_var = self
+            let mut elem_var = self
                 .nc_file
-                .add_variable::<f64>(&df_var_name, &[&df_dim_name])?;
-            df_var.put_values(df, ..)?;
+                .add_variable::<i64>(&elem_var_name, &[&entries_dim_name])?;
+            elem_var.put_values(elements, ..)?;
+
+            let mut side_var = self
+                .nc_file
+                .add_variable::<i64>(&side_var_name, &[&entries_dim_name])?;
+            side_var.put_values(sides, ..)?;
+
+            // Write distribution factors if provided
+            if let Some(df) = dist_factors {
+                let df_var_name = format!("dist_fact_ss{}", index + 1);
+                let df_dim_name = format!("num_df_ss{}", index + 1);
+
+                let mut df_var = self
+                    .nc_file
+                    .add_variable::<f64>(&df_var_name, &[&df_dim_name])?;
+                df_var.put_values(df, ..)?;
+            }
         }
 
         Ok(())
@@ -510,13 +516,12 @@ impl ExodusFile<mode::Read> {
         // Get the set parameters
         let set = self.set(EntityType::NodeSet, set_id)?;
 
-        // Read node IDs
+        // Read node IDs (empty if variable doesn't exist for empty sets)
         let node_var_name = format!("node_ns{}", index + 1);
-        let nodes: Vec<i64> = self
-            .nc_file
-            .variable(&node_var_name)
-            .ok_or_else(|| ExodusError::VariableNotDefined(node_var_name.clone()))?
-            .get_values(..)?;
+        let nodes: Vec<i64> = match self.nc_file.variable(&node_var_name) {
+            Some(var) => var.get_values(..)?,
+            None => Vec::new(), // Empty set
+        };
 
         // Read distribution factors if present
         let df_var_name = format!("dist_fact_ns{}", index + 1);
@@ -561,21 +566,19 @@ impl ExodusFile<mode::Read> {
         // Get the set parameters
         let set = self.set(EntityType::SideSet, set_id)?;
 
-        // Read element IDs
+        // Read element IDs (empty if variable doesn't exist for empty sets)
         let elem_var_name = format!("elem_ss{}", index + 1);
-        let elements: Vec<i64> = self
-            .nc_file
-            .variable(&elem_var_name)
-            .ok_or_else(|| ExodusError::VariableNotDefined(elem_var_name.clone()))?
-            .get_values(..)?;
+        let elements: Vec<i64> = match self.nc_file.variable(&elem_var_name) {
+            Some(var) => var.get_values(..)?,
+            None => Vec::new(), // Empty set
+        };
 
-        // Read side IDs
+        // Read side IDs (empty if variable doesn't exist for empty sets)
         let side_var_name = format!("side_ss{}", index + 1);
-        let sides: Vec<i64> = self
-            .nc_file
-            .variable(&side_var_name)
-            .ok_or_else(|| ExodusError::VariableNotDefined(side_var_name.clone()))?
-            .get_values(..)?;
+        let sides: Vec<i64> = match self.nc_file.variable(&side_var_name) {
+            Some(var) => var.get_values(..)?,
+            None => Vec::new(), // Empty set
+        };
 
         // Read distribution factors if present
         let df_var_name = format!("dist_fact_ss{}", index + 1);
