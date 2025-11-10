@@ -1064,12 +1064,12 @@ mod block_tests {
             };
             file.put_block(&block).unwrap();
 
-            file.put_name(EntityType::ElemBlock, 1, "StructuralBlock")
+            file.put_name(EntityType::ElemBlock, 0, "StructuralBlock")
                 .unwrap();
         }
 
         let file = ExodusFile::<mode::Read>::open(path).unwrap();
-        let name = file.name(EntityType::ElemBlock, 1).unwrap();
+        let name = file.name(EntityType::ElemBlock, 0).unwrap();
 
         assert_eq!(name, "StructuralBlock");
     }

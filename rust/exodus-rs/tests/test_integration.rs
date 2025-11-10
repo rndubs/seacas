@@ -237,23 +237,23 @@ mod integration_tests {
                 let time = step as f64 * 0.1;
                 file.put_time(step, time).unwrap();
 
-                // Global variables
+                // Global variables (entity_id is ignored for Global, var_index is used)
                 file.put_var(step, EntityType::Global, 0, 0, &[time])
                     .unwrap();
-                file.put_var(step, EntityType::Global, 1, 0, &[time * 100.0])
+                file.put_var(step, EntityType::Global, 0, 1, &[time * 100.0])
                     .unwrap();
 
-                // Nodal variables
+                // Nodal variables (entity_id is ignored for Nodal, var_index is used)
                 let temps: Vec<f64> = (0..4).map(|i| 20.0 + i as f64 + step as f64).collect();
                 file.put_var(step, EntityType::Nodal, 0, 0, &temps)
                     .unwrap();
 
                 let pressures: Vec<f64> = (0..4).map(|i| 100.0 + i as f64 * 10.0).collect();
-                file.put_var(step, EntityType::Nodal, 1, 0, &pressures)
+                file.put_var(step, EntityType::Nodal, 0, 1, &pressures)
                     .unwrap();
 
-                // Element variable
-                file.put_var(step, EntityType::ElemBlock, 0, 1, &[50.0 + step as f64])
+                // Element variable (block_id=1, var_index=0)
+                file.put_var(step, EntityType::ElemBlock, 1, 0, &[50.0 + step as f64])
                     .unwrap();
             }
         }
@@ -399,7 +399,7 @@ mod integration_tests {
             file.put_block(&block1).unwrap();
             file.put_connectivity(10, &(1..=8).collect::<Vec<i64>>())
                 .unwrap();
-            file.put_name(EntityType::ElemBlock, 10, "HexBlock")
+            file.put_name(EntityType::ElemBlock, 0, "HexBlock")
                 .unwrap();
 
             // Block 2: Tet4
@@ -416,7 +416,7 @@ mod integration_tests {
             file.put_block(&block2).unwrap();
             file.put_connectivity(20, &vec![9, 10, 11, 12])
                 .unwrap();
-            file.put_name(EntityType::ElemBlock, 20, "TetBlock")
+            file.put_name(EntityType::ElemBlock, 1, "TetBlock")
                 .unwrap();
 
             // Block 3: Wedge6
@@ -433,7 +433,7 @@ mod integration_tests {
             file.put_block(&block3).unwrap();
             file.put_connectivity(30, &(13..=18).collect::<Vec<i64>>())
                 .unwrap();
-            file.put_name(EntityType::ElemBlock, 30, "WedgeBlock")
+            file.put_name(EntityType::ElemBlock, 2, "WedgeBlock")
                 .unwrap();
         }
 
@@ -446,7 +446,7 @@ mod integration_tests {
             let block1 = file.block(10).unwrap();
             assert_eq!(block1.topology, "HEX8");
             assert_eq!(
-                file.name(EntityType::ElemBlock, 10).unwrap(),
+                file.name(EntityType::ElemBlock, 0).unwrap(),
                 "HexBlock"
             );
 
@@ -711,7 +711,7 @@ mod integration_tests {
             assert!(result.is_err());
 
             // Continue with valid operations
-            file.put_name(EntityType::ElemBlock, 1, "Block1")
+            file.put_name(EntityType::ElemBlock, 0, "Block1")
                 .unwrap();
         }
 
@@ -721,7 +721,7 @@ mod integration_tests {
             let params = file.init_params().unwrap();
             assert_eq!(params.num_nodes, 4);
 
-            let name = file.name(EntityType::ElemBlock, 1).unwrap();
+            let name = file.name(EntityType::ElemBlock, 0).unwrap();
             assert_eq!(name, "Block1");
         }
     }

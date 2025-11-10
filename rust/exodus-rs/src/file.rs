@@ -292,10 +292,24 @@ impl ExodusFile<mode::Append> {
         // Open the NetCDF file in append mode (read-write)
         let nc_file = netcdf::append(path)?;
 
+        // Load metadata from the existing file
+        let mut metadata = FileMetadata::new();
+
+        // Check if file is initialized by checking for num_dim dimension
+        if let Some(dim) = nc_file.dimension("num_dim") {
+            metadata.initialized = true;
+            metadata.num_dim = Some(dim.len());
+
+            // Load dimension cache
+            if let Some(nodes_dim) = nc_file.dimension("num_nodes") {
+                metadata.dim_cache.insert("num_nodes".to_string(), nodes_dim.len());
+            }
+        }
+
         Ok(Self {
             nc_file,
             path: path.to_path_buf(),
-            metadata: FileMetadata::new(),
+            metadata,
             _mode: std::marker::PhantomData,
         })
     }
