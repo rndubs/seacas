@@ -10,8 +10,6 @@ use crate::error::{ExodusError, Result};
 use crate::types::EntityType;
 use crate::{mode, ExodusFile, FileMode};
 
-#[cfg(feature = "netcdf4")]
-use netcdf;
 
 // ============================================================================
 // ID Maps

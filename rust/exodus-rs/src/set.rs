@@ -528,7 +528,7 @@ impl ExodusFile<mode::Read> {
             })?;
 
         // Get the set parameters
-        let set = self.set(EntityType::NodeSet, set_id)?;
+        let _set = self.set(EntityType::NodeSet, set_id)?;
 
         // Read node IDs (empty if variable doesn't exist for empty sets)
         let node_var_name = format!("node_ns{}", index + 1);
@@ -578,7 +578,7 @@ impl ExodusFile<mode::Read> {
             })?;
 
         // Get the set parameters
-        let set = self.set(EntityType::SideSet, set_id)?;
+        let _set = self.set(EntityType::SideSet, set_id)?;
 
         // Read element IDs (empty if variable doesn't exist for empty sets)
         let elem_var_name = format!("elem_ss{}", index + 1);
