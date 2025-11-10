@@ -256,7 +256,7 @@ build_wheel() {
     cd "$script_dir"
 
     # Build the wheel
-    maturin build --release
+    uv run maturin build --release
 
     # Find the built wheel
     WHEEL_FILE=$(find target/wheels -name "exodus_py-*.whl" -type f | sort -r | head -n 1)
