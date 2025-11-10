@@ -1,5 +1,5 @@
 use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion};
-use exodus_rs::{CreateOptions, EntityType, ExodusFile, InitParams};
+use exodus_rs::{CreateMode, CreateOptions, EntityType, ExodusFile, InitParams};
 use tempfile::NamedTempFile;
 
 fn benchmark_write_nodal_vars(c: &mut Criterion) {
@@ -14,7 +14,7 @@ fn benchmark_write_nodal_vars(c: &mut Criterion) {
 
                 b.iter(|| {
                     let temp = NamedTempFile::new().unwrap();
-                    let mut file = ExodusFile::create(temp.path(), CreateOptions::default()).unwrap();
+                    let mut file = ExodusFile::create(temp.path(), { let mut opts = CreateOptions::default(); opts.mode = CreateMode::Clobber; opts }).unwrap();
 
                     let params = InitParams {
                         title: "Benchmark".to_string(),
@@ -45,7 +45,7 @@ fn benchmark_read_nodal_vars(c: &mut Criterion) {
         // Setup: create a file with variables
         let temp = NamedTempFile::new().unwrap();
         {
-            let mut file = ExodusFile::create(temp.path(), CreateOptions::default()).unwrap();
+            let mut file = ExodusFile::create(temp.path(), { let mut opts = CreateOptions::default(); opts.mode = CreateMode::Clobber; opts }).unwrap();
             let params = InitParams {
                 title: "Benchmark".to_string(),
                 num_dim: 3,
@@ -91,7 +91,7 @@ fn benchmark_write_global_vars(c: &mut Criterion) {
 
                 b.iter(|| {
                     let temp = NamedTempFile::new().unwrap();
-                    let mut file = ExodusFile::create(temp.path(), CreateOptions::default()).unwrap();
+                    let mut file = ExodusFile::create(temp.path(), { let mut opts = CreateOptions::default(); opts.mode = CreateMode::Clobber; opts }).unwrap();
 
                     let params = InitParams {
                         title: "Benchmark".to_string(),
@@ -130,7 +130,7 @@ fn benchmark_multiple_time_steps(c: &mut Criterion) {
 
                 b.iter(|| {
                     let temp = NamedTempFile::new().unwrap();
-                    let mut file = ExodusFile::create(temp.path(), CreateOptions::default()).unwrap();
+                    let mut file = ExodusFile::create(temp.path(), { let mut opts = CreateOptions::default(); opts.mode = CreateMode::Clobber; opts }).unwrap();
 
                     let params = InitParams {
                         title: "Benchmark".to_string(),
