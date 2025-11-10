@@ -609,6 +609,247 @@ mod block_tests {
         assert_eq!(names[1], "material_id");
     }
 
+    #[test]
+    fn test_block_attribute_values_single_element() {
+        let tmp = NamedTempFile::new().unwrap();
+        let path = tmp.path();
+
+        {
+            let mut file = create_test_file(path).unwrap();
+            let params = InitParams {
+                title: "Block Attributes Single Element".to_string(),
+                num_dim: 3,
+                num_nodes: 8,
+                num_elems: 1,
+                num_elem_blocks: 1,
+                ..Default::default()
+            };
+            file.init(&params).unwrap();
+
+            // Create block with 3 attributes per element
+            let block = Block {
+                id: 100,
+                entity_type: EntityType::ElemBlock,
+                topology: "HEX8".to_string(),
+                num_entries: 1,
+                num_nodes_per_entry: 8,
+                num_edges_per_entry: 0,
+                num_faces_per_entry: 0,
+                num_attributes: 3,
+            };
+            file.put_block(&block).unwrap();
+
+            // Write attribute names
+            let attr_names = vec!["density", "temperature", "material_id"];
+            file.put_block_attribute_names(100, &attr_names).unwrap();
+
+            // Write attribute values: 1 element × 3 attributes = 3 values
+            let attributes = vec![7850.0, 298.15, 42.0];
+            file.put_block_attributes(100, &attributes).unwrap();
+        }
+
+        // Read and verify
+        {
+            let file = ExodusFile::<mode::Read>::open(path).unwrap();
+
+            // Check attribute names
+            let names = file.block_attribute_names(100).unwrap();
+            assert_eq!(names.len(), 3);
+            assert_eq!(names[0], "density");
+            assert_eq!(names[1], "temperature");
+            assert_eq!(names[2], "material_id");
+
+            // Check attribute values
+            let attrs = file.block_attributes(100).unwrap();
+            assert_eq!(attrs.len(), 3);
+            assert_eq!(attrs[0], 7850.0);
+            assert_eq!(attrs[1], 298.15);
+            assert_eq!(attrs[2], 42.0);
+        }
+    }
+
+    #[test]
+    fn test_block_attribute_values_multiple_elements() {
+        let tmp = NamedTempFile::new().unwrap();
+        let path = tmp.path();
+
+        {
+            let mut file = create_test_file(path).unwrap();
+            let params = InitParams {
+                title: "Block Attributes Multiple Elements".to_string(),
+                num_dim: 2,
+                num_nodes: 9,
+                num_elems: 4,
+                num_elem_blocks: 1,
+                ..Default::default()
+            };
+            file.init(&params).unwrap();
+
+            // Create block with 4 quad elements, 2 attributes each
+            let block = Block {
+                id: 200,
+                entity_type: EntityType::ElemBlock,
+                topology: "QUAD4".to_string(),
+                num_entries: 4,
+                num_nodes_per_entry: 4,
+                num_edges_per_entry: 0,
+                num_faces_per_entry: 0,
+                num_attributes: 2,
+            };
+            file.put_block(&block).unwrap();
+
+            // Write attribute names
+            let attr_names = vec!["thickness", "youngs_modulus"];
+            file.put_block_attribute_names(200, &attr_names).unwrap();
+
+            // Write attribute values: 4 elements × 2 attributes = 8 values
+            // Layout: [elem1_attr1, elem1_attr2, elem2_attr1, elem2_attr2, ...]
+            let attributes = vec![
+                0.01, 200e9,  // Element 1
+                0.02, 210e9,  // Element 2
+                0.015, 205e9, // Element 3
+                0.01, 200e9,  // Element 4
+            ];
+            file.put_block_attributes(200, &attributes).unwrap();
+        }
+
+        // Read and verify
+        {
+            let file = ExodusFile::<mode::Read>::open(path).unwrap();
+
+            let attrs = file.block_attributes(200).unwrap();
+            assert_eq!(attrs.len(), 8);
+
+            // Verify element 1 attributes
+            assert_eq!(attrs[0], 0.01);
+            assert_eq!(attrs[1], 200e9);
+
+            // Verify element 2 attributes
+            assert_eq!(attrs[2], 0.02);
+            assert_eq!(attrs[3], 210e9);
+
+            // Verify element 3 attributes
+            assert_eq!(attrs[4], 0.015);
+            assert_eq!(attrs[5], 205e9);
+
+            // Verify element 4 attributes
+            assert_eq!(attrs[6], 0.01);
+            assert_eq!(attrs[7], 200e9);
+        }
+    }
+
+    #[test]
+    fn test_block_attribute_values_no_attributes() {
+        let tmp = NamedTempFile::new().unwrap();
+        let path = tmp.path();
+
+        {
+            let mut file = create_test_file(path).unwrap();
+            let params = InitParams {
+                title: "Block No Attributes".to_string(),
+                num_dim: 3,
+                num_nodes: 4,
+                num_elems: 1,
+                num_elem_blocks: 1,
+                ..Default::default()
+            };
+            file.init(&params).unwrap();
+
+            // Create block with NO attributes
+            let block = Block {
+                id: 300,
+                entity_type: EntityType::ElemBlock,
+                topology: "TET4".to_string(),
+                num_entries: 1,
+                num_nodes_per_entry: 4,
+                num_edges_per_entry: 0,
+                num_faces_per_entry: 0,
+                num_attributes: 0,
+            };
+            file.put_block(&block).unwrap();
+        }
+
+        // Read and verify - should return empty vector
+        {
+            let file = ExodusFile::<mode::Read>::open(path).unwrap();
+            let attrs = file.block_attributes(300).unwrap();
+            assert_eq!(attrs.len(), 0);
+
+            let names = file.block_attribute_names(300).unwrap();
+            assert_eq!(names.len(), 0);
+        }
+    }
+
+    #[test]
+    fn test_multiple_blocks_with_different_attributes() {
+        let tmp = NamedTempFile::new().unwrap();
+        let path = tmp.path();
+
+        {
+            let mut file = create_test_file(path).unwrap();
+            let params = InitParams {
+                title: "Multiple Blocks Different Attributes".to_string(),
+                num_dim: 3,
+                num_nodes: 20,
+                num_elems: 3,
+                num_elem_blocks: 2,
+                ..Default::default()
+            };
+            file.init(&params).unwrap();
+
+            // Block 1: 1 hex element, 3 attributes
+            let block1 = Block {
+                id: 100,
+                entity_type: EntityType::ElemBlock,
+                topology: "HEX8".to_string(),
+                num_entries: 1,
+                num_nodes_per_entry: 8,
+                num_edges_per_entry: 0,
+                num_faces_per_entry: 0,
+                num_attributes: 3,
+            };
+            file.put_block(&block1).unwrap();
+            file.put_block_attribute_names(100, &vec!["a1", "a2", "a3"]).unwrap();
+            file.put_block_attributes(100, &vec![1.0, 2.0, 3.0]).unwrap();
+
+            // Block 2: 2 tet elements, 2 attributes
+            let block2 = Block {
+                id: 200,
+                entity_type: EntityType::ElemBlock,
+                topology: "TET4".to_string(),
+                num_entries: 2,
+                num_nodes_per_entry: 4,
+                num_edges_per_entry: 0,
+                num_faces_per_entry: 0,
+                num_attributes: 2,
+            };
+            file.put_block(&block2).unwrap();
+            file.put_block_attribute_names(200, &vec!["b1", "b2"]).unwrap();
+            file.put_block_attributes(200, &vec![10.0, 20.0, 30.0, 40.0]).unwrap();
+        }
+
+        // Read and verify both blocks
+        {
+            let file = ExodusFile::<mode::Read>::open(path).unwrap();
+
+            // Block 1
+            let attrs1 = file.block_attributes(100).unwrap();
+            assert_eq!(attrs1.len(), 3);
+            assert_eq!(attrs1, vec![1.0, 2.0, 3.0]);
+
+            let names1 = file.block_attribute_names(100).unwrap();
+            assert_eq!(names1, vec!["a1", "a2", "a3"]);
+
+            // Block 2
+            let attrs2 = file.block_attributes(200).unwrap();
+            assert_eq!(attrs2.len(), 4);
+            assert_eq!(attrs2, vec![10.0, 20.0, 30.0, 40.0]);
+
+            let names2 = file.block_attribute_names(200).unwrap();
+            assert_eq!(names2, vec!["b1", "b2"]);
+        }
+    }
+
     // ========================================================================
     // Connectivity Validation Tests
     // ========================================================================
