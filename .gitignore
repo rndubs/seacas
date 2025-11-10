@@ -139,3 +139,6 @@ TPL/catalyst2/catalyst/
 TPL/fmt/fmt/
 build/
 .scannerwork
+# SEACAS build and install directories
+build/
+install/
