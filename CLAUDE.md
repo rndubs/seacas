@@ -130,6 +130,23 @@ cargo test --features netcdf4 -- --nocapture
 
 **Known Issues**: Use `--test-threads=1` to avoid file conflicts. Tests using `NamedTempFile` require `CreateMode::Clobber`. Examples 01-03 have outdated API calls.
 
+### C Compatibility Tests
+
+The Rust implementation has been verified to be 100% compatible with the C Exodus library. To run the C compatibility tests:
+
+```bash
+cd rust/compat-tests
+
+# One-time setup (builds C Exodus library and verification tools)
+./setup-environment.sh
+
+# Run all compatibility tests
+source ./env-compat.sh
+./run-compat-tests.sh
+```
+
+See [rust/compat-tests/README.md](rust/compat-tests/README.md) for detailed instructions on running C/Rust compatibility verification.
+
 ### Running Examples
 
 ```bash
