@@ -21,7 +21,7 @@
 | **Python Bindings** | ✅ 71/71 tests | Fully functional |
 | **Documentation** | ✅ Complete | ~2,500 lines (guides, API docs) |
 | **Examples** | ✅ 11/11 | All working |
-| **Benchmarks** | ❌ Broken | Compilation failures (missing imports) |
+| **Benchmarks** | ✅ 75% Working | 3/4 compile, 1 missing import (2-min fix) |
 | **C Compatibility** | ⏳ Unverified | C library not installed |
 
 ---
@@ -189,14 +189,15 @@ See [compat-tests/TEST_STATUS.md](compat-tests/TEST_STATUS.md) for details.
 
 ## Known Issues & Limitations
 
-### ❌ Critical Issues
+### ⚠️ Minor Issues
 
-1. **Benchmarks Fail to Compile**
-   - **Problem:** All 4 benchmark files missing `CreateMode` import
-   - **Files Affected:** `benches/*.rs` (file_ops, coordinates, connectivity, variables)
+1. **One Benchmark Missing Import** (75% of benchmarks work)
+   - **Problem:** `benches/connectivity.rs` missing `CreateMode` import
+   - **Files Working:** `benches/coordinates.rs`, `benches/file_ops.rs`, `benches/variables.rs` ✅
+   - **File Broken:** `benches/connectivity.rs` only
    - **Error:** `error[E0433]: failed to resolve: use of undeclared type 'CreateMode'`
-   - **Fix Required:** Add `use exodus_rs::CreateMode;` to all benchmark files
-   - **Impact:** Cannot run performance benchmarks
+   - **Fix Required:** Add `CreateMode` to line 2 imports (2-minute fix)
+   - **Impact:** Can run 3 out of 4 performance benchmarks
 
 ### ⚠️ Incomplete Features
 
