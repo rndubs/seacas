@@ -15,6 +15,11 @@ inc
 share
 /lib
 /include
+
+# TPL build artifacts
+cmake/hdf5-*.cmake
+cmake/netcdf-*.cmake
+cmake/*-targets*.cmake
 SEACAS-Test/*.g3
 SEACAS-Test/baseline.gt
 SEACAS-Test/baseline.mat
