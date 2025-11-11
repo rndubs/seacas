@@ -12,52 +12,94 @@ This test suite verifies bidirectional compatibility:
 
 ### Prerequisites
 
-```bash
-# Install system dependencies (Ubuntu/Debian)
-apt-get install -y libhdf5-dev libnetcdf-dev pkg-config gcc
+Install basic development tools:
 
-# Or on macOS
-brew install hdf5 netcdf
+```bash
+# Ubuntu/Debian
+apt-get install -y gcc g++ gfortran cmake make pkg-config git curl
+
+# macOS
+xcode-select --install
+brew install cmake
 ```
 
-### Build Everything
+**Note:** You do NOT need to install HDF5/NetCDF separately. The setup script builds compatible versions from source.
+
+### One-Time Setup
+
+Build the TPL libraries and C Exodus library (takes ~10 minutes):
 
 ```bash
 # From the compat-tests directory
-./tools/build_all.sh
+./setup-environment.sh
+
+# For faster builds (use more CPU cores)
+./setup-environment.sh --jobs 8
+
+# To rebuild from scratch
+./setup-environment.sh --clean
 ```
 
-### Run All Tests
+This script:
+- Builds HDF5 1.14.6 and NetCDF 4.9.2 from source
+- Compiles the SEACAS C Exodus library
+- Creates the C verification tool
+- Sets up environment configuration
+
+### Run Compatibility Tests
+
+After setup, run the full test suite:
 
 ```bash
-./tools/run_all_tests.sh
+# Source the environment (required after setup and in new shells)
+source ./env-compat.sh
+
+# Run all tests
+./run-compat-tests.sh
+
+# Verbose output
+./run-compat-tests.sh --verbose
+
+# Keep failed files for debugging
+./run-compat-tests.sh --keep-failures
 ```
 
-### Run Specific Test Direction
+### Manual Testing
+
+You can also run individual tests manually:
 
 ```bash
-# Only Rust → C tests
-./tools/run_all_tests.sh --rust-to-c
-
-# Only C → Rust tests
-./tools/run_all_tests.sh --c-to-rust
-```
-
-### Run Individual Test
-
-```bash
-# Rust writes, C reads
+# Generate a single file
 cd rust-to-c
-cargo run --features netcdf4 -- basic_mesh
-./verify output/basic_mesh.exo
+cargo run --features netcdf4 -- basic_mesh_2d
 
-# C writes, Rust reads
-cd c-to-rust
-./writer basic_mesh
-cargo run --manifest-path verify/Cargo.toml -- output/basic_mesh.exo
+# Verify with C library
+./verify output/basic_mesh_2d.exo
 ```
 
-## Test Categories
+## Test Status
+
+### Rust → C (Completed ✅)
+
+All 11 test files verified with C Exodus library - **80/80 tests passed (100%)**
+
+| File | Tests | Features |
+|------|-------|----------|
+| basic_mesh_2d.exo | 6/6 ✅ | 2D QUAD4 mesh |
+| basic_mesh_3d.exo | 6/6 ✅ | 3D HEX8 mesh |
+| multiple_blocks.exo | 6/6 ✅ | Multiple element blocks |
+| node_sets.exo | 7/7 ✅ | Node sets with distribution factors |
+| side_sets.exo | 7/7 ✅ | Side sets with element-side pairs |
+| element_sets.exo | 6/6 ✅ | Element sets |
+| all_sets.exo | 8/8 ✅ | All set types combined |
+| global_variables.exo | 8/8 ✅ | Global variables with time steps |
+| nodal_variables.exo | 8/8 ✅ | Nodal variables with time steps |
+| element_variables.exo | 8/8 ✅ | Element variables with time steps |
+| all_variables.exo | 10/10 ✅ | All variable types combined |
+
+**Result:** 100% C compatibility verified for Phases 1-6
+
+### C → Rust (Future Work)
 
 | Category | Phase | Description | Status |
 |----------|-------|-------------|--------|
@@ -127,9 +169,15 @@ See [TESTING_PLAN.md](TESTING_PLAN.md) for:
 
 ## Status
 
-🚧 **Under Development** 🚧
+✅ **Rust → C Compatibility: 100% Verified**
+
+- All 80 C verification tests passed
+- Covers Exodus II Phases 1-6 (basic I/O through variables)
+- Production-ready for writing Exodus files compatible with C tools
 
 Current implementation status tracked in [../RUST.md](../RUST.md).
+
+See [TEST_STATUS.md](TEST_STATUS.md) for detailed verification results.
 
 ## Notes
 
