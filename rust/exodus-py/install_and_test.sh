@@ -7,6 +7,9 @@
 set -e  # Exit on error
 set -u  # Exit on undefined variable
 
+# Determine script directory (absolute path)
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
 # Color codes for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -130,8 +133,14 @@ install_system_deps() {
             if command -v brew &> /dev/null; then
                 export NETCDF_DIR=$(brew --prefix netcdf 2>/dev/null || echo "/usr/local")
                 export HDF5_DIR=$(brew --prefix hdf5 2>/dev/null || echo "/usr/local")
+
+                # Set dynamic library paths for macOS
+                local brew_prefix=$(brew --prefix)
+                export DYLD_FALLBACK_LIBRARY_PATH="${brew_prefix}/lib:${NETCDF_DIR}/lib:${HDF5_DIR}/lib:${DYLD_FALLBACK_LIBRARY_PATH:-}"
+
                 log_success "NetCDF location: $NETCDF_DIR"
                 log_success "HDF5 location: $HDF5_DIR"
+                log_success "Dynamic library path configured"
             fi
             ;;
 
@@ -252,8 +261,7 @@ build_wheel() {
     log_info "Building wheel distribution in release mode..."
 
     # Navigate to exodus-py directory
-    local script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-    cd "$script_dir"
+    cd "$SCRIPT_DIR"
 
     # Build the wheel
     uv run maturin build --release
@@ -273,8 +281,7 @@ build_wheel() {
 test_wheel() {
     log_info "Testing wheel installation in clean virtual environment..."
 
-    local script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-    local test_venv="$script_dir/test-venv"
+    local test_venv="$SCRIPT_DIR/test-venv"
 
     # Remove old test venv if it exists
     if [ -d "$test_venv" ]; then
@@ -305,17 +312,17 @@ test_wheel() {
     log_success "Wheel installation verified successfully"
 
     # Run additional tests if pytest is available
-    if [ -d "$script_dir/tests" ]; then
+    if [ -d "$SCRIPT_DIR/tests" ]; then
         log_info "Installing test dependencies..."
         uv pip install pytest
 
         log_info "Running test suite..."
-        pytest "$script_dir/tests" -v || log_warning "Some tests failed"
+        pytest "$SCRIPT_DIR/tests" -v || log_warning "Some tests failed"
     fi
 
     # Run example if available
-    if [ -d "$script_dir/examples" ]; then
-        local example_file=$(find "$script_dir/examples" -name "*.py" -type f | head -n 1)
+    if [ -d "$SCRIPT_DIR/examples" ]; then
+        local example_file=$(find "$SCRIPT_DIR/examples" -name "*.py" -type f | head -n 1)
         if [ -n "$example_file" ]; then
             log_info "Running example: $example_file"
             python "$example_file" || log_warning "Example failed to run"
@@ -366,10 +373,10 @@ main() {
     log_success "Installation and testing complete!"
     log_success "=========================================="
     log_info "Wheel location: $WHEEL_FILE"
-    log_info "Test environment: $script_dir/test-venv"
+    log_info "Test environment: $SCRIPT_DIR/test-venv"
     log_info ""
     log_info "To use the installed package:"
-    log_info "  source $script_dir/test-venv/bin/activate"
+    log_info "  source $SCRIPT_DIR/test-venv/bin/activate"
     log_info "  python -c 'import exodus; print(exodus.__version__)'"
 }
 
