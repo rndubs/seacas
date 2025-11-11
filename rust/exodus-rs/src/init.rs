@@ -215,6 +215,9 @@ impl ExodusFile<mode::Write> {
     /// # Ok::<(), exodus_rs::ExodusError>(())
     /// ```
     pub fn init(&mut self, params: &InitParams) -> Result<()> {
+        // Ensure we're in define mode for adding dimensions and attributes
+        self.ensure_define_mode()?;
+
         // Check if already initialized
         if self.metadata.initialized {
             return Err(ExodusError::Other(

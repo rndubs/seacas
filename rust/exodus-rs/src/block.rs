@@ -44,6 +44,9 @@ impl ExodusFile<mode::Write> {
     /// # Ok::<(), exodus_rs::ExodusError>(())
     /// ```
     pub fn put_block(&mut self, block: &Block) -> Result<()> {
+        // Ensure we're in define mode for adding block definitions
+        self.ensure_define_mode()?;
+
         if !self.metadata.initialized {
             return Err(ExodusError::NotInitialized);
         }
@@ -148,6 +151,9 @@ impl ExodusFile<mode::Write> {
     /// # Ok::<(), exodus_rs::ExodusError>(())
     /// ```
     pub fn put_connectivity(&mut self, block_id: EntityId, connectivity: &[i64]) -> Result<()> {
+        // Ensure we're in data mode for writing connectivity values
+        self.ensure_data_mode()?;
+
         // Try to find the block in all block types (ElemBlock, EdgeBlock, FaceBlock)
         let (block_index, _entity_type) = self.find_block_in_any_type(block_id)?;
         let conn_var_name = format!("connect{}", block_index + 1);

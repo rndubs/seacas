@@ -123,6 +123,9 @@ impl ExodusFile<mode::Write> {
         var_type: EntityType,
         names: &[impl AsRef<str>],
     ) -> Result<()> {
+        // Ensure we're in define mode for adding variables
+        self.ensure_define_mode()?;
+
         if names.is_empty() {
             return Ok(());
         }
@@ -257,16 +260,21 @@ impl ExodusFile<mode::Write> {
     pub fn put_time(&mut self, step: usize, time: f64) -> Result<()> {
         // Ensure time_step dimension exists (may be created earlier by define_variables)
         if self.nc_file.dimension("time_step").is_none() {
+            self.ensure_define_mode()?;
             self.nc_file.add_unlimited_dimension("time_step")?;
         }
 
         // Ensure time_whole variable exists
         if self.nc_file.variable("time_whole").is_none() {
+            self.ensure_define_mode()?;
             let mut var = self
                 .nc_file
                 .add_variable::<f64>("time_whole", &["time_step"])?;
             var.put_attribute("name", "time_whole")?;
         }
+
+        // Ensure we're in data mode for writing time values
+        self.ensure_data_mode()?;
 
         // Write the time value
         if let Some(mut var) = self.nc_file.variable_mut("time_whole") {
@@ -305,8 +313,13 @@ impl ExodusFile<mode::Write> {
 
         // Get or create the variable
         if self.nc_file.variable(&var_name).is_none() {
+            // Need to be in define mode to create the variable
+            self.ensure_define_mode()?;
             self.create_var_storage(var_type, entity_id, var_index)?;
         }
+
+        // Ensure we're in data mode for writing variable values
+        self.ensure_data_mode()?;
 
         // Write the values
         if let Some(mut var) = self.nc_file.variable_mut(&var_name) {
