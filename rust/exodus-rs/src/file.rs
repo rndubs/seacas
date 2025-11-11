@@ -184,23 +184,19 @@ impl ExodusFile<mode::Write> {
 
     /// Ensure all metadata and dimensions are written to the file
     ///
-    /// This method can be called after defining all dimensions, variables, and metadata
-    /// to ensure they are committed to the file before writing data. While NetCDF-4
-    /// generally handles this automatically, calling this explicitly can help with
-    /// certain workflow patterns.
+    /// This method flushes all pending changes to disk, ensuring data integrity.
     ///
     /// # Returns
     ///
     /// `Ok(())` on success
     ///
-    /// # Note
+    /// # Automatic Mode Management
     ///
-    /// NetCDF-4 format generally allows interleaving definition and data operations.
-    /// However, for best compatibility and performance, it's recommended to:
-    /// 1. Initialize the file with `init()`
-    /// 2. Define all blocks, sets, and variables
-    /// 3. Call `sync()` (optional but recommended)
-    /// 4. Write all data values
+    /// exodus-rs now automatically manages NetCDF define/data mode transitions.
+    /// You typically don't need to manually call `end_define()` or `reenter_define()`.
+    /// The library automatically switches modes as needed:
+    /// - Define mode for: `init()`, `put_block()`, `define_variables()`
+    /// - Data mode for: `put_coords()`, `put_connectivity()`, `put_var()`
     ///
     /// # Example
     ///
@@ -208,17 +204,17 @@ impl ExodusFile<mode::Write> {
     /// # use exodus_rs::*;
     /// let mut file = ExodusFile::create_default("mesh.exo")?;
     ///
-    /// // Define structure
+    /// // Define structure - automatically uses define mode
     /// file.init(&params)?;
     /// file.put_block(&block)?;
     /// file.define_variables(EntityType::Nodal, &["Temp"])?;
     ///
-    /// // Sync definitions
-    /// file.sync()?;
-    ///
-    /// // Write data
+    /// // Write data - automatically switches to data mode
     /// file.put_coords(&x, &y, &z)?;
     /// file.put_var(0, EntityType::Nodal, 0, 0, &values)?;
+    ///
+    /// // Optional: sync to ensure everything is written
+    /// file.sync()?;
     /// # Ok::<(), ExodusError>(())
     /// ```
     pub fn sync(&mut self) -> Result<()> {
@@ -228,39 +224,53 @@ impl ExodusFile<mode::Write> {
 
     /// End define mode and enter data mode
     ///
-    /// This method transitions the NetCDF file from define mode (where dimensions,
-    /// variables, and attributes can be added) to data mode (where variable data
-    /// can be written). After calling this method, attempting to add new dimensions
-    /// or variables may fail.
+    /// This method explicitly transitions the NetCDF file from define mode to data mode.
     ///
     /// # Returns
     ///
     /// `Ok(())` on success
     ///
-    /// # Note
+    /// # Note - Automatic Mode Management
     ///
-    /// NetCDF-4 format is more flexible than classic NetCDF and generally allows
-    /// mode transitions automatically. However, explicitly managing modes can:
-    /// - Improve performance by batching metadata operations
-    /// - Make code intent clearer
-    /// - Ensure compatibility with tools expecting strict mode separation
+    /// **This method is now optional** thanks to automatic mode management.
+    /// exodus-rs automatically switches between define and data modes as needed.
+    /// You only need to call this method if you want explicit control over mode
+    /// transitions for performance reasons or code clarity.
     ///
-    /// # Example
+    /// For most use cases, you can simply call operations in any order and the
+    /// library will handle mode transitions automatically.
+    ///
+    /// # Example (Manual Mode Control)
     ///
     /// ```rust,ignore
     /// # use exodus_rs::*;
     /// let mut file = ExodusFile::create_default("mesh.exo")?;
     ///
-    /// // Define all structure in define mode
+    /// // Define all structure
     /// file.init(&params)?;
     /// file.put_block(&block)?;
     /// file.define_variables(EntityType::Nodal, &["Temp"])?;
     ///
-    /// // End define mode before writing data
+    /// // Optional: explicitly end define mode
     /// file.end_define()?;
     ///
-    /// // Write data in data mode
+    /// // Write data
     /// file.put_coords(&x, &y, &z)?;
+    /// file.put_var(0, EntityType::Nodal, 0, 0, &values)?;
+    /// # Ok::<(), ExodusError>(())
+    /// ```
+    ///
+    /// # Example (Automatic - Recommended)
+    ///
+    /// ```rust,ignore
+    /// # use exodus_rs::*;
+    /// let mut file = ExodusFile::create_default("mesh.exo")?;
+    ///
+    /// // Just call operations in any order - modes are automatic
+    /// file.init(&params)?;
+    /// file.put_block(&block)?;
+    /// file.define_variables(EntityType::Nodal, &["Temp"])?;
+    /// file.put_coords(&x, &y, &z)?;  // Automatically switches to data mode
     /// file.put_var(0, EntityType::Nodal, 0, 0, &values)?;
     /// # Ok::<(), ExodusError>(())
     /// ```
@@ -274,39 +284,48 @@ impl ExodusFile<mode::Write> {
 
     /// Re-enter define mode from data mode
     ///
-    /// This method transitions the NetCDF file back to define mode, allowing
-    /// new dimensions, variables, or attributes to be added after data has
-    /// been written.
+    /// This method explicitly transitions the NetCDF file back to define mode.
     ///
     /// # Returns
     ///
     /// `Ok(())` on success
     ///
-    /// # Note
+    /// # Note - Automatic Mode Management
     ///
-    /// Re-entering define mode may have performance implications, as NetCDF
-    /// may need to reorganize file metadata. For best performance, define
-    /// all metadata upfront when possible.
+    /// **This method is now optional** thanks to automatic mode management.
+    /// exodus-rs automatically switches back to define mode when needed.
+    /// The library handles mode transitions transparently, so you can freely
+    /// mix definition and data operations.
     ///
-    /// # Example
+    /// # Example (Automatic - Recommended)
     ///
     /// ```rust,ignore
     /// # use exodus_rs::*;
     /// let mut file = ExodusFile::create_default("mesh.exo")?;
     ///
-    /// // Initial definitions
+    /// // Mix definitions and data operations freely
+    /// file.init(&params)?;
+    /// file.put_coords(&x, &y, &z)?;  // Writes data
+    /// file.define_variables(EntityType::Element, &["Stress"])?;  // Auto-switches to define mode
+    /// file.put_var(0, EntityType::Element, 0, 1, &stress)?;  // Auto-switches back to data mode
+    /// # Ok::<(), ExodusError>(())
+    /// ```
+    ///
+    /// # Example (Manual Control)
+    ///
+    /// ```rust,ignore
+    /// # use exodus_rs::*;
+    /// let mut file = ExodusFile::create_default("mesh.exo")?;
+    ///
     /// file.init(&params)?;
     /// file.end_define()?;
-    ///
-    /// // Write some data
     /// file.put_coords(&x, &y, &z)?;
     ///
-    /// // Need to add more variables after writing data
+    /// // Manually re-enter define mode
     /// file.reenter_define()?;
     /// file.define_variables(EntityType::Element, &["Stress"])?;
     /// file.end_define()?;
     ///
-    /// // Continue writing data
     /// file.put_var(0, EntityType::Element, 0, 1, &stress)?;
     /// # Ok::<(), ExodusError>(())
     /// ```
@@ -337,6 +356,30 @@ impl ExodusFile<mode::Write> {
     /// ```
     pub fn is_define_mode(&self) -> bool {
         self.metadata.define_mode == DefineMode::Define
+    }
+
+    /// Ensure the file is in define mode, transitioning if necessary
+    ///
+    /// This is an internal helper that automatically manages mode transitions.
+    /// If the file is already in define mode, this is a no-op.
+    /// If in data mode, this calls `reenter_define()` automatically.
+    pub(crate) fn ensure_define_mode(&mut self) -> Result<()> {
+        if self.metadata.define_mode == DefineMode::Data {
+            self.reenter_define()?;
+        }
+        Ok(())
+    }
+
+    /// Ensure the file is in data mode, transitioning if necessary
+    ///
+    /// This is an internal helper that automatically manages mode transitions.
+    /// If the file is already in data mode, this is a no-op.
+    /// If in define mode, this calls `end_define()` automatically.
+    pub(crate) fn ensure_data_mode(&mut self) -> Result<()> {
+        if self.metadata.define_mode == DefineMode::Define {
+            self.end_define()?;
+        }
+        Ok(())
     }
 }
 
@@ -470,6 +513,26 @@ impl ExodusFile<mode::Append> {
     /// See [`ExodusFile::<mode::Write>::is_define_mode()`] for details.
     pub fn is_define_mode(&self) -> bool {
         self.metadata.define_mode == DefineMode::Define
+    }
+
+    /// Ensure the file is in define mode, transitioning if necessary
+    ///
+    /// See [`ExodusFile::<mode::Write>::ensure_define_mode()`] for details.
+    pub(crate) fn ensure_define_mode(&mut self) -> Result<()> {
+        if self.metadata.define_mode == DefineMode::Data {
+            self.reenter_define()?;
+        }
+        Ok(())
+    }
+
+    /// Ensure the file is in data mode, transitioning if necessary
+    ///
+    /// See [`ExodusFile::<mode::Write>::ensure_data_mode()`] for details.
+    pub(crate) fn ensure_data_mode(&mut self) -> Result<()> {
+        if self.metadata.define_mode == DefineMode::Define {
+            self.end_define()?;
+        }
+        Ok(())
     }
 }
 

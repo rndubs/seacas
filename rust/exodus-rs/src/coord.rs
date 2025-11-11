@@ -181,6 +181,9 @@ impl ExodusFile<mode::Write> {
         y: Option<&[T]>,
         z: Option<&[T]>,
     ) -> Result<()> {
+        // Ensure we're in data mode for writing coordinate values
+        self.ensure_data_mode()?;
+
         // Validate that file is initialized
         if !self.metadata.initialized {
             return Err(ExodusError::NotInitialized);
@@ -877,6 +880,9 @@ impl ExodusFile<mode::Append> {
         y: Option<&[T]>,
         z: Option<&[T]>,
     ) -> Result<()> {
+        // Ensure we're in data mode for writing coordinate values
+        self.ensure_data_mode()?;
+
         // Same implementation as Write mode
         // (In a real implementation, we'd refactor to avoid duplication)
         if !self.metadata.initialized {
