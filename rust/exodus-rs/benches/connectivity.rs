@@ -1,5 +1,5 @@
 use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion};
-use exodus_rs::{Block, CreateOptions, EntityType, ExodusFile, InitParams, Topology};
+use exodus_rs::{Block, CreateMode, CreateOptions, EntityType, ExodusFile, InitParams, Topology};
 use tempfile::NamedTempFile;
 
 fn benchmark_write_connectivity(c: &mut Criterion) {
