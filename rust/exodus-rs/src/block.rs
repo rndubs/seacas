@@ -5,7 +5,40 @@
 
 use crate::error::{EntityId, ExodusError, Result};
 use crate::types::{Block, Connectivity, EntityType, Topology};
-use crate::{mode, ExodusFile};
+use crate::{mode, ExodusFile, FileMode};
+
+// Common block operations (available in all modes)
+#[cfg(feature = "netcdf4")]
+impl<M: FileMode> ExodusFile<M> {
+    /// Get all block IDs of a given type
+    ///
+    /// # Arguments
+    ///
+    /// * `entity_type` - Type of block (ElemBlock, EdgeBlock, or FaceBlock)
+    ///
+    /// # Returns
+    ///
+    /// Vector of block IDs
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if entity type is not a block type
+    pub fn block_ids(&self, entity_type: EntityType) -> Result<Vec<EntityId>> {
+        let id_var_name = match entity_type {
+            EntityType::ElemBlock => "eb_prop1",
+            EntityType::EdgeBlock => "ed_prop1",
+            EntityType::FaceBlock => "fa_prop1",
+            _ => return Err(ExodusError::InvalidEntityType(entity_type.to_string())),
+        };
+
+        if let Some(var) = self.nc_file.variable(id_var_name) {
+            let ids: Vec<i64> = var.get_values(..)?;
+            Ok(ids)
+        } else {
+            Ok(Vec::new())
+        }
+    }
+}
 
 // Block operations for write mode
 #[cfg(feature = "netcdf4")]
@@ -304,61 +337,11 @@ impl ExodusFile<mode::Write> {
             id: block_id,
         })
     }
-
-    /// Get all block IDs of a given type
-    ///
-    /// # Arguments
-    ///
-    /// * `entity_type` - Type of block (ElemBlock, EdgeBlock, or FaceBlock)
-    ///
-    /// # Returns
-    ///
-    /// Vector of block IDs
-    pub fn block_ids(&self, entity_type: EntityType) -> Result<Vec<EntityId>> {
-        let id_var_name = match entity_type {
-            EntityType::ElemBlock => "eb_prop1",
-            EntityType::EdgeBlock => "ed_prop1",
-            EntityType::FaceBlock => "fa_prop1",
-            _ => return Err(ExodusError::InvalidEntityType(entity_type.to_string())),
-        };
-
-        if let Some(var) = self.nc_file.variable(id_var_name) {
-            let ids: Vec<i64> = var.get_values(..)?;
-            Ok(ids)
-        } else {
-            Ok(Vec::new())
-        }
-    }
 }
 
 // Block operations for read mode
 #[cfg(feature = "netcdf4")]
 impl ExodusFile<mode::Read> {
-    /// Get all block IDs of a given type
-    ///
-    /// # Arguments
-    ///
-    /// * `entity_type` - Type of block (ElemBlock, EdgeBlock, or FaceBlock)
-    ///
-    /// # Returns
-    ///
-    /// Vector of block IDs
-    pub fn block_ids(&self, entity_type: EntityType) -> Result<Vec<EntityId>> {
-        let id_var_name = match entity_type {
-            EntityType::ElemBlock => "eb_prop1",
-            EntityType::EdgeBlock => "ed_prop1",
-            EntityType::FaceBlock => "fa_prop1",
-            _ => return Err(ExodusError::InvalidEntityType(entity_type.to_string())),
-        };
-
-        if let Some(var) = self.nc_file.variable(id_var_name) {
-            let ids: Vec<i64> = var.get_values(..)?;
-            Ok(ids)
-        } else {
-            Ok(Vec::new())
-        }
-    }
-
     /// Get block parameters
     ///
     /// # Arguments
@@ -569,23 +552,6 @@ impl ExodusFile<mode::Read> {
 // Block operations for append mode
 #[cfg(feature = "netcdf4")]
 impl ExodusFile<mode::Append> {
-    /// Get all block IDs (read operation)
-    pub fn block_ids(&self, entity_type: EntityType) -> Result<Vec<EntityId>> {
-        let id_var_name = match entity_type {
-            EntityType::ElemBlock => "eb_prop1",
-            EntityType::EdgeBlock => "ed_prop1",
-            EntityType::FaceBlock => "fa_prop1",
-            _ => return Err(ExodusError::InvalidEntityType(entity_type.to_string())),
-        };
-
-        if let Some(var) = self.nc_file.variable(id_var_name) {
-            let ids: Vec<i64> = var.get_values(..)?;
-            Ok(ids)
-        } else {
-            Ok(Vec::new())
-        }
-    }
-
     /// Get block parameters (read operation)
     pub fn block(&self, block_id: EntityId) -> Result<Block> {
         // Reuse read implementation

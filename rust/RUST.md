@@ -223,16 +223,23 @@ See [compat-tests/TEST_STATUS.md](compat-tests/TEST_STATUS.md) for complete deta
    - **Impact:** Full production-ready for C↔Rust interoperability
    - **Note:** Reverse direction (C→Rust) not yet tested but highly likely to work
 
-2. **Reduction Variables - Not Implemented**
-   - **Feature:** Min/max/sum aggregation for variables
-   - **Status:** Mentioned in spec but not implemented
-   - **Priority:** Low (optional feature)
-
 ### 🟡 Minor Limitations
 
-None - All previously identified minor limitations have been resolved.
+None - All previously identified limitations have been resolved.
 
 **Recently Resolved:**
+
+2. **Reduction Variables** ✅ **RESOLVED**
+   - **Feature:** Aggregated/summary values for entire objects (assemblies, blocks, sets)
+   - **Status:** Fully implemented with 100% C library compatibility
+   - **API Methods:**
+     - `define_reduction_variables()` - Define reduction variables for entity types
+     - `put_reduction_vars()` - Write reduction variable values
+     - `reduction_variable_names()` - Read reduction variable names
+     - `get_reduction_vars()` - Read reduction variable values
+   - **Supported Entity Types:** Global, ElemBlock, EdgeBlock, FaceBlock, NodeSet, EdgeSet, FaceSet, SideSet, ElemSet, Assembly, Blob
+   - **Details:** Reduction variables store aggregate statistics (e.g., total momentum, kinetic energy) for entire objects rather than individual entities. Follows C Exodus II naming conventions and file format exactly.
+   - **Resolved:** 2025-11-11
 
 3. **NetCDF Define Mode Management** ✅ **RESOLVED**
    - **Status:** Now fully automatic with intelligent mode switching

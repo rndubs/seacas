@@ -99,6 +99,200 @@ impl<M: FileMode> ExodusFile<M> {
             .map(|d| d.len())
             .unwrap_or(0))
     }
+
+    // ====================
+    // Reduction Variables (Read Operations)
+    // ====================
+
+    /// Get reduction variable names for an entity type
+    ///
+    /// # Arguments
+    ///
+    /// * `var_type` - Entity type
+    ///
+    /// # Returns
+    ///
+    /// Vector of reduction variable names
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if NetCDF read fails
+    pub fn reduction_variable_names(&self, var_type: EntityType) -> Result<Vec<String>> {
+        let var_name_var = match var_type {
+            EntityType::Global => "name_glo_var",
+            EntityType::ElemBlock => "name_ele_red_var",
+            EntityType::EdgeBlock => "name_edg_red_var",
+            EntityType::FaceBlock => "name_fac_red_var",
+            EntityType::NodeSet => "name_nset_red_var",
+            EntityType::EdgeSet => "name_eset_red_var",
+            EntityType::FaceSet => "name_fset_red_var",
+            EntityType::SideSet => "name_sset_red_var",
+            EntityType::ElemSet => "name_elset_red_var",
+            EntityType::Assembly => "name_assembly_red_var",
+            EntityType::Blob => "name_blob_red_var",
+            _ => {
+                return Err(ExodusError::InvalidEntityType(format!(
+                    "Invalid reduction variable type: {}",
+                    var_type
+                )))
+            }
+        };
+
+        // Try to get the variable
+        match self.nc_file.variable(var_name_var) {
+            Some(var) => {
+                let num_vars = if let Some(dim) = var.dimensions().first() {
+                    dim.len()
+                } else {
+                    return Ok(Vec::new());
+                };
+
+                if num_vars == 0 {
+                    return Ok(Vec::new());
+                }
+
+                let len_string = self.nc_file.dimension("len_string")
+                    .ok_or_else(|| ExodusError::Other(
+                        "len_string dimension not found when reading reduction variable names".to_string()
+                    ))?
+                    .len();
+
+                let mut names = Vec::new();
+
+                for i in 0..num_vars {
+                    let name_chars: Vec<u8> = var.get_values((i..i+1, 0..len_string))?;
+                    let name = String::from_utf8_lossy(&name_chars)
+                        .trim_end_matches('\0')
+                        .trim()
+                        .to_string();
+                    names.push(name);
+                }
+
+                Ok(names)
+            }
+            None => Ok(Vec::new()),
+        }
+    }
+
+    /// Read reduction variable values for a time step
+    ///
+    /// # Arguments
+    ///
+    /// * `step` - Time step index (0-based)
+    /// * `var_type` - Entity type
+    /// * `entity_id` - Entity ID
+    ///
+    /// # Returns
+    ///
+    /// Vector of reduction variable values
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if NetCDF read fails
+    pub fn get_reduction_vars(
+        &self,
+        step: usize,
+        var_type: EntityType,
+        entity_id: EntityId,
+    ) -> Result<Vec<f64>> {
+        let var_name = match var_type {
+            EntityType::Global => "vals_glo_var".to_string(),
+            EntityType::Assembly => format!("vals_assembly_red{}", entity_id),
+            EntityType::Blob => format!("vals_blob_red{}", entity_id),
+            EntityType::ElemBlock => {
+                let block_ids = self.block_ids(var_type)?;
+                let block_index = block_ids.iter().position(|&id| id == entity_id)
+                    .ok_or_else(|| ExodusError::EntityNotFound {
+                        entity_type: var_type.to_string(),
+                        id: entity_id,
+                    })?;
+                format!("vals_elem_red_eb{}", block_index + 1)
+            }
+            EntityType::EdgeBlock => {
+                let block_ids = self.block_ids(var_type)?;
+                let block_index = block_ids.iter().position(|&id| id == entity_id)
+                    .ok_or_else(|| ExodusError::EntityNotFound {
+                        entity_type: var_type.to_string(),
+                        id: entity_id,
+                    })?;
+                format!("vals_edge_red_edgb{}", block_index + 1)
+            }
+            EntityType::FaceBlock => {
+                let block_ids = self.block_ids(var_type)?;
+                let block_index = block_ids.iter().position(|&id| id == entity_id)
+                    .ok_or_else(|| ExodusError::EntityNotFound {
+                        entity_type: var_type.to_string(),
+                        id: entity_id,
+                    })?;
+                format!("vals_face_red_facb{}", block_index + 1)
+            }
+            EntityType::NodeSet => {
+                let set_ids = self.set_ids(EntityType::NodeSet)?;
+                let set_index = set_ids.iter().position(|&id| id == entity_id)
+                    .ok_or_else(|| ExodusError::EntityNotFound {
+                        entity_type: EntityType::NodeSet.to_string(),
+                        id: entity_id,
+                    })?;
+                format!("vals_nset_red_ns{}", set_index + 1)
+            }
+            EntityType::EdgeSet => {
+                let set_ids = self.set_ids(EntityType::EdgeSet)?;
+                let set_index = set_ids.iter().position(|&id| id == entity_id)
+                    .ok_or_else(|| ExodusError::EntityNotFound {
+                        entity_type: EntityType::EdgeSet.to_string(),
+                        id: entity_id,
+                    })?;
+                format!("vals_eset_red_es{}", set_index + 1)
+            }
+            EntityType::FaceSet => {
+                let set_ids = self.set_ids(EntityType::FaceSet)?;
+                let set_index = set_ids.iter().position(|&id| id == entity_id)
+                    .ok_or_else(|| ExodusError::EntityNotFound {
+                        entity_type: EntityType::FaceSet.to_string(),
+                        id: entity_id,
+                    })?;
+                format!("vals_fset_red_fs{}", set_index + 1)
+            }
+            EntityType::SideSet => {
+                let set_ids = self.set_ids(EntityType::SideSet)?;
+                let set_index = set_ids.iter().position(|&id| id == entity_id)
+                    .ok_or_else(|| ExodusError::EntityNotFound {
+                        entity_type: EntityType::SideSet.to_string(),
+                        id: entity_id,
+                    })?;
+                format!("vals_sset_red_ss{}", set_index + 1)
+            }
+            EntityType::ElemSet => {
+                let set_ids = self.set_ids(EntityType::ElemSet)?;
+                let set_index = set_ids.iter().position(|&id| id == entity_id)
+                    .ok_or_else(|| ExodusError::EntityNotFound {
+                        entity_type: EntityType::ElemSet.to_string(),
+                        id: entity_id,
+                    })?;
+                format!("vals_elset_red_els{}", set_index + 1)
+            }
+            _ => {
+                return Err(ExodusError::InvalidEntityType(format!(
+                    "Unsupported reduction variable type: {}",
+                    var_type
+                )))
+            }
+        };
+
+        if let Some(var) = self.nc_file.variable(&var_name) {
+            // Get the number of reduction variables
+            let num_vars = if let Some(dim) = var.dimensions().get(1) {
+                dim.len()
+            } else {
+                return Ok(Vec::new());
+            };
+
+            let values: Vec<f64> = var.get_values((step..step + 1, 0..num_vars))?;
+            Ok(values)
+        } else {
+            Ok(Vec::new())
+        }
+    }
 }
 
 // ====================
@@ -896,6 +1090,341 @@ impl ExodusFile<mode::Write> {
                 )))
             }
         })
+    }
+
+    // ====================
+    // Reduction Variables (Write Operations)
+    // ====================
+
+    /// Define reduction variables for an entity type
+    ///
+    /// Reduction variables store aggregated/summary values for entire objects
+    /// (e.g., assemblies, blocks, sets) rather than for individual entities within those objects.
+    /// For example, you might store total momentum or kinetic energy for an entire assembly.
+    ///
+    /// # Arguments
+    ///
+    /// * `var_type` - Entity type (ElemBlock, NodeSet, SideSet, ElemSet, Assembly, Blob, etc.)
+    /// * `names` - Variable names
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if NetCDF operation fails
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// # use exodus_rs::*;
+    /// # use exodus_rs::types::*;
+    /// # let mut file = ExodusFile::create("test.exo", CreateOptions::default()).unwrap();
+    /// // Define reduction variables for assemblies
+    /// file.define_reduction_variables(
+    ///     EntityType::Assembly,
+    ///     &["Momentum_X", "Momentum_Y", "Kinetic_Energy"]
+    /// ).unwrap();
+    /// ```
+    pub fn define_reduction_variables(
+        &mut self,
+        var_type: EntityType,
+        names: &[impl AsRef<str>],
+    ) -> Result<()> {
+        // Ensure we're in define mode
+        self.ensure_define_mode()?;
+
+        if names.is_empty() {
+            return Ok(());
+        }
+
+        let num_vars = names.len();
+
+        // Get the dimension and variable names based on entity type
+        let (num_var_dim, var_name_var) = match var_type {
+            EntityType::Global => ("num_glo_var", "name_glo_var"),
+            EntityType::ElemBlock => ("num_ele_red_var", "name_ele_red_var"),
+            EntityType::EdgeBlock => ("num_edg_red_var", "name_edg_red_var"),
+            EntityType::FaceBlock => ("num_fac_red_var", "name_fac_red_var"),
+            EntityType::NodeSet => ("num_nset_red_var", "name_nset_red_var"),
+            EntityType::EdgeSet => ("num_eset_red_var", "name_eset_red_var"),
+            EntityType::FaceSet => ("num_fset_red_var", "name_fset_red_var"),
+            EntityType::SideSet => ("num_sset_red_var", "name_sset_red_var"),
+            EntityType::ElemSet => ("num_elset_red_var", "name_elset_red_var"),
+            EntityType::Assembly => ("num_assembly_red_var", "name_assembly_red_var"),
+            EntityType::Blob => ("num_blob_red_var", "name_blob_red_var"),
+            _ => {
+                return Err(ExodusError::InvalidEntityType(format!(
+                    "Invalid reduction variable type: {}",
+                    var_type
+                )))
+            }
+        };
+
+        // Add dimension for number of reduction variables
+        self.nc_file.add_dimension(num_var_dim, num_vars)?;
+
+        // Ensure len_string dimension exists
+        const STANDARD_NAME_LEN: usize = 32;
+        let len_string = if let Some(dim) = self.nc_file.dimension("len_string") {
+            dim.len()
+        } else {
+            STANDARD_NAME_LEN
+        };
+
+        if self.nc_file.dimension("len_string").is_none() {
+            self.nc_file
+                .add_dimension("len_string", len_string)?;
+        }
+
+        // Ensure time_step dimension exists
+        if self.nc_file.dimension("time_step").is_none() {
+            self.nc_file.add_unlimited_dimension("time_step")?;
+        }
+
+        // Create the variable name storage variable
+        if self.nc_file.variable(var_name_var).is_none() {
+            self.nc_file
+                .add_variable::<u8>(var_name_var, &[num_var_dim, "len_string"])?;
+        }
+
+        // For global reduction variables, create the storage variable now
+        // For other types, storage is created per-entity in put_reduction_vars()
+        if var_type == EntityType::Global {
+            if self.nc_file.variable("vals_glo_var").is_none() {
+                self.nc_file
+                    .add_variable::<f64>("vals_glo_var", &["time_step", num_var_dim])?;
+            }
+        }
+
+        // Write the variable names
+        let actual_len_string = self.nc_file.dimension("len_string")
+            .ok_or_else(|| ExodusError::Other(
+                "len_string dimension not found after creation".to_string()
+            ))?
+            .len();
+
+        let mut var = self.nc_file.variable_mut(var_name_var)
+            .ok_or_else(|| ExodusError::Other(format!(
+                "Cannot get mutable reference to variable '{}' after creation",
+                var_name_var
+            )))?;
+
+        for (i, name) in names.iter().enumerate() {
+            let name_str = name.as_ref();
+            let mut buf = vec![0u8; actual_len_string];
+            let bytes = name_str.as_bytes();
+            let copy_len = bytes.len().min(actual_len_string);
+            buf[..copy_len].copy_from_slice(&bytes[..copy_len]);
+            var.put_values(&buf, (i..i + 1, ..))?;
+        }
+
+        // Force sync to ensure all data is written
+        self.nc_file.sync()?;
+
+        Ok(())
+    }
+
+    /// Write reduction variable values for a time step
+    ///
+    /// Reduction variables store aggregate values for entire objects (assemblies, blocks, sets)
+    /// rather than for individual entities within those objects.
+    ///
+    /// # Arguments
+    ///
+    /// * `step` - Time step index (0-based)
+    /// * `var_type` - Entity type
+    /// * `entity_id` - Entity ID (e.g., assembly ID, block ID, set ID)
+    /// * `values` - Variable values (one per reduction variable)
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if NetCDF write fails
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// # use exodus_rs::*;
+    /// # use exodus_rs::types::*;
+    /// # let mut file = ExodusFile::create("test.exo", CreateOptions::default()).unwrap();
+    /// // Write reduction variables for assembly 100 at time step 0
+    /// file.put_reduction_vars(
+    ///     0,
+    ///     EntityType::Assembly,
+    ///     100,
+    ///     &[1.5, 2.3, 45.6] // Momentum_X, Momentum_Y, Kinetic_Energy
+    /// ).unwrap();
+    /// ```
+    pub fn put_reduction_vars(
+        &mut self,
+        step: usize,
+        var_type: EntityType,
+        entity_id: EntityId,
+        values: &[f64],
+    ) -> Result<()> {
+        // Get the reduction variable name for this entity
+        let var_name = self.get_reduction_var_name(var_type, entity_id)?;
+
+        // Get or create the variable
+        if self.nc_file.variable(&var_name).is_none() {
+            self.ensure_define_mode()?;
+            self.create_reduction_var_storage(var_type, entity_id)?;
+        }
+
+        // Ensure we're in data mode for writing
+        self.ensure_data_mode()?;
+
+        // Write the values
+        if let Some(mut var) = self.nc_file.variable_mut(&var_name) {
+            var.put_values(values, (step..step + 1, ..))?;
+        }
+
+        Ok(())
+    }
+
+    /// Helper: Get reduction variable name for storage
+    fn get_reduction_var_name(&self, var_type: EntityType, entity_id: EntityId) -> Result<String> {
+        Ok(match var_type {
+            EntityType::Global => "vals_glo_var".to_string(),
+            EntityType::Assembly => {
+                // For assemblies, use entity_id directly as the index
+                format!("vals_assembly_red{}", entity_id)
+            }
+            EntityType::Blob => {
+                // For blobs, use entity_id directly as the index
+                format!("vals_blob_red{}", entity_id)
+            }
+            EntityType::ElemBlock => {
+                // Find the index of this block
+                let block_ids = self.block_ids(var_type)?;
+                let block_index = block_ids
+                    .iter()
+                    .position(|&id| id == entity_id)
+                    .ok_or_else(|| ExodusError::EntityNotFound {
+                        entity_type: var_type.to_string(),
+                        id: entity_id,
+                    })?;
+                format!("vals_elem_red_eb{}", block_index + 1)
+            }
+            EntityType::EdgeBlock => {
+                let block_ids = self.block_ids(var_type)?;
+                let block_index = block_ids
+                    .iter()
+                    .position(|&id| id == entity_id)
+                    .ok_or_else(|| ExodusError::EntityNotFound {
+                        entity_type: var_type.to_string(),
+                        id: entity_id,
+                    })?;
+                format!("vals_edge_red_edgb{}", block_index + 1)
+            }
+            EntityType::FaceBlock => {
+                let block_ids = self.block_ids(var_type)?;
+                let block_index = block_ids
+                    .iter()
+                    .position(|&id| id == entity_id)
+                    .ok_or_else(|| ExodusError::EntityNotFound {
+                        entity_type: var_type.to_string(),
+                        id: entity_id,
+                    })?;
+                format!("vals_face_red_facb{}", block_index + 1)
+            }
+            EntityType::NodeSet => {
+                let set_ids = self.set_ids(EntityType::NodeSet)?;
+                let set_index = set_ids
+                    .iter()
+                    .position(|&id| id == entity_id)
+                    .ok_or_else(|| ExodusError::EntityNotFound {
+                        entity_type: EntityType::NodeSet.to_string(),
+                        id: entity_id,
+                    })?;
+                format!("vals_nset_red_ns{}", set_index + 1)
+            }
+            EntityType::EdgeSet => {
+                let set_ids = self.set_ids(EntityType::EdgeSet)?;
+                let set_index = set_ids
+                    .iter()
+                    .position(|&id| id == entity_id)
+                    .ok_or_else(|| ExodusError::EntityNotFound {
+                        entity_type: EntityType::EdgeSet.to_string(),
+                        id: entity_id,
+                    })?;
+                format!("vals_eset_red_es{}", set_index + 1)
+            }
+            EntityType::FaceSet => {
+                let set_ids = self.set_ids(EntityType::FaceSet)?;
+                let set_index = set_ids
+                    .iter()
+                    .position(|&id| id == entity_id)
+                    .ok_or_else(|| ExodusError::EntityNotFound {
+                        entity_type: EntityType::FaceSet.to_string(),
+                        id: entity_id,
+                    })?;
+                format!("vals_fset_red_fs{}", set_index + 1)
+            }
+            EntityType::SideSet => {
+                let set_ids = self.set_ids(EntityType::SideSet)?;
+                let set_index = set_ids
+                    .iter()
+                    .position(|&id| id == entity_id)
+                    .ok_or_else(|| ExodusError::EntityNotFound {
+                        entity_type: EntityType::SideSet.to_string(),
+                        id: entity_id,
+                    })?;
+                format!("vals_sset_red_ss{}", set_index + 1)
+            }
+            EntityType::ElemSet => {
+                let set_ids = self.set_ids(EntityType::ElemSet)?;
+                let set_index = set_ids
+                    .iter()
+                    .position(|&id| id == entity_id)
+                    .ok_or_else(|| ExodusError::EntityNotFound {
+                        entity_type: EntityType::ElemSet.to_string(),
+                        id: entity_id,
+                    })?;
+                format!("vals_elset_red_els{}", set_index + 1)
+            }
+            _ => {
+                return Err(ExodusError::InvalidEntityType(format!(
+                    "Unsupported reduction variable type: {}",
+                    var_type
+                )))
+            }
+        })
+    }
+
+    /// Helper: Create storage variable for reduction variables
+    fn create_reduction_var_storage(
+        &mut self,
+        var_type: EntityType,
+        entity_id: EntityId,
+    ) -> Result<()> {
+        let var_name = self.get_reduction_var_name(var_type, entity_id)?;
+
+        // Get the dimension name for the number of reduction variables
+        let num_var_dim = match var_type {
+            EntityType::Global => "num_glo_var",
+            EntityType::ElemBlock => "num_ele_red_var",
+            EntityType::EdgeBlock => "num_edg_red_var",
+            EntityType::FaceBlock => "num_fac_red_var",
+            EntityType::NodeSet => "num_nset_red_var",
+            EntityType::EdgeSet => "num_eset_red_var",
+            EntityType::FaceSet => "num_fset_red_var",
+            EntityType::SideSet => "num_sset_red_var",
+            EntityType::ElemSet => "num_elset_red_var",
+            EntityType::Assembly => "num_assembly_red_var",
+            EntityType::Blob => "num_blob_red_var",
+            _ => {
+                return Err(ExodusError::InvalidEntityType(format!(
+                    "Unsupported reduction variable type: {}",
+                    var_type
+                )))
+            }
+        };
+
+        // Create the storage variable: var_name(time_step, num_*_red_var)
+        if self.nc_file.variable(&var_name).is_none() {
+            self.nc_file
+                .add_variable::<f64>(&var_name, &["time_step", num_var_dim])?;
+        }
+
+        Ok(())
     }
 }
 

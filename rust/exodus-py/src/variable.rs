@@ -129,6 +129,48 @@ impl ExodusReader {
         let table = self.file.truth_table(var_type.to_rust()).into_py()?;
         Ok(TruthTable::from_rust(&table))
     }
+
+    /// Get reduction variable names for an entity type
+    ///
+    /// Reduction variables store aggregated/summary values for entire objects
+    /// (e.g., assemblies, blocks, sets) rather than for individual entities within those objects.
+    ///
+    /// Args:
+    ///     var_type: Entity type (e.g., EntityType.ASSEMBLY, EntityType.ELEM_BLOCK)
+    ///
+    /// Returns:
+    ///     List of reduction variable names
+    ///
+    /// Example:
+    ///     >>> names = reader.reduction_variable_names(EntityType.ASSEMBLY)
+    ///     >>> print(names)  # ['Momentum_X', 'Momentum_Y', 'Kinetic_Energy']
+    fn reduction_variable_names(&self, var_type: EntityType) -> PyResult<Vec<String>> {
+        self.file.reduction_variable_names(var_type.to_rust()).into_py()
+    }
+
+    /// Read reduction variable values for a time step
+    ///
+    /// Args:
+    ///     step: Time step index (0-based)
+    ///     var_type: Entity type
+    ///     entity_id: Entity ID (e.g., assembly ID, block ID, set ID)
+    ///
+    /// Returns:
+    ///     List of reduction variable values
+    ///
+    /// Example:
+    ///     >>> values = reader.get_reduction_vars(0, EntityType.ASSEMBLY, 100)
+    ///     >>> print(f"Momentum: {values[0]}, Energy: {values[3]}")
+    fn get_reduction_vars(
+        &self,
+        step: usize,
+        var_type: EntityType,
+        entity_id: i64,
+    ) -> PyResult<Vec<f64>> {
+        self.file
+            .get_reduction_vars(step, var_type.to_rust(), entity_id)
+            .into_py()
+    }
 }
 
 /// Variable operations for ExodusWriter
@@ -284,6 +326,61 @@ impl ExodusWriter {
     fn put_truth_table(&mut self, var_type: EntityType, table: &TruthTable) -> PyResult<()> {
         if let Some(ref mut file) = self.file {
             file.put_truth_table(var_type.to_rust(), &table.to_rust())
+                .into_py()
+        } else {
+            Err(PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(
+                "File already closed",
+            ))
+        }
+    }
+
+    /// Define reduction variables for an entity type
+    ///
+    /// Reduction variables store aggregated/summary values for entire objects
+    /// (e.g., assemblies, blocks, sets) rather than for individual entities within those objects.
+    ///
+    /// Args:
+    ///     var_type: Entity type (e.g., EntityType.ASSEMBLY, EntityType.ELEM_BLOCK)
+    ///     names: List of variable names
+    ///
+    /// Example:
+    ///     >>> writer.define_reduction_variables(EntityType.ASSEMBLY,
+    ///     ...     ["Momentum_X", "Momentum_Y", "Kinetic_Energy"])
+    fn define_reduction_variables(&mut self, var_type: EntityType, names: Vec<String>) -> PyResult<()> {
+        if let Some(ref mut file) = self.file {
+            let name_refs: Vec<&str> = names.iter().map(|s| s.as_str()).collect();
+            file.define_reduction_variables(var_type.to_rust(), &name_refs)
+                .into_py()
+        } else {
+            Err(PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(
+                "File already closed",
+            ))
+        }
+    }
+
+    /// Write reduction variable values for a time step
+    ///
+    /// Reduction variables store aggregate values for entire objects (assemblies, blocks, sets)
+    /// rather than for individual entities within those objects.
+    ///
+    /// Args:
+    ///     step: Time step index (0-based)
+    ///     var_type: Entity type
+    ///     entity_id: Entity ID (e.g., assembly ID, block ID, set ID)
+    ///     values: Variable values (one per reduction variable)
+    ///
+    /// Example:
+    ///     >>> writer.put_reduction_vars(0, EntityType.ASSEMBLY, 100,
+    ///     ...     [1.5, 2.3, 45.6])  # Momentum_X, Momentum_Y, Kinetic_Energy
+    fn put_reduction_vars(
+        &mut self,
+        step: usize,
+        var_type: EntityType,
+        entity_id: i64,
+        values: Vec<f64>,
+    ) -> PyResult<()> {
+        if let Some(ref mut file) = self.file {
+            file.put_reduction_vars(step, var_type.to_rust(), entity_id, &values)
                 .into_py()
         } else {
             Err(PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(
