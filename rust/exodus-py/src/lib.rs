@@ -18,6 +18,7 @@ mod map;
 mod assembly;
 mod variable;
 mod attribute;
+mod performance;
 
 // Re-exports
 use types::*;
@@ -40,6 +41,12 @@ fn exodus(py: Python, m: &PyModule) -> PyResult<()> {
     m.add_class::<FloatSize>()?;
     m.add_class::<Int64Mode>()?;
     m.add_class::<AttributeType>()?;
+
+    // Register performance types
+    m.add_class::<performance::PyNodeType>()?;
+    m.add_class::<performance::PyCacheConfig>()?;
+    m.add_class::<performance::PyChunkConfig>()?;
+    m.add_class::<performance::PyPerformanceConfig>()?;
 
     // Register data types
     m.add_class::<InitParams>()?;

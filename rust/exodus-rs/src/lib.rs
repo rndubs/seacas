@@ -40,6 +40,7 @@
 //! - [`error`] - Error types and result aliases
 //! - [`types`] - Core type definitions (EntityType, InitParams, etc.)
 //! - [`file`] - File handle and mode types
+//! - [`performance`] - Performance tuning (cache, chunks, node detection)
 //! - [`init`] - Database initialization
 //! - [`coord`] - Coordinate operations
 //! - [`block`] - Block (element/edge/face) operations
@@ -61,6 +62,7 @@ pub mod error;
 pub mod types;
 pub mod coord;
 pub mod builder;
+pub mod performance;
 
 // Internal modules (will be implemented in phases)
 mod file;
@@ -94,6 +96,7 @@ pub use set::SetIterator;
 pub use coord::{CoordValue, Coordinates};
 pub use builder::{BlockBuilder, MeshBuilder};
 pub use attribute::AttributeData;
+pub use performance::{CacheConfig, ChunkConfig, NodeType, PerformanceConfig};
 
 // File mode types
 /// Type-state pattern for file modes

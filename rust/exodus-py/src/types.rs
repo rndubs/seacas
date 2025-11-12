@@ -453,26 +453,40 @@ pub struct CreateOptions {
     #[pyo3(get, set)]
     /// Integer storage mode
     pub int64_mode: Int64Mode,
+    #[pyo3(get, set)]
+    /// Performance configuration (optional, auto-detects if None)
+    pub performance: Option<crate::performance::PyPerformanceConfig>,
 }
 
 #[pymethods]
 impl CreateOptions {
     #[new]
-    #[pyo3(signature = (mode=CreateMode::Clobber, float_size=FloatSize::Float64, int64_mode=Int64Mode::Int64))]
-    fn new(mode: CreateMode, float_size: FloatSize, int64_mode: Int64Mode) -> Self {
+    #[pyo3(signature = (mode=CreateMode::Clobber, float_size=FloatSize::Float64, int64_mode=Int64Mode::Int64, performance=None))]
+    fn new(
+        mode: CreateMode,
+        float_size: FloatSize,
+        int64_mode: Int64Mode,
+        performance: Option<crate::performance::PyPerformanceConfig>,
+    ) -> Self {
         CreateOptions {
             mode,
             float_size,
             int64_mode,
+            performance,
         }
     }
 
     fn __repr__(&self) -> String {
         format!(
-            "CreateOptions(mode={}, float_size={}, int64_mode={})",
+            "CreateOptions(mode={}, float_size={}, int64_mode={}, performance={})",
             self.mode.__str__(),
             self.float_size.__str__(),
-            self.int64_mode.__str__()
+            self.int64_mode.__str__(),
+            if self.performance.is_some() {
+                "configured"
+            } else {
+                "None"
+            }
         )
     }
 }
@@ -483,6 +497,7 @@ impl CreateOptions {
             mode: self.mode.to_rust(),
             float_size: self.float_size.to_rust(),
             int64_mode: self.int64_mode.to_rust(),
+            performance: self.performance.as_ref().map(|p| p.inner.clone()),
             ..Default::default()
         }
     }
