@@ -680,8 +680,10 @@ pub struct CreateOptions {
     pub int64_mode: Int64Mode,
     /// Compression settings
     pub compression: Option<Compression>,
-    /// Enable parallel I/O
+    /// Enable parallel I/O (requires MPI-enabled HDF5)
     pub parallel: bool,
+    /// Performance configuration (cache and chunk settings)
+    pub performance: Option<crate::performance::PerformanceConfig>,
 }
 
 impl Default for CreateOptions {
@@ -692,6 +694,7 @@ impl Default for CreateOptions {
             int64_mode: Int64Mode::Int64,
             compression: None,
             parallel: false,
+            performance: None, // Auto-detect on file creation if None
         }
     }
 }

@@ -34,6 +34,8 @@ pub(crate) struct FileMetadata {
     pub dim_cache: HashMap<String, usize>,
     /// Current NetCDF define/data mode (only tracked for Write/Append modes)
     pub define_mode: DefineMode,
+    /// Performance configuration (if specified)
+    pub performance: Option<crate::performance::PerformanceConfig>,
 }
 
 impl FileMetadata {
@@ -45,6 +47,19 @@ impl FileMetadata {
             num_dim: None,
             dim_cache: HashMap::new(),
             define_mode: DefineMode::Define,
+            performance: None,
+        }
+    }
+
+    /// Create metadata with performance config
+    fn with_performance(perf: Option<crate::performance::PerformanceConfig>) -> Self {
+        Self {
+            initialized: false,
+            title: None,
+            num_dim: None,
+            dim_cache: HashMap::new(),
+            define_mode: DefineMode::Define,
+            performance: perf,
         }
     }
 }
@@ -96,8 +111,20 @@ impl ExodusFile<mode::Write> {
     /// let file = ExodusFile::create("mesh.exo", options)?;
     /// # Ok::<(), exodus_rs::ExodusError>(())
     /// ```
-    pub fn create<P: AsRef<Path>>(path: P, options: CreateOptions) -> Result<Self> {
+    pub fn create<P: AsRef<Path>>(path: P, mut options: CreateOptions) -> Result<Self> {
         let path = path.as_ref();
+
+        // Get or auto-detect performance configuration
+        let perf_config = if options.performance.is_none() {
+            Some(crate::performance::PerformanceConfig::auto())
+        } else {
+            options.performance.take()
+        };
+
+        // Apply HDF5 performance tuning via environment variables if config is present
+        if let Some(ref config) = perf_config {
+            Self::apply_hdf5_env_vars(config);
+        }
 
         // Convert options to NetCDF creation flags
         let mut nc_options = netcdf::Options::NETCDF4;
@@ -121,7 +148,7 @@ impl ExodusFile<mode::Write> {
         Ok(Self {
             nc_file,
             path: path.to_path_buf(),
-            metadata: FileMetadata::new(),
+            metadata: FileMetadata::with_performance(perf_config),
             _mode: std::marker::PhantomData,
         })
     }
@@ -148,6 +175,48 @@ impl ExodusFile<mode::Write> {
     /// ```
     pub fn create_default<P: AsRef<Path>>(path: P) -> Result<Self> {
         Self::create(path, CreateOptions::default())
+    }
+
+    /// Apply HDF5 performance tuning via environment variables
+    ///
+    /// Sets HDF5_CHUNK_CACHE_* environment variables that HDF5 will respect.
+    /// Note: These must be set before the HDF5 library is initialized.
+    ///
+    /// For more fine-grained control, users can set these environment variables
+    /// manually before running their program.
+    fn apply_hdf5_env_vars(config: &crate::performance::PerformanceConfig) {
+        use std::env;
+
+        // HDF5 respects these environment variables (if set before library init)
+        // HDF5_CHUNK_CACHE_NBYTES - cache size in bytes
+        // HDF5_CHUNK_CACHE_NSLOTS - number of hash slots
+        // HDF5_CHUNK_CACHE_W0 - preemption policy (0.0-1.0)
+
+        // Only set if not already set by user
+        if env::var("HDF5_CHUNK_CACHE_NBYTES").is_err() {
+            env::set_var(
+                "HDF5_CHUNK_CACHE_NBYTES",
+                config.cache.cache_size.to_string(),
+            );
+        }
+
+        if env::var("HDF5_CHUNK_CACHE_W0").is_err() {
+            env::set_var(
+                "HDF5_CHUNK_CACHE_W0",
+                config.cache.preemption.to_string(),
+            );
+        }
+
+        // Calculate or use provided num_slots
+        if env::var("HDF5_CHUNK_CACHE_NSLOTS").is_err() {
+            let num_slots = if config.cache.num_slots > 0 {
+                config.cache.num_slots
+            } else {
+                // Auto-calculate based on typical chunk size (1MB for coordinates)
+                config.cache.auto_slots(1024 * 1024)
+            };
+            env::set_var("HDF5_CHUNK_CACHE_NSLOTS", num_slots.to_string());
+        }
     }
 
     /// Write global attributes to the NetCDF file
