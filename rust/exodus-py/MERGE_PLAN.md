@@ -50,10 +50,10 @@ The ExodusModel class needs to maintain:
 ## Phase 3: Element Block Operations (✅ Basic Operations COMPLETED)
 
 ### 3.1 Basic Operations
-- ⬜ `create_element_block(id, info, connectivity)` - Create new element block
-- ⬜ `delete_element_block(ids)` - Delete element blocks
+- ✅ `create_element_block(id, info, connectivity)` - Create new element block
+- ✅ `delete_element_block(ids)` - Delete element blocks
 - ✅ `element_block_exists(id)` - Check existence
-- ⬜ `rename_element_block(id, new_id)` - Rename block
+- ✅ `rename_element_block(id, new_id)` - Rename block
 - ✅ `get_element_block_ids()` - Get all block IDs
 - ✅ `get_element_block_name(element_block_id)` - Get block name
 - ✅ `get_all_element_block_names()` - Get all block names
@@ -70,7 +70,7 @@ The ExodusModel class needs to maintain:
 - ✅ `get_nodes_per_element(element_block_id)` - Get nodes per element
 - ✅ `get_connectivity(element_block_id)` - Get connectivity array
 - ✅ `get_element_block_connectivity(element_block_id)` - Alias for get_connectivity
-- ⬜ `get_nodes_in_element_block(element_block_ids)` - Get node list
+- ✅ `get_nodes_in_element_block(element_block_ids)` - Get node list
 
 ### 3.4 Geometric Transformations
 - ⬜ `translate_element_blocks(element_block_ids, offset, ...)` - Translate blocks

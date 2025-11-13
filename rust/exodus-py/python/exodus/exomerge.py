@@ -272,6 +272,27 @@ class ExodusModel:
         self._warning(f"Unknown element type '{element_type}', assuming 3D")
         return 3
 
+    def _get_unreferenced_nodes(self) -> List[int]:
+        """
+        Return a list of node indices which are not used by any element.
+
+        Returns
+        -------
+        list of int
+            List of unreferenced node indices
+        """
+        used_node = [False] * len(self.nodes)
+        for block_id in self.get_element_block_ids():
+            connectivity = self.get_connectivity(block_id)
+            # connectivity is a list of lists, flatten it
+            for element_nodes in connectivity:
+                for node_index in element_nodes:
+                    if 0 <= node_index < len(self.nodes):
+                        used_node[node_index] = True
+
+        unused_nodes = [index for index, used in enumerate(used_node) if not used]
+        return unused_nodes
+
     # ========================================================================
     # File I/O Operations
     # ========================================================================
@@ -629,6 +650,18 @@ class ExodusModel:
         """
         Create a new element block.
 
+        The nodes for the elements in the block must have already been defined.
+
+        The info list should be comprised of the following information:
+        [element_type, element_count, nodes_per_element, attributes_per_element]
+
+        For example: ['hex8', 10, 8, 0] would create a hex8 block with 10 elements.
+
+        The connectivity list should be a shallow list of element connectivity
+        and must be of length element_count * nodes_per_element.
+
+        Element blocks are unnamed when created. To name them, use rename_element_block().
+
         Parameters
         ----------
         element_block_id : int
@@ -642,14 +675,25 @@ class ExodusModel:
         --------
         >>> model.create_element_block(1, ['HEX8', 10, 8, 0], connectivity_array)
         """
-        raise NotImplementedError(
-            "create_element_block() is not yet implemented. "
-            "Implementation planned for Phase 3."
-        )
+        # Make sure it doesn't exist already
+        if self.element_block_exists(element_block_id):
+            self._error(f"Element block {element_block_id} already exists")
+
+        # Set up an empty connectivity if none is given
+        if connectivity is None:
+            connectivity = []
+
+        # Create the actual block: [name, info, connectivity, fields]
+        self.element_blocks[element_block_id] = ["", info, connectivity, {}]
 
     def delete_element_block(self, element_block_ids: Union[int, List[int]], delete_orphaned_nodes: bool = True):
         """
         Delete one or more element blocks.
+
+        This will also delete any references to elements in that block in side sets.
+
+        By default, this will delete any nodes that become unused as a result
+        of deleting the element blocks. To prevent this, set delete_orphaned_nodes=False.
 
         Parameters
         ----------
@@ -663,10 +707,60 @@ class ExodusModel:
         >>> model.delete_element_block(1)
         >>> model.delete_element_block([1, 2, 3])
         """
-        raise NotImplementedError(
-            "delete_element_block() is not yet implemented. "
-            "Implementation planned for Phase 3."
-        )
+        # Convert to list if single ID
+        if isinstance(element_block_ids, int):
+            element_block_ids = [element_block_ids]
+
+        # If we're not deleting anything, skip
+        if not element_block_ids:
+            return
+
+        # Find unreferenced nodes before deletion
+        if delete_orphaned_nodes:
+            unreferenced_nodes = self._get_unreferenced_nodes()
+
+        # Delete the element blocks and associated data
+        for element_block_id in element_block_ids:
+            # Check if block exists
+            if element_block_id not in self.element_blocks:
+                self._warning(f"Element block {element_block_id} does not exist")
+                continue
+
+            # Delete the element block itself
+            del self.element_blocks[element_block_id]
+
+            # Delete faces of that element block from side sets
+            for side_set_id in self.get_side_set_ids():
+                members = self.get_side_set_members(side_set_id)
+                name, _, fields = self.side_sets[side_set_id]
+
+                # Find indices to delete (members are tuples of (block_id, element_id, face_id))
+                deleted_indices = []
+                for index, member in enumerate(members):
+                    if member[0] == element_block_id:  # block_id matches
+                        deleted_indices.append(index)
+
+                # Delete them from members (in reverse order to maintain indices)
+                new_members = [m for i, m in enumerate(members) if i not in deleted_indices]
+
+                # Delete them from the fields
+                new_fields = {}
+                for field_name, all_values in fields.items():
+                    new_all_values = []
+                    for values in all_values:
+                        new_values = [v for i, v in enumerate(values) if i not in deleted_indices]
+                        new_all_values.append(new_values)
+                    new_fields[field_name] = new_all_values
+
+                # Update the side set
+                self.side_sets[side_set_id] = [name, new_members, new_fields]
+
+        # Now find the new unreferenced nodes
+        if delete_orphaned_nodes:
+            new_unreferenced_nodes = self._get_unreferenced_nodes()
+            nodes_to_delete = sorted(set(new_unreferenced_nodes) - set(unreferenced_nodes))
+            if nodes_to_delete:
+                self.delete_node(nodes_to_delete)
 
     def element_block_exists(self, element_block_id: int) -> bool:
         """
@@ -684,25 +778,66 @@ class ExodusModel:
         """
         return element_block_id in self.element_blocks
 
-    def rename_element_block(self, element_block_id: int, new_element_block_id: int):
+    def rename_element_block(self, element_block_id: int, new_element_block_id: Union[int, str]):
         """
-        Rename an element block.
+        Change an element block ID or name.
+
+        This function can be used to change either the element block ID or name.
+        If new_element_block_id is an integer, it will change the ID.
+        If it is a string, it will change the name.
 
         Parameters
         ----------
         element_block_id : int
             Current element block ID
-        new_element_block_id : int
-            New element block ID
+        new_element_block_id : int or str
+            New element block ID (int) or new name (str)
 
         Examples
         --------
-        >>> model.rename_element_block(1, 100)
+        >>> model.rename_element_block(1, 100)  # Change ID from 1 to 100
+        >>> model.rename_element_block(1, 'block_1')  # Change name to 'block_1'
         """
-        raise NotImplementedError(
-            "rename_element_block() is not yet implemented. "
-            "Implementation planned for Phase 3."
-        )
+        # Check that the block exists
+        if element_block_id not in self.element_blocks:
+            self._error(f"Element block {element_block_id} does not exist")
+
+        # If we're just changing the name (string provided)
+        if isinstance(new_element_block_id, str):
+            # If the same name already, just exit
+            if self.element_blocks[element_block_id][0] == new_element_block_id:
+                return
+            # If the name already exists elsewhere, issue a warning
+            for block_id, block_data in self.element_blocks.items():
+                if block_id != element_block_id and block_data[0] == new_element_block_id:
+                    self._warning(f'Element block name "{new_element_block_id}" already exists')
+                    break
+            # Rename it
+            self.element_blocks[element_block_id][0] = new_element_block_id
+            return
+
+        # Otherwise, we're changing the ID (integer provided)
+        assert isinstance(new_element_block_id, int)
+
+        # Check that the new ID doesn't already exist
+        if new_element_block_id in self.element_blocks:
+            self._error(f"Element block {new_element_block_id} already exists")
+
+        # Rename the block by creating new entry and deleting old
+        self.element_blocks[new_element_block_id] = self.element_blocks[element_block_id]
+        del self.element_blocks[element_block_id]
+
+        # Adjust side sets that reference this element block
+        for side_set_id in self.get_side_set_ids():
+            name, members, fields = self.side_sets[side_set_id]
+            new_members = []
+            for member in members:
+                # member is (block_id, element_id, face_id)
+                if member[0] == element_block_id:
+                    new_members.append((new_element_block_id, member[1], member[2]))
+                else:
+                    new_members.append(member)
+            self.side_sets[side_set_id] = [name, new_members, fields]
 
     def get_element_block_ids(self) -> List[int]:
         """
@@ -855,24 +990,46 @@ class ExodusModel:
         """
         return self.get_connectivity(element_block_id)
 
-    def get_nodes_in_element_block(self, element_block_ids: Union[str, List[int]]) -> List[int]:
+    def get_nodes_in_element_block(self, element_block_ids: Union[str, int, List[int]]) -> List[int]:
         """
-        Get list of nodes used in element blocks.
+        Return a list of all node indices used in the given element blocks.
 
         Parameters
         ----------
-        element_block_ids : str or list of int
+        element_block_ids : str, int, or list of int
             Element block IDs or "all"
 
         Returns
         -------
         list of int
-            List of node indices
+            Sorted list of unique node indices
+
+        Examples
+        --------
+        >>> model.get_nodes_in_element_block(1)
+        >>> model.get_nodes_in_element_block([1, 3])
+        >>> model.get_nodes_in_element_block("all")
         """
-        raise NotImplementedError(
-            "get_nodes_in_element_block() is not yet implemented. "
-            "Implementation planned for Phase 3."
-        )
+        # Handle "all" case
+        if element_block_ids == "all":
+            element_block_ids = list(self.element_blocks.keys())
+        # Convert single ID to list
+        elif isinstance(element_block_ids, int):
+            element_block_ids = [element_block_ids]
+
+        # Collect all unique nodes
+        node_set = set()
+        for block_id in element_block_ids:
+            if block_id not in self.element_blocks:
+                self._warning(f"Element block {block_id} does not exist")
+                continue
+
+            connectivity = self.get_connectivity(block_id)
+            # Flatten the connectivity list and add to set
+            for element_nodes in connectivity:
+                node_set.update(element_nodes)
+
+        return sorted(node_set)
 
     def duplicate_element_block(self, source_id: int, target_id: int, duplicate_nodes: bool = False):
         """
