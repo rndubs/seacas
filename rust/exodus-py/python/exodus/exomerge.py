@@ -994,32 +994,224 @@ class ExodusModel:
 
     def create_element_field(self, element_field_name: str, element_block_id: int,
                             default_value: Union[str, float] = "auto"):
-        """Create an element field."""
-        raise NotImplementedError("create_element_field() is not yet implemented.")
+        """
+        Create an element field.
+
+        Parameters
+        ----------
+        element_field_name : str
+            Name of the element field
+        element_block_id : int
+            Element block ID
+        default_value : str or float, optional
+            Initial value ("auto" for zeros, float for constant value)
+
+        Examples
+        --------
+        >>> model.create_element_field("stress", 1, 0.0)
+        """
+        if element_block_id not in self.element_blocks:
+            self._error(f"Element block {element_block_id} does not exist")
+
+        name, info, connectivity, fields = self.element_blocks[element_block_id]
+
+        if element_field_name in fields:
+            self._warning(f"Element field '{element_field_name}' already exists in block {element_block_id}, overwriting")
+
+        # Initialize field values for all timesteps
+        num_timesteps = len(self.timesteps) if self.timesteps else 1
+        num_elems = info[1]  # info = [elem_type, num_elems, nodes_per_elem, num_attrs]
+
+        if default_value == "auto":
+            # Create zero-filled arrays
+            field_data = [[0.0] * num_elems for _ in range(num_timesteps)]
+        elif isinstance(default_value, (int, float)):
+            # Constant value for all elements and timesteps
+            field_data = [[float(default_value)] * num_elems for _ in range(num_timesteps)]
+        else:
+            field_data = [[0.0] * num_elems for _ in range(num_timesteps)]
+
+        fields[element_field_name] = field_data
+        self.element_blocks[element_block_id] = [name, info, connectivity, fields]
 
     def delete_element_field(self, element_field_names: Union[str, List[str]],
                             element_block_ids: Union[str, List[int]] = "all"):
-        """Delete element field(s)."""
-        raise NotImplementedError("delete_element_field() is not yet implemented.")
+        """
+        Delete element field(s).
+
+        Parameters
+        ----------
+        element_field_names : str or list of str
+            Element field name(s) to delete
+        element_block_ids : str or list of int, optional
+            Element block IDs ("all" for all blocks)
+        """
+        if isinstance(element_field_names, str):
+            element_field_names = [element_field_names]
+
+        # Determine which blocks to process
+        if element_block_ids == "all":
+            block_ids = list(self.element_blocks.keys())
+        elif isinstance(element_block_ids, int):
+            block_ids = [element_block_ids]
+        else:
+            block_ids = element_block_ids
+
+        for block_id in block_ids:
+            if block_id not in self.element_blocks:
+                continue
+
+            name, info, connectivity, fields = self.element_blocks[block_id]
+            for field_name in element_field_names:
+                if field_name in fields:
+                    del fields[field_name]
+            self.element_blocks[block_id] = [name, info, connectivity, fields]
 
     def element_field_exists(self, element_field_name: str,
                             element_block_ids: Union[str, List[int]] = "all") -> bool:
-        """Check if element field exists."""
-        raise NotImplementedError("element_field_exists() is not yet implemented.")
+        """
+        Check if element field exists.
+
+        Parameters
+        ----------
+        element_field_name : str
+            Element field name
+        element_block_ids : str or list of int, optional
+            Element block IDs to check ("all" for all blocks)
+
+        Returns
+        -------
+        bool
+            True if element field exists in any of the specified blocks
+        """
+        # Determine which blocks to check
+        if element_block_ids == "all":
+            block_ids = list(self.element_blocks.keys())
+        elif isinstance(element_block_ids, int):
+            block_ids = [element_block_ids]
+        else:
+            block_ids = element_block_ids
+
+        for block_id in block_ids:
+            if block_id not in self.element_blocks:
+                continue
+            name, info, connectivity, fields = self.element_blocks[block_id]
+            if element_field_name in fields:
+                return True
+        return False
 
     def get_element_field_names(self, element_block_ids: Union[str, List[int]] = "all") -> List[str]:
-        """Get element field names."""
-        raise NotImplementedError("get_element_field_names() is not yet implemented.")
+        """
+        Get element field names.
+
+        Parameters
+        ----------
+        element_block_ids : str or list of int, optional
+            Element block IDs ("all" for all blocks)
+
+        Returns
+        -------
+        list of str
+            List of unique element field names across specified blocks
+        """
+        # Determine which blocks to check
+        if element_block_ids == "all":
+            block_ids = list(self.element_blocks.keys())
+        elif isinstance(element_block_ids, int):
+            block_ids = [element_block_ids]
+        else:
+            block_ids = element_block_ids
+
+        field_names = set()
+        for block_id in block_ids:
+            if block_id not in self.element_blocks:
+                continue
+            name, info, connectivity, fields = self.element_blocks[block_id]
+            field_names.update(fields.keys())
+
+        return sorted(field_names)
 
     def get_element_field_values(self, element_field_name: str, element_block_id: int,
                                 timestep: Union[str, float] = "last") -> List[float]:
-        """Get element field values."""
-        raise NotImplementedError("get_element_field_values() is not yet implemented.")
+        """
+        Get element field values.
+
+        Parameters
+        ----------
+        element_field_name : str
+            Element field name
+        element_block_id : int
+            Element block ID
+        timestep : str or float, optional
+            Timestep ("last" or timestep value)
+
+        Returns
+        -------
+        list of float
+            Element field values
+        """
+        if element_block_id not in self.element_blocks:
+            self._error(f"Element block {element_block_id} does not exist")
+
+        name, info, connectivity, fields = self.element_blocks[element_block_id]
+
+        if element_field_name not in fields:
+            self._error(f"Element field '{element_field_name}' does not exist in block {element_block_id}")
+
+        field_data = fields[element_field_name]
+
+        # Determine timestep index
+        if timestep == "last":
+            timestep_idx = len(field_data) - 1 if field_data else 0
+        else:
+            # Find timestep index
+            try:
+                timestep_idx = self.timesteps.index(timestep)
+            except ValueError:
+                timestep_idx = 0
+
+        if timestep_idx < 0 or timestep_idx >= len(field_data):
+            timestep_idx = 0
+
+        return field_data[timestep_idx] if field_data else []
 
     def rename_element_field(self, element_field_name: str, new_element_field_name: str,
                             element_block_ids: Union[str, List[int]] = "all"):
-        """Rename an element field."""
-        raise NotImplementedError("rename_element_field() is not yet implemented.")
+        """
+        Rename an element field.
+
+        Parameters
+        ----------
+        element_field_name : str
+            Current element field name
+        new_element_field_name : str
+            New element field name
+        element_block_ids : str or list of int, optional
+            Element block IDs ("all" for all blocks)
+        """
+        # Determine which blocks to process
+        if element_block_ids == "all":
+            block_ids = list(self.element_blocks.keys())
+        elif isinstance(element_block_ids, int):
+            block_ids = [element_block_ids]
+        else:
+            block_ids = element_block_ids
+
+        for block_id in block_ids:
+            if block_id not in self.element_blocks:
+                continue
+
+            name, info, connectivity, fields = self.element_blocks[block_id]
+
+            if element_field_name not in fields:
+                continue
+
+            if new_element_field_name in fields:
+                self._error(f"Element field '{new_element_field_name}' already exists in block {block_id}")
+
+            fields[new_element_field_name] = fields[element_field_name]
+            del fields[element_field_name]
+            self.element_blocks[block_id] = [name, info, connectivity, fields]
 
     def calculate_element_field(self, expression: str, element_block_ids: Union[str, List[int]] = "all"):
         """Calculate element field from expression."""
@@ -1063,28 +1255,139 @@ class ExodusModel:
     # ========================================================================
 
     def create_node_field(self, node_field_name: str, value: Union[str, float, List] = "auto"):
-        """Create a node field."""
-        raise NotImplementedError("create_node_field() is not yet implemented.")
+        """
+        Create a node field.
+
+        Parameters
+        ----------
+        node_field_name : str
+            Name of the node field
+        value : str, float, or list, optional
+            Initial value ("auto" for zeros, float for constant, list for per-timestep values)
+
+        Examples
+        --------
+        >>> model.create_node_field("temperature", 0.0)
+        """
+        if node_field_name in self.node_fields:
+            self._warning(f"Node field '{node_field_name}' already exists, overwriting")
+
+        # Initialize field values for all timesteps
+        num_timesteps = len(self.timesteps) if self.timesteps else 1
+        num_nodes = len(self.nodes)
+
+        if value == "auto":
+            # Create zero-filled arrays
+            field_data = [[0.0] * num_nodes for _ in range(num_timesteps)]
+        elif isinstance(value, (int, float)):
+            # Constant value for all nodes and timesteps
+            field_data = [[float(value)] * num_nodes for _ in range(num_timesteps)]
+        elif isinstance(value, list):
+            # User-provided values
+            field_data = value
+        else:
+            field_data = [[0.0] * num_nodes for _ in range(num_timesteps)]
+
+        self.node_fields[node_field_name] = field_data
 
     def delete_node_field(self, node_field_names: Union[str, List[str]]):
-        """Delete node field(s)."""
-        raise NotImplementedError("delete_node_field() is not yet implemented.")
+        """
+        Delete node field(s).
+
+        Parameters
+        ----------
+        node_field_names : str or list of str
+            Node field name(s) to delete
+        """
+        if isinstance(node_field_names, str):
+            node_field_names = [node_field_names]
+
+        for field_name in node_field_names:
+            if field_name in self.node_fields:
+                del self.node_fields[field_name]
 
     def node_field_exists(self, node_field_name: str) -> bool:
-        """Check if node field exists."""
-        raise NotImplementedError("node_field_exists() is not yet implemented.")
+        """
+        Check if node field exists.
+
+        Parameters
+        ----------
+        node_field_name : str
+            Node field name
+
+        Returns
+        -------
+        bool
+            True if node field exists
+        """
+        return node_field_name in self.node_fields
 
     def get_node_field_names(self) -> List[str]:
-        """Get all node field names."""
-        raise NotImplementedError("get_node_field_names() is not yet implemented.")
+        """
+        Get all node field names.
+
+        Returns
+        -------
+        list of str
+            List of node field names
+        """
+        return list(self.node_fields.keys())
 
     def get_node_field_values(self, node_field_name: str, timestep: Union[str, float] = "last") -> List[float]:
-        """Get node field values."""
-        raise NotImplementedError("get_node_field_values() is not yet implemented.")
+        """
+        Get node field values.
+
+        Parameters
+        ----------
+        node_field_name : str
+            Node field name
+        timestep : str or float, optional
+            Timestep ("last" or timestep value)
+
+        Returns
+        -------
+        list of float
+            Node field values
+
+        """
+        if node_field_name not in self.node_fields:
+            self._error(f"Node field '{node_field_name}' does not exist")
+
+        field_data = self.node_fields[node_field_name]
+
+        # Determine timestep index
+        if timestep == "last":
+            timestep_idx = len(field_data) - 1 if field_data else 0
+        else:
+            # Find timestep index
+            try:
+                timestep_idx = self.timesteps.index(timestep)
+            except ValueError:
+                timestep_idx = 0
+
+        if timestep_idx < 0 or timestep_idx >= len(field_data):
+            timestep_idx = 0
+
+        return field_data[timestep_idx] if field_data else []
 
     def rename_node_field(self, node_field_name: str, new_node_field_name: str):
-        """Rename a node field."""
-        raise NotImplementedError("rename_node_field() is not yet implemented.")
+        """
+        Rename a node field.
+
+        Parameters
+        ----------
+        node_field_name : str
+            Current node field name
+        new_node_field_name : str
+            New node field name
+        """
+        if node_field_name not in self.node_fields:
+            self._error(f"Node field '{node_field_name}' does not exist")
+        if new_node_field_name in self.node_fields:
+            self._error(f"Node field '{new_node_field_name}' already exists")
+
+        self.node_fields[new_node_field_name] = self.node_fields[node_field_name]
+        del self.node_fields[node_field_name]
 
     def calculate_node_field(self, expression: str):
         """Calculate node field from expression."""
@@ -1117,24 +1420,101 @@ class ExodusModel:
     # ========================================================================
 
     def create_global_variable(self, global_variable_name: str, value: Union[str, float, List] = "auto"):
-        """Create a global variable."""
-        raise NotImplementedError("create_global_variable() is not yet implemented.")
+        """
+        Create a global variable.
+
+        Parameters
+        ----------
+        global_variable_name : str
+            Name of the global variable
+        value : str, float, or list, optional
+            Initial value ("auto" for zeros, float for constant, list for per-timestep values)
+
+        Examples
+        --------
+        >>> model.create_global_variable("time_step", 0.01)
+        """
+        if global_variable_name in self.global_variables:
+            self._warning(f"Global variable '{global_variable_name}' already exists, overwriting")
+
+        # Initialize values for all timesteps
+        num_timesteps = len(self.timesteps) if self.timesteps else 1
+
+        if value == "auto":
+            # Create zero-filled array
+            var_data = [0.0] * num_timesteps
+        elif isinstance(value, (int, float)):
+            # Constant value for all timesteps
+            var_data = [float(value)] * num_timesteps
+        elif isinstance(value, list):
+            # User-provided values
+            var_data = value
+        else:
+            var_data = [0.0] * num_timesteps
+
+        self.global_variables[global_variable_name] = var_data
 
     def delete_global_variable(self, global_variable_names: Union[str, List[str]]):
-        """Delete global variable(s)."""
-        raise NotImplementedError("delete_global_variable() is not yet implemented.")
+        """
+        Delete global variable(s).
+
+        Parameters
+        ----------
+        global_variable_names : str or list of str
+            Global variable name(s) to delete
+        """
+        if isinstance(global_variable_names, str):
+            global_variable_names = [global_variable_names]
+
+        for var_name in global_variable_names:
+            if var_name in self.global_variables:
+                del self.global_variables[var_name]
 
     def global_variable_exists(self, global_variable_name: str) -> bool:
-        """Check if global variable exists."""
-        raise NotImplementedError("global_variable_exists() is not yet implemented.")
+        """
+        Check if global variable exists.
+
+        Parameters
+        ----------
+        global_variable_name : str
+            Global variable name
+
+        Returns
+        -------
+        bool
+            True if global variable exists
+        """
+        return global_variable_name in self.global_variables
 
     def get_global_variable_names(self) -> List[str]:
-        """Get all global variable names."""
-        raise NotImplementedError("get_global_variable_names() is not yet implemented.")
+        """
+        Get all global variable names.
+
+        Returns
+        -------
+        list of str
+            List of global variable names
+        """
+        return list(self.global_variables.keys())
 
     def rename_global_variable(self, global_variable_name: str, new_global_variable_name: str):
-        """Rename a global variable."""
-        raise NotImplementedError("rename_global_variable() is not yet implemented.")
+        """
+        Rename a global variable.
+
+        Parameters
+        ----------
+        global_variable_name : str
+            Current global variable name
+        new_global_variable_name : str
+            New global variable name
+        """
+        if global_variable_name not in self.global_variables:
+            self._error(f"Global variable '{global_variable_name}' does not exist")
+        if new_global_variable_name in self.global_variables:
+            self._error(f"Global variable '{new_global_variable_name}' already exists")
+
+        self.global_variables[new_global_variable_name] = self.global_variables[global_variable_name]
+        del self.global_variables[global_variable_name]
 
     def calculate_global_variable(self, expression: str):
         """Calculate global variable from expression."""
@@ -1154,32 +1534,213 @@ class ExodusModel:
 
     def create_side_set_field(self, side_set_field_name: str, side_set_id: int,
                              default_value: Union[str, float] = "auto"):
-        """Create a side set field."""
-        raise NotImplementedError("create_side_set_field() is not yet implemented.")
+        """
+        Create a side set field.
+
+        Parameters
+        ----------
+        side_set_field_name : str
+            Name of the side set field
+        side_set_id : int
+            Side set ID
+        default_value : str or float, optional
+            Initial value ("auto" for zeros, float for constant value)
+
+        Examples
+        --------
+        >>> model.create_side_set_field("pressure", 1, 0.0)
+        """
+        if side_set_id not in self.side_sets:
+            self._error(f"Side set {side_set_id} does not exist")
+
+        name, members, fields = self.side_sets[side_set_id]
+
+        if side_set_field_name in fields:
+            self._warning(f"Side set field '{side_set_field_name}' already exists in side set {side_set_id}, overwriting")
+
+        # Initialize field values for all timesteps
+        num_timesteps = len(self.timesteps) if self.timesteps else 1
+        num_members = len(members)
+
+        if default_value == "auto":
+            # Create zero-filled arrays
+            field_data = [[0.0] * num_members for _ in range(num_timesteps)]
+        elif isinstance(default_value, (int, float)):
+            # Constant value for all members and timesteps
+            field_data = [[float(default_value)] * num_members for _ in range(num_timesteps)]
+        else:
+            field_data = [[0.0] * num_members for _ in range(num_timesteps)]
+
+        fields[side_set_field_name] = field_data
+        self.side_sets[side_set_id] = [name, members, fields]
 
     def delete_side_set_field(self, side_set_field_names: Union[str, List[str]],
                              side_set_ids: Union[str, List[int]] = "all"):
-        """Delete side set field(s)."""
-        raise NotImplementedError("delete_side_set_field() is not yet implemented.")
+        """
+        Delete side set field(s).
+
+        Parameters
+        ----------
+        side_set_field_names : str or list of str
+            Side set field name(s) to delete
+        side_set_ids : str or list of int, optional
+            Side set IDs ("all" for all side sets)
+        """
+        if isinstance(side_set_field_names, str):
+            side_set_field_names = [side_set_field_names]
+
+        # Determine which side sets to process
+        if side_set_ids == "all":
+            set_ids = list(self.side_sets.keys())
+        elif isinstance(side_set_ids, int):
+            set_ids = [side_set_ids]
+        else:
+            set_ids = side_set_ids
+
+        for set_id in set_ids:
+            if set_id not in self.side_sets:
+                continue
+
+            name, members, fields = self.side_sets[set_id]
+            for field_name in side_set_field_names:
+                if field_name in fields:
+                    del fields[field_name]
+            self.side_sets[set_id] = [name, members, fields]
 
     def side_set_field_exists(self, side_set_field_name: str,
                              side_set_ids: Union[str, List[int]] = "all") -> bool:
-        """Check if side set field exists."""
-        raise NotImplementedError("side_set_field_exists() is not yet implemented.")
+        """
+        Check if side set field exists.
+
+        Parameters
+        ----------
+        side_set_field_name : str
+            Side set field name
+        side_set_ids : str or list of int, optional
+            Side set IDs to check ("all" for all side sets)
+
+        Returns
+        -------
+        bool
+            True if side set field exists in any of the specified side sets
+        """
+        # Determine which side sets to check
+        if side_set_ids == "all":
+            set_ids = list(self.side_sets.keys())
+        elif isinstance(side_set_ids, int):
+            set_ids = [side_set_ids]
+        else:
+            set_ids = side_set_ids
+
+        for set_id in set_ids:
+            if set_id not in self.side_sets:
+                continue
+            name, members, fields = self.side_sets[set_id]
+            if side_set_field_name in fields:
+                return True
+        return False
 
     def get_side_set_field_names(self, side_set_id: int) -> List[str]:
-        """Get side set field names."""
-        raise NotImplementedError("get_side_set_field_names() is not yet implemented.")
+        """
+        Get side set field names.
+
+        Parameters
+        ----------
+        side_set_id : int
+            Side set ID
+
+        Returns
+        -------
+        list of str
+            List of side set field names
+        """
+        if side_set_id not in self.side_sets:
+            self._error(f"Side set {side_set_id} does not exist")
+
+        name, members, fields = self.side_sets[side_set_id]
+        return list(fields.keys())
 
     def get_side_set_field_values(self, side_set_field_name: str, side_set_id: int,
                                   timestep: Union[str, float] = "last") -> List[float]:
-        """Get side set field values."""
-        raise NotImplementedError("get_side_set_field_values() is not yet implemented.")
+        """
+        Get side set field values.
+
+        Parameters
+        ----------
+        side_set_field_name : str
+            Side set field name
+        side_set_id : int
+            Side set ID
+        timestep : str or float, optional
+            Timestep ("last" or timestep value)
+
+        Returns
+        -------
+        list of float
+            Side set field values
+        """
+        if side_set_id not in self.side_sets:
+            self._error(f"Side set {side_set_id} does not exist")
+
+        name, members, fields = self.side_sets[side_set_id]
+
+        if side_set_field_name not in fields:
+            self._error(f"Side set field '{side_set_field_name}' does not exist in side set {side_set_id}")
+
+        field_data = fields[side_set_field_name]
+
+        # Determine timestep index
+        if timestep == "last":
+            timestep_idx = len(field_data) - 1 if field_data else 0
+        else:
+            # Find timestep index
+            try:
+                timestep_idx = self.timesteps.index(timestep)
+            except ValueError:
+                timestep_idx = 0
+
+        if timestep_idx < 0 or timestep_idx >= len(field_data):
+            timestep_idx = 0
+
+        return field_data[timestep_idx] if field_data else []
 
     def rename_side_set_field(self, side_set_field_name: str, new_side_set_field_name: str,
                              side_set_ids: Union[str, List[int]] = "all"):
-        """Rename a side set field."""
-        raise NotImplementedError("rename_side_set_field() is not yet implemented.")
+        """
+        Rename a side set field.
+
+        Parameters
+        ----------
+        side_set_field_name : str
+            Current side set field name
+        new_side_set_field_name : str
+            New side set field name
+        side_set_ids : str or list of int, optional
+            Side set IDs ("all" for all side sets)
+        """
+        # Determine which side sets to process
+        if side_set_ids == "all":
+            set_ids = list(self.side_sets.keys())
+        elif isinstance(side_set_ids, int):
+            set_ids = [side_set_ids]
+        else:
+            set_ids = side_set_ids
+
+        for set_id in set_ids:
+            if set_id not in self.side_sets:
+                continue
+
+            name, members, fields = self.side_sets[set_id]
+
+            if side_set_field_name not in fields:
+                continue
+
+            if new_side_set_field_name in fields:
+                self._error(f"Side set field '{new_side_set_field_name}' already exists in side set {set_id}")
+
+            fields[new_side_set_field_name] = fields[side_set_field_name]
+            del fields[side_set_field_name]
+            self.side_sets[set_id] = [name, members, fields]
 
     def calculate_side_set_field(self, expression: str, side_set_ids: Union[str, List[int]] = "all"):
         """Calculate side set field from expression."""
@@ -1194,32 +1755,213 @@ class ExodusModel:
 
     def create_node_set_field(self, node_set_field_name: str, node_set_id: int,
                              default_value: Union[str, float] = "auto"):
-        """Create a node set field."""
-        raise NotImplementedError("create_node_set_field() is not yet implemented.")
+        """
+        Create a node set field.
+
+        Parameters
+        ----------
+        node_set_field_name : str
+            Name of the node set field
+        node_set_id : int
+            Node set ID
+        default_value : str or float, optional
+            Initial value ("auto" for zeros, float for constant value)
+
+        Examples
+        --------
+        >>> model.create_node_set_field("temperature", 1, 0.0)
+        """
+        if node_set_id not in self.node_sets:
+            self._error(f"Node set {node_set_id} does not exist")
+
+        name, members, fields = self.node_sets[node_set_id]
+
+        if node_set_field_name in fields:
+            self._warning(f"Node set field '{node_set_field_name}' already exists in node set {node_set_id}, overwriting")
+
+        # Initialize field values for all timesteps
+        num_timesteps = len(self.timesteps) if self.timesteps else 1
+        num_members = len(members)
+
+        if default_value == "auto":
+            # Create zero-filled arrays
+            field_data = [[0.0] * num_members for _ in range(num_timesteps)]
+        elif isinstance(default_value, (int, float)):
+            # Constant value for all members and timesteps
+            field_data = [[float(default_value)] * num_members for _ in range(num_timesteps)]
+        else:
+            field_data = [[0.0] * num_members for _ in range(num_timesteps)]
+
+        fields[node_set_field_name] = field_data
+        self.node_sets[node_set_id] = [name, members, fields]
 
     def delete_node_set_field(self, node_set_field_names: Union[str, List[str]],
                              node_set_ids: Union[str, List[int]] = "all"):
-        """Delete node set field(s)."""
-        raise NotImplementedError("delete_node_set_field() is not yet implemented.")
+        """
+        Delete node set field(s).
+
+        Parameters
+        ----------
+        node_set_field_names : str or list of str
+            Node set field name(s) to delete
+        node_set_ids : str or list of int, optional
+            Node set IDs ("all" for all node sets)
+        """
+        if isinstance(node_set_field_names, str):
+            node_set_field_names = [node_set_field_names]
+
+        # Determine which node sets to process
+        if node_set_ids == "all":
+            set_ids = list(self.node_sets.keys())
+        elif isinstance(node_set_ids, int):
+            set_ids = [node_set_ids]
+        else:
+            set_ids = node_set_ids
+
+        for set_id in set_ids:
+            if set_id not in self.node_sets:
+                continue
+
+            name, members, fields = self.node_sets[set_id]
+            for field_name in node_set_field_names:
+                if field_name in fields:
+                    del fields[field_name]
+            self.node_sets[set_id] = [name, members, fields]
 
     def node_set_field_exists(self, node_set_field_name: str,
                              node_set_ids: Union[str, List[int]] = "all") -> bool:
-        """Check if node set field exists."""
-        raise NotImplementedError("node_set_field_exists() is not yet implemented.")
+        """
+        Check if node set field exists.
+
+        Parameters
+        ----------
+        node_set_field_name : str
+            Node set field name
+        node_set_ids : str or list of int, optional
+            Node set IDs to check ("all" for all node sets)
+
+        Returns
+        -------
+        bool
+            True if node set field exists in any of the specified node sets
+        """
+        # Determine which node sets to check
+        if node_set_ids == "all":
+            set_ids = list(self.node_sets.keys())
+        elif isinstance(node_set_ids, int):
+            set_ids = [node_set_ids]
+        else:
+            set_ids = node_set_ids
+
+        for set_id in set_ids:
+            if set_id not in self.node_sets:
+                continue
+            name, members, fields = self.node_sets[set_id]
+            if node_set_field_name in fields:
+                return True
+        return False
 
     def get_node_set_field_names(self, node_set_id: int) -> List[str]:
-        """Get node set field names."""
-        raise NotImplementedError("get_node_set_field_names() is not yet implemented.")
+        """
+        Get node set field names.
+
+        Parameters
+        ----------
+        node_set_id : int
+            Node set ID
+
+        Returns
+        -------
+        list of str
+            List of node set field names
+        """
+        if node_set_id not in self.node_sets:
+            self._error(f"Node set {node_set_id} does not exist")
+
+        name, members, fields = self.node_sets[node_set_id]
+        return list(fields.keys())
 
     def get_node_set_field_values(self, node_set_field_name: str, node_set_id: int,
                                   timestep: Union[str, float] = "last") -> List[float]:
-        """Get node set field values."""
-        raise NotImplementedError("get_node_set_field_values() is not yet implemented.")
+        """
+        Get node set field values.
+
+        Parameters
+        ----------
+        node_set_field_name : str
+            Node set field name
+        node_set_id : int
+            Node set ID
+        timestep : str or float, optional
+            Timestep ("last" or timestep value)
+
+        Returns
+        -------
+        list of float
+            Node set field values
+        """
+        if node_set_id not in self.node_sets:
+            self._error(f"Node set {node_set_id} does not exist")
+
+        name, members, fields = self.node_sets[node_set_id]
+
+        if node_set_field_name not in fields:
+            self._error(f"Node set field '{node_set_field_name}' does not exist in node set {node_set_id}")
+
+        field_data = fields[node_set_field_name]
+
+        # Determine timestep index
+        if timestep == "last":
+            timestep_idx = len(field_data) - 1 if field_data else 0
+        else:
+            # Find timestep index
+            try:
+                timestep_idx = self.timesteps.index(timestep)
+            except ValueError:
+                timestep_idx = 0
+
+        if timestep_idx < 0 or timestep_idx >= len(field_data):
+            timestep_idx = 0
+
+        return field_data[timestep_idx] if field_data else []
 
     def rename_node_set_field(self, node_set_field_name: str, new_node_set_field_name: str,
                              node_set_ids: Union[str, List[int]] = "all"):
-        """Rename a node set field."""
-        raise NotImplementedError("rename_node_set_field() is not yet implemented.")
+        """
+        Rename a node set field.
+
+        Parameters
+        ----------
+        node_set_field_name : str
+            Current node set field name
+        new_node_set_field_name : str
+            New node set field name
+        node_set_ids : str or list of int, optional
+            Node set IDs ("all" for all node sets)
+        """
+        # Determine which node sets to process
+        if node_set_ids == "all":
+            set_ids = list(self.node_sets.keys())
+        elif isinstance(node_set_ids, int):
+            set_ids = [node_set_ids]
+        else:
+            set_ids = node_set_ids
+
+        for set_id in set_ids:
+            if set_id not in self.node_sets:
+                continue
+
+            name, members, fields = self.node_sets[set_id]
+
+            if node_set_field_name not in fields:
+                continue
+
+            if new_node_set_field_name in fields:
+                self._error(f"Node set field '{new_node_set_field_name}' already exists in node set {set_id}")
+
+            fields[new_node_set_field_name] = fields[node_set_field_name]
+            del fields[node_set_field_name]
+            self.node_sets[set_id] = [name, members, fields]
 
     def calculate_node_set_field(self, expression: str, node_set_ids: Union[str, List[int]] = "all"):
         """Calculate node set field from expression."""
@@ -1233,16 +1975,126 @@ class ExodusModel:
     # ========================================================================
 
     def create_nodes(self, new_nodes: List[List[float]]):
-        """Create new nodes (was create_node in original)."""
-        raise NotImplementedError("create_nodes() is not yet implemented.")
+        """
+        Create new nodes (was create_node in original).
+
+        Parameters
+        ----------
+        new_nodes : list of list of float
+            List of node coordinates [[x1, y1, z1], [x2, y2, z2], ...]
+
+        Examples
+        --------
+        >>> model.create_nodes([[0.0, 0.0, 0.0], [1.0, 0.0, 0.0]])
+        """
+        for node in new_nodes:
+            # Ensure node has 3 coordinates
+            if len(node) == 2:
+                node = [node[0], node[1], 0.0]
+            elif len(node) == 1:
+                node = [node[0], 0.0, 0.0]
+            elif len(node) > 3:
+                node = node[:3]
+            self.nodes.append(node)
 
     def delete_node(self, node_indices: Union[int, List[int]]):
-        """Delete node(s)."""
-        raise NotImplementedError("delete_node() is not yet implemented.")
+        """
+        Delete node(s).
+
+        Parameters
+        ----------
+        node_indices : int or list of int
+            Node index or indices to delete (0-based)
+
+        Notes
+        -----
+        This will update all connectivity arrays to reflect the new node indices.
+        """
+        if isinstance(node_indices, int):
+            node_indices = [node_indices]
+
+        # Sort in reverse order to delete from end first
+        node_indices = sorted(set(node_indices), reverse=True)
+
+        # Create a mapping of old indices to new indices
+        node_map = {}
+        offset = 0
+        for i in range(len(self.nodes)):
+            if i in node_indices:
+                offset += 1
+                node_map[i] = -1  # Mark as deleted
+            else:
+                node_map[i] = i - offset
+
+        # Delete nodes
+        for idx in node_indices:
+            if 0 <= idx < len(self.nodes):
+                del self.nodes[idx]
+
+        # Update connectivity in all element blocks
+        for block_id, block_data in self.element_blocks.items():
+            name, info, connectivity, fields = block_data
+            new_connectivity = []
+            for element_conn in connectivity:
+                # Update node indices (connectivity is 1-indexed)
+                new_element_conn = []
+                skip_element = False
+                for node_idx in element_conn:
+                    zero_based_idx = node_idx - 1
+                    if zero_based_idx in node_map:
+                        new_idx = node_map[zero_based_idx]
+                        if new_idx == -1:
+                            skip_element = True
+                            break
+                        new_element_conn.append(new_idx + 1)  # Convert back to 1-based
+                    else:
+                        new_element_conn.append(node_idx)
+
+                if not skip_element:
+                    new_connectivity.append(new_element_conn)
+
+            # Update element count
+            info[1] = len(new_connectivity)
+            self.element_blocks[block_id] = [name, info, new_connectivity, fields]
+
+        # Update node sets
+        for ns_id, ns_data in self.node_sets.items():
+            name, members, fields = ns_data
+            new_members = []
+            for node_idx in members:
+                zero_based_idx = node_idx - 1
+                if zero_based_idx in node_map and node_map[zero_based_idx] != -1:
+                    new_members.append(node_map[zero_based_idx] + 1)  # Convert to 1-based
+            self.node_sets[ns_id] = [name, new_members, fields]
 
     def delete_unused_nodes(self):
-        """Delete nodes that are not referenced by any elements."""
-        raise NotImplementedError("delete_unused_nodes() is not yet implemented.")
+        """
+        Delete nodes that are not referenced by any elements.
+
+        Returns
+        -------
+        int
+            Number of nodes deleted
+        """
+        # Find all referenced nodes
+        referenced_nodes = set()
+        for block_id, block_data in self.element_blocks.items():
+            name, info, connectivity, fields = block_data
+            for element_conn in connectivity:
+                for node_idx in element_conn:
+                    referenced_nodes.add(node_idx - 1)  # Convert to 0-based
+
+        # Find unreferenced nodes
+        unreferenced = []
+        for i in range(len(self.nodes)):
+            if i not in referenced_nodes:
+                unreferenced.append(i)
+
+        # Delete unreferenced nodes
+        if unreferenced:
+            self.delete_node(unreferenced)
+
+        return len(unreferenced)
 
     def get_node_count(self) -> int:
         """Get total number of nodes."""
@@ -1253,60 +2105,308 @@ class ExodusModel:
         return self.nodes
 
     def merge_nodes(self, tolerance: float = None, *args, **kwargs):
-        """Merge nodes within tolerance distance."""
-        raise NotImplementedError("merge_nodes() is not yet implemented.")
+        """
+        Merge nodes within tolerance distance.
+
+        Parameters
+        ----------
+        tolerance : float, optional
+            Distance tolerance for merging nodes. If None, uses 1e-6 * length_scale
+
+        Returns
+        -------
+        int
+            Number of nodes merged
+
+        Notes
+        -----
+        This uses a simple O(n²) algorithm. For large meshes, this may be slow.
+        """
+        if tolerance is None:
+            tolerance = 1e-6 * self.get_length_scale()
+
+        if len(self.nodes) == 0:
+            return 0
+
+        # Find nodes to merge (simple O(n²) algorithm)
+        merge_map = {}  # Maps node index to the index it should merge with
+        merged_count = 0
+
+        for i in range(len(self.nodes)):
+            if i in merge_map:
+                continue
+
+            for j in range(i + 1, len(self.nodes)):
+                if j in merge_map:
+                    continue
+
+                # Calculate distance
+                dist_sq = sum((self.nodes[i][k] - self.nodes[j][k])**2 for k in range(3))
+                if dist_sq < tolerance**2:
+                    merge_map[j] = i
+                    merged_count += 1
+
+        if merged_count == 0:
+            return 0
+
+        # Create node mapping (0-based)
+        node_map = {}
+        new_index = 0
+        for i in range(len(self.nodes)):
+            if i in merge_map:
+                # This node merges with another
+                target = merge_map[i]
+                while target in merge_map:
+                    target = merge_map[target]
+                node_map[i] = node_map.get(target, target)
+            else:
+                node_map[i] = new_index
+                new_index += 1
+
+        # Create new nodes list
+        new_nodes = []
+        for i in range(len(self.nodes)):
+            if i not in merge_map:
+                new_nodes.append(self.nodes[i])
+
+        # Update connectivity
+        for block_id, block_data in self.element_blocks.items():
+            name, info, connectivity, fields = block_data
+            new_connectivity = []
+            for element_conn in connectivity:
+                new_element_conn = [node_map[idx - 1] + 1 for idx in element_conn]  # Convert 1-based
+                new_connectivity.append(new_element_conn)
+            self.element_blocks[block_id] = [name, info, new_connectivity, fields]
+
+        # Update node sets
+        for ns_id, ns_data in self.node_sets.items():
+            name, members, fields = ns_data
+            new_members = list(set(node_map[idx - 1] + 1 for idx in members))  # Remove duplicates
+            self.node_sets[ns_id] = [name, sorted(new_members), fields]
+
+        self.nodes = new_nodes
+        return merged_count
 
     def get_closest_node_distance(self) -> float:
-        """Get minimum distance between any two nodes."""
-        raise NotImplementedError("get_closest_node_distance() is not yet implemented.")
+        """
+        Get minimum distance between any two nodes.
+
+        Returns
+        -------
+        float
+            Minimum distance between any pair of nodes
+
+        Notes
+        -----
+        Uses O(n²) algorithm. For large meshes, this may be slow.
+        """
+        if len(self.nodes) < 2:
+            return 0.0
+
+        min_dist = float('inf')
+        for i in range(len(self.nodes)):
+            for j in range(i + 1, len(self.nodes)):
+                dist_sq = sum((self.nodes[i][k] - self.nodes[j][k])**2 for k in range(3))
+                if dist_sq < min_dist:
+                    min_dist = dist_sq
+
+        return min_dist ** 0.5 if min_dist != float('inf') else 0.0
 
     def get_length_scale(self) -> float:
-        """Get characteristic length scale of the model."""
-        raise NotImplementedError("get_length_scale() is not yet implemented.")
+        """
+        Get characteristic length scale of the model.
+
+        Returns
+        -------
+        float
+            Characteristic length scale (diagonal of bounding box)
+
+        Notes
+        -----
+        This is computed as the diagonal of the bounding box.
+        """
+        if len(self.nodes) == 0:
+            return 1.0
+
+        # Find bounding box
+        min_coords = [float('inf')] * 3
+        max_coords = [float('-inf')] * 3
+
+        for node in self.nodes:
+            for i in range(3):
+                if node[i] < min_coords[i]:
+                    min_coords[i] = node[i]
+                if node[i] > max_coords[i]:
+                    max_coords[i] = node[i]
+
+        # Calculate diagonal
+        diagonal_sq = sum((max_coords[i] - min_coords[i])**2 for i in range(3))
+        return diagonal_sq ** 0.5 if diagonal_sq > 0 else 1.0
 
     # ========================================================================
     # Side Set Operations
     # ========================================================================
 
     def create_side_set(self, side_set_id: int, side_set_members: Optional[List] = None):
-        """Create a side set."""
-        raise NotImplementedError("create_side_set() is not yet implemented.")
+        """
+        Create a side set.
+
+        Parameters
+        ----------
+        side_set_id : int
+            Side set ID
+        side_set_members : list of tuples, optional
+            List of (element_id, face_id) tuples
+
+        Examples
+        --------
+        >>> model.create_side_set(1, [(1, 1), (2, 3)])
+        """
+        if side_set_id in self.side_sets:
+            self._warning(f"Side set {side_set_id} already exists, overwriting")
+
+        members = side_set_members if side_set_members is not None else []
+        self.side_sets[side_set_id] = ["", members, {}]  # [name, members, fields]
 
     def delete_side_set(self, side_set_ids: Union[int, List[int]]):
-        """Delete side set(s)."""
-        raise NotImplementedError("delete_side_set() is not yet implemented.")
+        """
+        Delete side set(s).
+
+        Parameters
+        ----------
+        side_set_ids : int or list of int
+            Side set ID(s) to delete
+        """
+        if isinstance(side_set_ids, int):
+            side_set_ids = [side_set_ids]
+
+        for ss_id in side_set_ids:
+            if ss_id in self.side_sets:
+                del self.side_sets[ss_id]
 
     def delete_empty_side_sets(self):
-        """Delete all empty side sets."""
-        raise NotImplementedError("delete_empty_side_sets() is not yet implemented.")
+        """
+        Delete all empty side sets.
+
+        Returns
+        -------
+        int
+            Number of side sets deleted
+        """
+        empty_sets = [ss_id for ss_id, ss_data in self.side_sets.items() if len(ss_data[1]) == 0]
+        self.delete_side_set(empty_sets)
+        return len(empty_sets)
 
     def side_set_exists(self, side_set_id: int) -> bool:
-        """Check if side set exists."""
-        raise NotImplementedError("side_set_exists() is not yet implemented.")
+        """
+        Check if side set exists.
+
+        Parameters
+        ----------
+        side_set_id : int
+            Side set ID
+
+        Returns
+        -------
+        bool
+            True if side set exists
+        """
+        return side_set_id in self.side_sets
 
     def rename_side_set(self, side_set_id: int, new_side_set_id: int):
-        """Rename a side set."""
-        raise NotImplementedError("rename_side_set() is not yet implemented.")
+        """
+        Rename a side set.
+
+        Parameters
+        ----------
+        side_set_id : int
+            Current side set ID
+        new_side_set_id : int
+            New side set ID
+        """
+        if side_set_id not in self.side_sets:
+            self._error(f"Side set {side_set_id} does not exist")
+        if new_side_set_id in self.side_sets:
+            self._error(f"Side set {new_side_set_id} already exists")
+
+        self.side_sets[new_side_set_id] = self.side_sets[side_set_id]
+        del self.side_sets[side_set_id]
 
     def get_side_set_ids(self) -> List[int]:
-        """Get all side set IDs."""
-        raise NotImplementedError("get_side_set_ids() is not yet implemented.")
+        """
+        Get all side set IDs.
+
+        Returns
+        -------
+        list of int
+            List of side set IDs
+        """
+        return list(self.side_sets.keys())
 
     def get_side_set_name(self, side_set_id: int) -> str:
-        """Get side set name."""
-        raise NotImplementedError("get_side_set_name() is not yet implemented.")
+        """
+        Get side set name.
+
+        Parameters
+        ----------
+        side_set_id : int
+            Side set ID
+
+        Returns
+        -------
+        str
+            Side set name
+        """
+        if side_set_id not in self.side_sets:
+            self._error(f"Side set {side_set_id} does not exist")
+        return self.side_sets[side_set_id][0]
 
     def get_all_side_set_names(self) -> Dict[int, str]:
-        """Get all side set names."""
-        raise NotImplementedError("get_all_side_set_names() is not yet implemented.")
+        """
+        Get all side set names.
+
+        Returns
+        -------
+        dict
+            Dictionary mapping side set IDs to names
+        """
+        return {ss_id: ss_data[0] for ss_id, ss_data in self.side_sets.items()}
 
     def get_side_set_members(self, side_set_id: int) -> List[Tuple[int, int]]:
-        """Get side set members as list of (element_id, face_id) tuples."""
-        raise NotImplementedError("get_side_set_members() is not yet implemented.")
+        """
+        Get side set members as list of (element_id, face_id) tuples.
+
+        Parameters
+        ----------
+        side_set_id : int
+            Side set ID
+
+        Returns
+        -------
+        list of tuples
+            List of (element_id, face_id) tuples
+        """
+        if side_set_id not in self.side_sets:
+            self._error(f"Side set {side_set_id} does not exist")
+        return self.side_sets[side_set_id][1]
 
     def add_faces_to_side_set(self, side_set_id: int, new_side_set_members: List[Tuple[int, int]]):
-        """Add faces to an existing side set."""
-        raise NotImplementedError("add_faces_to_side_set() is not yet implemented.")
+        """
+        Add faces to an existing side set.
+
+        Parameters
+        ----------
+        side_set_id : int
+            Side set ID
+        new_side_set_members : list of tuples
+            List of (element_id, face_id) tuples to add
+        """
+        if side_set_id not in self.side_sets:
+            self._error(f"Side set {side_set_id} does not exist")
+
+        name, members, fields = self.side_sets[side_set_id]
+        members.extend(new_side_set_members)
+        self.side_sets[side_set_id] = [name, members, fields]
 
     def create_side_set_from_expression(self, expression: str, side_set_id: int = None, *args, **kwargs):
         """Create side set from expression."""
@@ -1332,48 +2432,203 @@ class ExodusModel:
     # ========================================================================
 
     def create_node_set(self, node_set_id: int, node_set_members: Optional[List[int]] = None):
-        """Create a node set."""
-        raise NotImplementedError("create_node_set() is not yet implemented.")
+        """
+        Create a node set.
+
+        Parameters
+        ----------
+        node_set_id : int
+            Node set ID
+        node_set_members : list of int, optional
+            List of node indices (1-based)
+
+        Examples
+        --------
+        >>> model.create_node_set(1, [1, 2, 3, 4])
+        """
+        if node_set_id in self.node_sets:
+            self._warning(f"Node set {node_set_id} already exists, overwriting")
+
+        members = node_set_members if node_set_members is not None else []
+        self.node_sets[node_set_id] = ["", members, {}]  # [name, members, fields]
 
     def delete_node_set(self, node_set_ids: Union[int, List[int]]):
-        """Delete node set(s)."""
-        raise NotImplementedError("delete_node_set() is not yet implemented.")
+        """
+        Delete node set(s).
+
+        Parameters
+        ----------
+        node_set_ids : int or list of int
+            Node set ID(s) to delete
+        """
+        if isinstance(node_set_ids, int):
+            node_set_ids = [node_set_ids]
+
+        for ns_id in node_set_ids:
+            if ns_id in self.node_sets:
+                del self.node_sets[ns_id]
 
     def delete_empty_node_sets(self):
-        """Delete all empty node sets."""
-        raise NotImplementedError("delete_empty_node_sets() is not yet implemented.")
+        """
+        Delete all empty node sets.
+
+        Returns
+        -------
+        int
+            Number of node sets deleted
+        """
+        empty_sets = [ns_id for ns_id, ns_data in self.node_sets.items() if len(ns_data[1]) == 0]
+        self.delete_node_set(empty_sets)
+        return len(empty_sets)
 
     def node_set_exists(self, node_set_id: int) -> bool:
-        """Check if node set exists."""
-        raise NotImplementedError("node_set_exists() is not yet implemented.")
+        """
+        Check if node set exists.
+
+        Parameters
+        ----------
+        node_set_id : int
+            Node set ID
+
+        Returns
+        -------
+        bool
+            True if node set exists
+        """
+        return node_set_id in self.node_sets
 
     def rename_node_set(self, node_set_id: int, new_node_set_id: int):
-        """Rename a node set."""
-        raise NotImplementedError("rename_node_set() is not yet implemented.")
+        """
+        Rename a node set.
+
+        Parameters
+        ----------
+        node_set_id : int
+            Current node set ID
+        new_node_set_id : int
+            New node set ID
+        """
+        if node_set_id not in self.node_sets:
+            self._error(f"Node set {node_set_id} does not exist")
+        if new_node_set_id in self.node_sets:
+            self._error(f"Node set {new_node_set_id} already exists")
+
+        self.node_sets[new_node_set_id] = self.node_sets[node_set_id]
+        del self.node_sets[node_set_id]
 
     def get_node_set_ids(self) -> List[int]:
-        """Get all node set IDs."""
-        raise NotImplementedError("get_node_set_ids() is not yet implemented.")
+        """
+        Get all node set IDs.
+
+        Returns
+        -------
+        list of int
+            List of node set IDs
+        """
+        return list(self.node_sets.keys())
 
     def get_node_set_name(self, node_set_id: int) -> str:
-        """Get node set name."""
-        raise NotImplementedError("get_node_set_name() is not yet implemented.")
+        """
+        Get node set name.
+
+        Parameters
+        ----------
+        node_set_id : int
+            Node set ID
+
+        Returns
+        -------
+        str
+            Node set name
+        """
+        if node_set_id not in self.node_sets:
+            self._error(f"Node set {node_set_id} does not exist")
+        return self.node_sets[node_set_id][0]
 
     def get_all_node_set_names(self) -> Dict[int, str]:
-        """Get all node set names."""
-        raise NotImplementedError("get_all_node_set_names() is not yet implemented.")
+        """
+        Get all node set names.
+
+        Returns
+        -------
+        dict
+            Dictionary mapping node set IDs to names
+        """
+        return {ns_id: ns_data[0] for ns_id, ns_data in self.node_sets.items()}
 
     def get_node_set_members(self, node_set_id: int) -> List[int]:
-        """Get node set members."""
-        raise NotImplementedError("get_node_set_members() is not yet implemented.")
+        """
+        Get node set members.
+
+        Parameters
+        ----------
+        node_set_id : int
+            Node set ID
+
+        Returns
+        -------
+        list of int
+            List of node indices (1-based)
+        """
+        if node_set_id not in self.node_sets:
+            self._error(f"Node set {node_set_id} does not exist")
+        return self.node_sets[node_set_id][1]
 
     def add_nodes_to_node_set(self, node_set_id: int, new_node_set_members: List[int]):
-        """Add nodes to an existing node set."""
-        raise NotImplementedError("add_nodes_to_node_set() is not yet implemented.")
+        """
+        Add nodes to an existing node set.
+
+        Parameters
+        ----------
+        node_set_id : int
+            Node set ID
+        new_node_set_members : list of int
+            List of node indices (1-based) to add
+        """
+        if node_set_id not in self.node_sets:
+            self._error(f"Node set {node_set_id} does not exist")
+
+        name, members, fields = self.node_sets[node_set_id]
+        members.extend(new_node_set_members)
+        # Remove duplicates and sort
+        members = sorted(set(members))
+        self.node_sets[node_set_id] = [name, members, fields]
 
     def create_node_set_from_side_set(self, node_set_id: int, side_set_id: int):
-        """Create node set from side set members."""
-        raise NotImplementedError("create_node_set_from_side_set() is not yet implemented.")
+        """
+        Create node set from side set members.
+
+        Parameters
+        ----------
+        node_set_id : int
+            Node set ID to create
+        side_set_id : int
+            Side set ID to extract nodes from
+
+        Notes
+        -----
+        This extracts all unique nodes from the elements in the side set.
+        """
+        if side_set_id not in self.side_sets:
+            self._error(f"Side set {side_set_id} does not exist")
+
+        # Get side set members (list of (elem_id, face_id) tuples)
+        side_set_members = self.get_side_set_members(side_set_id)
+
+        # Extract unique nodes from elements
+        node_indices = set()
+        for elem_id, face_id in side_set_members:
+            # Find the element in the blocks
+            for block_id, block_data in self.element_blocks.items():
+                name, info, connectivity, fields = block_data
+                # elem_id is 1-based, connectivity list is 0-based
+                if 0 < elem_id <= len(connectivity):
+                    element_conn = connectivity[elem_id - 1]
+                    node_indices.update(element_conn)
+                    break
+
+        # Create node set
+        self.create_node_set(node_set_id, sorted(node_indices))
 
     # ========================================================================
     # Geometric Transformation Operations

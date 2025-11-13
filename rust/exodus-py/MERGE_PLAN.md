@@ -99,119 +99,122 @@ The ExodusModel class needs to maintain:
 - ⬜ `get_element_block_extents(element_block_ids)` - Get bounding box
 - ⬜ `get_element_edge_length_info(element_block_ids)` - Get edge length stats
 
-## Phase 4: Field Operations (⬜ Not Started)
+## Phase 4: Node Operations (✅ COMPLETED)
 
-### 4.1 Element Fields
-- ⬜ `create_element_field(name, element_block_id, default_value)` - Create field
-- ⬜ `delete_element_field(name, element_block_ids)` - Delete field
-- ⬜ `element_field_exists(name, block_ids)` - Check existence
-- ⬜ `get_element_field_names(element_block_ids)` - Get field names
-- ⬜ `get_element_field_values(name, element_block_id, timestep)` - Get values
-- ⬜ `rename_element_field(old_name, new_name, element_block_ids)` - Rename field
+### 4.1 Basic Operations
+- ✅ `create_nodes(new_nodes)` - Create nodes
+- ✅ `delete_node(indices)` - Delete nodes
+- ✅ `delete_unused_nodes()` - Remove unreferenced nodes
+- ✅ `get_node_count()` - Get node count
+- ✅ `get_nodes()` - Get all nodes
 
-### 4.2 Node Fields
-- ⬜ `create_node_field(name, default_value)` - Create field
-- ⬜ `delete_node_field(name)` - Delete field
-- ⬜ `node_field_exists(name)` - Check existence
-- ⬜ `get_node_field_names()` - Get field names
-- ⬜ `get_node_field_values(name, timestep)` - Get values
-- ⬜ `rename_node_field(node_field_name, new_node_field_name)` - Rename field
+### 4.2 Node Merging & Analysis
+- ✅ `merge_nodes(tolerance, ...)` - Merge close nodes
+- ✅ `get_closest_node_distance()` - Find minimum distance between nodes
+- ✅ `get_length_scale()` - Calculate model bounding box diagonal
 
-### 4.3 Global Variables
-- ⬜ `create_global_variable(name, value)` - Create variable
-- ⬜ `delete_global_variable(name)` - Delete variable
-- ⬜ `global_variable_exists(name)` - Check existence
-- ⬜ `get_global_variable_names()` - Get variable names
-- ⬜ `rename_global_variable(old_name, new_name)` - Rename variable
+## Phase 5: Set Operations (✅ COMPLETED)
 
-### 4.4 Side Set Fields
-- ⬜ `create_side_set_field(name, side_set_id, default_value)` - Create field
-- ⬜ `delete_side_set_field(name, side_set_id)` - Delete field
-- ⬜ `side_set_field_exists(name, side_set_ids)` - Check existence
-- ⬜ `get_side_set_field_names(side_set_id)` - Get field names
-- ⬜ `get_side_set_field_values(name, side_set_id, timestep)` - Get values
-- ⬜ `rename_side_set_field(old_name, new_name, side_set_ids)` - Rename field
+### 5.1 Side Set Operations
+- ✅ `create_side_set(id, members)` - Create side set
+- ✅ `delete_side_set(ids)` - Delete side set
+- ✅ `delete_empty_side_sets()` - Delete empty sets
+- ✅ `side_set_exists(id)` - Check existence
+- ✅ `rename_side_set(id, new_name)` - Rename side set
+- ✅ `get_side_set_ids()` - Get all IDs
+- ✅ `get_side_set_name(id)` - Get side set name
+- ✅ `get_all_side_set_names()` - Get all names
+- ✅ `get_side_set_members(id)` - Get members
+- ✅ `add_faces_to_side_set(side_set_id, new_members)` - Add faces
 
-### 4.5 Node Set Fields
-- ⬜ `create_node_set_field(name, node_set_id, default_value)` - Create field
-- ⬜ `delete_node_set_field(name, node_set_id)` - Delete field
-- ⬜ `node_set_field_exists(name, node_set_ids)` - Check existence
-- ⬜ `get_node_set_field_names(node_set_id)` - Get field names
-- ⬜ `get_node_set_field_values(name, node_set_id, timestep)` - Get values
-- ⬜ `rename_node_set_field(old_name, new_name, node_set_ids)` - Rename field
+### 5.2 Node Set Operations
+- ✅ `create_node_set(id, members)` - Create node set
+- ✅ `delete_node_set(ids)` - Delete node set
+- ✅ `delete_empty_node_sets()` - Delete empty sets
+- ✅ `node_set_exists(id)` - Check existence
+- ✅ `rename_node_set(id, new_name)` - Rename node set
+- ✅ `get_node_set_ids()` - Get all IDs
+- ✅ `get_node_set_name(id)` - Get node set name
+- ✅ `get_all_node_set_names()` - Get all names
+- ✅ `get_node_set_members(id)` - Get members
+- ✅ `add_nodes_to_node_set(node_set_id, new_members)` - Add nodes
+- ✅ `create_node_set_from_side_set(node_set_id, side_set_id)` - Create from side set
 
-### 4.6 Field Calculations
-- ⬜ `calculate_element_field(expression, element_block_ids)` - Calculate element field
-- ⬜ `calculate_node_field(expression)` - Calculate node field
-- ⬜ `calculate_side_set_field(expression, side_set_ids)` - Calculate side set field
-- ⬜ `calculate_node_set_field(expression, node_set_ids)` - Calculate node set field
-- ⬜ `calculate_global_variable(expression)` - Calculate global variable
+## Phase 6: Field Operations (✅ COMPLETED)
+
+### 6.1 Element Fields
+- ✅ `create_element_field(name, element_block_id, default_value)` - Create field
+- ✅ `delete_element_field(name, element_block_ids)` - Delete field
+- ✅ `element_field_exists(name, block_ids)` - Check existence
+- ✅ `get_element_field_names(element_block_ids)` - Get field names
+- ✅ `get_element_field_values(name, element_block_id, timestep)` - Get values
+- ✅ `rename_element_field(old_name, new_name, element_block_ids)` - Rename field
+
+### 6.2 Node Fields
+- ✅ `create_node_field(name, default_value)` - Create field
+- ✅ `delete_node_field(name)` - Delete field
+- ✅ `node_field_exists(name)` - Check existence
+- ✅ `get_node_field_names()` - Get field names
+- ✅ `get_node_field_values(name, timestep)` - Get values
+- ✅ `rename_node_field(node_field_name, new_node_field_name)` - Rename field
+
+### 6.3 Global Variables
+- ✅ `create_global_variable(name, value)` - Create variable
+- ✅ `delete_global_variable(name)` - Delete variable
+- ✅ `global_variable_exists(name)` - Check existence
+- ✅ `get_global_variable_names()` - Get variable names
+- ✅ `rename_global_variable(old_name, new_name)` - Rename variable
+
+### 6.4 Side Set Fields
+- ✅ `create_side_set_field(name, side_set_id, default_value)` - Create field
+- ✅ `delete_side_set_field(name, side_set_id)` - Delete field
+- ✅ `side_set_field_exists(name, side_set_ids)` - Check existence
+- ✅ `get_side_set_field_names(side_set_id)` - Get field names
+- ✅ `get_side_set_field_values(name, side_set_id, timestep)` - Get values
+- ✅ `rename_side_set_field(old_name, new_name, side_set_ids)` - Rename field
+
+### 6.5 Node Set Fields
+- ✅ `create_node_set_field(name, node_set_id, default_value)` - Create field
+- ✅ `delete_node_set_field(name, node_set_id)` - Delete field
+- ✅ `node_set_field_exists(name, node_set_ids)` - Check existence
+- ✅ `get_node_set_field_names(node_set_id)` - Get field names
+- ✅ `get_node_set_field_values(name, node_set_id, timestep)` - Get values
+- ✅ `rename_node_set_field(old_name, new_name, node_set_ids)` - Rename field
+
+### 6.6 Field Calculations (Not Yet Implemented)
+- ⏸️ `calculate_element_field(expression, element_block_ids)` - Calculate element field (requires expression parser)
+- ⏸️ `calculate_node_field(expression)` - Calculate node field (requires expression parser)
+- ⏸️ `calculate_side_set_field(expression, side_set_ids)` - Calculate side set field (requires expression parser)
+- ⏸️ `calculate_node_set_field(expression, node_set_ids)` - Calculate node set field (requires expression parser)
+- ⏸️ `calculate_global_variable(expression)` - Calculate global variable (requires expression parser)
 - ⬜ `output_global_variables(expressions, ...)` - Output global variables
 
-### 4.7 Field Extrema
+### 6.7 Field Extrema (Not Yet Implemented)
 - ⬜ `calculate_element_field_maximum(names, block_ids, ...)` - Find maximum
 - ⬜ `calculate_element_field_minimum(names, block_ids, ...)` - Find minimum
 - ⬜ `calculate_node_field_maximum(names, ...)` - Find node maximum
 - ⬜ `calculate_node_field_minimum(names, ...)` - Find node minimum
 
-### 4.8 Field Conversions
+### 6.8 Field Conversions (Not Yet Implemented)
 - ⬜ `convert_element_field_to_node_field(field_name, ...)` - Element to node
 - ⬜ `convert_node_field_to_element_field(field_name, ...)` - Node to element
 - ⬜ `create_averaged_element_field(field_names, ...)` - Create averaged field
 
-### 4.9 Displacement Fields
+### 6.9 Displacement Fields (Not Yet Implemented)
 - ⬜ `displacement_field_exists()` - Check if displacement field exists
 - ⬜ `create_displacement_field()` - Create displacement field
 
-## Phase 5: Node Operations (⬜ Not Started)
+## Phase 7: Advanced Set Operations (⬜ Not Started)
 
-### 5.1 Basic Operations
-- ⬜ `create_nodes(new_nodes)` - Create nodes (was create_node in original)
-- ⬜ `delete_node(indices)` - Delete nodes
-- ⬜ `delete_unused_nodes()` - Remove unreferenced nodes
-- ⬜ `get_node_count()` - Get node count
-- ⬜ `get_nodes()` - Get all nodes (via nodes attribute)
-
-### 5.2 Node Merging
-- ⬜ `merge_nodes(tolerance, ...)` - Merge close nodes
-- ⬜ `delete_duplicate_elements(element_block_ids)` - Remove duplicates
-
-## Phase 6: Side Set Operations (⬜ Not Started)
-
-### 6.1 Basic Operations
-- ⬜ `create_side_set(id, members, fields)` - Create side set
-- ⬜ `delete_side_set(ids)` - Delete side set
-- ⬜ `delete_empty_side_sets()` - Delete empty sets
-- ⬜ `side_set_exists(id)` - Check existence
-- ⬜ `rename_side_set(id, new_id)` - Rename side set
-- ⬜ `get_side_set_ids()` - Get all IDs
-- ⬜ `get_side_set_name(id)` - Get side set name
-- ⬜ `get_all_side_set_names()` - Get all names
-- ⬜ `get_side_set_members(id)` - Get members
-- ⬜ `add_faces_to_side_set(side_set_id, new_members)` - Add faces
-
-### 6.2 Advanced Operations
+### 7.1 Side Set Advanced Operations
 - ⬜ `create_side_set_from_expression(expression, ...)` - Create from expression
 - ⬜ `convert_side_set_to_cohesive_zone(side_set_ids, new_element_block_id)` - Convert to cohesive
 - ⬜ `get_nodes_in_side_set(side_set_id)` - Get nodes in side set
 - ⬜ `get_side_set_area(side_set_ids)` - Calculate area
 
-## Phase 7: Node Set Operations (⬜ Not Started)
-
-### 7.1 Basic Operations
-- ⬜ `create_node_set(id, members, fields)` - Create node set
-- ⬜ `delete_node_set(ids)` - Delete node set
-- ⬜ `delete_empty_node_sets()` - Delete empty sets
-- ⬜ `node_set_exists(id)` - Check existence
-- ⬜ `rename_node_set(id, new_id)` - Rename node set
-- ⬜ `get_node_set_ids()` - Get all IDs
-- ⬜ `get_node_set_name(id)` - Get node set name
-- ⬜ `get_all_node_set_names()` - Get all names
-- ⬜ `get_node_set_members(id)` - Get members
-- ⬜ `add_nodes_to_node_set(node_set_id, new_members)` - Add nodes
-
-### 7.2 Conversions
-- ⬜ `create_node_set_from_side_set(node_set_id, side_set_id)` - Create from side set
+### 7.2 Node Set Advanced Operations
+- ⬜ `create_node_set_from_expression(expression, ...)` - Create from expression
+- ⬜ `get_nodes_in_node_set(node_set_id)` - Get nodes (alias for get_node_set_members)
 
 ## Phase 8: Timestep Operations (⬜ Not Started)
 
@@ -225,19 +228,19 @@ The ExodusModel class needs to maintain:
 - ⬜ `copy_timestep(timestep, new_timestep)` - Copy timestep
 - ⬜ `create_interpolated_timestep(timestep, interpolation)` - Interpolate timestep
 
-## Phase 9: Metadata & QA Operations (⬜ Not Started)
+## Phase 9: Metadata & QA Operations (🔄 Partially Complete)
 
 ### 9.1 Title & Info
-- ⬜ `set_title(title)` - Set database title
-- ⬜ `get_title()` - Get database title
-- ⬜ `add_info_record(record)` - Add info record
-- ⬜ `get_info_records()` - Get info records
+- ✅ `set_title(title)` - Set database title
+- ✅ `get_title()` - Get database title
+- ✅ `add_info_record(record)` - Add info record
+- ✅ `get_info_records()` - Get info records
 
 ### 9.2 QA Records
 - ⬜ `add_qa_record(...)` - Add QA record
-- ⬜ `get_qa_records()` - Get QA records
+- ✅ `get_qa_records()` - Get QA records
 
-## Phase 10: Geometry Operations (⬜ Not Started)
+## Phase 10: Geometry Operations (🔄 Partially Complete)
 
 ### 10.1 Global Transformations
 - ⬜ `rotate_geometry(axis, angle_in_degrees, ...)` - Rotate entire geometry
@@ -245,8 +248,8 @@ The ExodusModel class needs to maintain:
 - ⬜ `scale_geometry(scale_factor, ...)` - Scale entire geometry
 
 ### 10.2 Utility Operations
-- ⬜ `get_length_scale()` - Get characteristic length scale
-- ⬜ `get_closest_node_distance()` - Get minimum node distance
+- ✅ `get_length_scale()` - Get characteristic length scale
+- ✅ `get_closest_node_distance()` - Get minimum distance between nodes
 - ⬜ `to_lowercase()` - Convert names to lowercase
 
 ## Phase 11: Utility & Helper Methods (⬜ Not Started)
