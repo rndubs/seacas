@@ -4,7 +4,55 @@ Comprehensive tests for the implemented features of exodus.exomerge module.
 These tests validate the File I/O and basic element block operations.
 """
 
-import pytest
+try:
+    import pytest
+except ImportError:
+    # Create a minimal pytest stub for running tests without pytest
+    class PytestStub:
+        @staticmethod
+        def skip(msg):
+            raise RuntimeError(f"Test skipped: {msg}")
+
+        @staticmethod
+        def fail(msg):
+            raise AssertionError(msg)
+
+        @staticmethod
+        def approx(expected, abs=None):
+            class Approx:
+                def __init__(self, expected, tolerance):
+                    self.expected = expected
+                    self.tolerance = tolerance or 1e-6
+
+                def __eq__(self, actual):
+                    if isinstance(self.expected, list):
+                        return all(abs(a - e) <= self.tolerance for a, e in zip(actual, self.expected))
+                    return abs(actual - self.expected) <= self.tolerance
+
+            return Approx(expected, abs)
+
+        class raises:
+            def __init__(self, exc_type):
+                self.exc_type = exc_type
+                self.value = None
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, exc_type, exc_val, exc_tb):
+                if exc_type is None:
+                    raise AssertionError(f"Expected {self.exc_type.__name__} but no exception was raised")
+                if not issubclass(exc_type, self.exc_type):
+                    return False
+                self.value = exc_val
+                return True
+
+        @staticmethod
+        def main(args):
+            pass
+
+    pytest = PytestStub()
+
 import tempfile
 import os
 

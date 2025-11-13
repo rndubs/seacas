@@ -23,10 +23,42 @@ import datetime
 from typing import Optional, List, Dict, Any, Union, Tuple
 
 # Import the exodus-py module (Rust bindings)
+_exodus_available = True
 try:
-    from . import exodus
-except ImportError:
-    import exodus
+    try:
+        from . import exodus
+    except ImportError:
+        import exodus
+except (ImportError, ModuleNotFoundError):
+    _exodus_available = False
+    # Create minimal stubs for testing without Rust module
+    class ExodusStub:
+        class ExodusReader:
+            @staticmethod
+            def open(filename):
+                raise NotImplementedError("Rust exodus module not available")
+
+        class ExodusWriter:
+            @staticmethod
+            def create(filename, opts=None):
+                raise NotImplementedError("Rust exodus module not available")
+
+        class CreateOptions:
+            pass
+
+        class CreateMode:
+            Clobber = None
+
+        class InitParams:
+            pass
+
+        class Block:
+            pass
+
+        class EntityType:
+            pass
+
+    exodus = ExodusStub()
 
 __version__ = "0.1.0"
 VERSION = __version__
@@ -2313,24 +2345,22 @@ class ExodusModel:
         """
         return side_set_id in self.side_sets
 
-    def rename_side_set(self, side_set_id: int, new_side_set_id: int):
+    def rename_side_set(self, side_set_id: int, new_name: str):
         """
-        Rename a side set.
+        Rename a side set (change its name, not its ID).
 
         Parameters
         ----------
         side_set_id : int
-            Current side set ID
-        new_side_set_id : int
-            New side set ID
+            Side set ID
+        new_name : str
+            New name for the side set
         """
         if side_set_id not in self.side_sets:
             self._error(f"Side set {side_set_id} does not exist")
-        if new_side_set_id in self.side_sets:
-            self._error(f"Side set {new_side_set_id} already exists")
 
-        self.side_sets[new_side_set_id] = self.side_sets[side_set_id]
-        del self.side_sets[side_set_id]
+        name, members, fields = self.side_sets[side_set_id]
+        self.side_sets[side_set_id] = [new_name, members, fields]
 
     def get_side_set_ids(self) -> List[int]:
         """
@@ -2497,24 +2527,22 @@ class ExodusModel:
         """
         return node_set_id in self.node_sets
 
-    def rename_node_set(self, node_set_id: int, new_node_set_id: int):
+    def rename_node_set(self, node_set_id: int, new_name: str):
         """
-        Rename a node set.
+        Rename a node set (change its name, not its ID).
 
         Parameters
         ----------
         node_set_id : int
-            Current node set ID
-        new_node_set_id : int
-            New node set ID
+            Node set ID
+        new_name : str
+            New name for the node set
         """
         if node_set_id not in self.node_sets:
             self._error(f"Node set {node_set_id} does not exist")
-        if new_node_set_id in self.node_sets:
-            self._error(f"Node set {new_node_set_id} already exists")
 
-        self.node_sets[new_node_set_id] = self.node_sets[node_set_id]
-        del self.node_sets[node_set_id]
+        name, members, fields = self.node_sets[node_set_id]
+        self.node_sets[node_set_id] = [new_name, members, fields]
 
     def get_node_set_ids(self) -> List[int]:
         """
