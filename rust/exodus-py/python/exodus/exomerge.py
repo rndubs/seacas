@@ -2904,7 +2904,7 @@ class ExodusModel:
             var_names = [expressions]
             header.extend(var_names)
 
-        lines.append("	".join(header))
+        lines.append("\t".join(header))
 
         # Data rows
         num_timesteps = len(self.timesteps) if self.timesteps else 1
@@ -2919,10 +2919,9 @@ class ExodusModel:
                         row.append("0.0")
                 else:
                     row.append("0.0")
-            lines.append("	".join(row))
+            lines.append("\t".join(row))
 
-        result = "
-".join(lines)
+        result = "\n".join(lines)
 
         if output_file:
             with open(output_file, 'w') as f:
