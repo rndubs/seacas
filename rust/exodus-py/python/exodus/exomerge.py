@@ -293,6 +293,166 @@ class ExodusModel:
         unused_nodes = [index for index, used in enumerate(used_node) if not used]
         return unused_nodes
 
+    def _ensure_no_shared_nodes(self, element_block_ids: List[int]):
+        """
+        Ensure no nodes are shared outside the given element blocks.
+
+        Raises an error if nodes are shared between the given element blocks
+        and other element blocks.
+
+        Parameters
+        ----------
+        element_block_ids : list of int
+            Element block IDs to check
+        """
+        affected_nodes = self.get_nodes_in_element_block(element_block_ids)
+        other_block_ids = list(set(self.get_element_block_ids()) - set(element_block_ids))
+
+        if not other_block_ids:
+            return  # No other blocks to share with
+
+        nodes_in_other_blocks = self.get_nodes_in_element_block(other_block_ids)
+        shared_nodes = sorted(set(affected_nodes) & set(nodes_in_other_blocks))
+
+        if shared_nodes:
+            max_nodes_to_display = 20
+            node_list = ", ".join([str(x) for x in shared_nodes[:max_nodes_to_display]])
+            if len(shared_nodes) > max_nodes_to_display:
+                node_list += ", ..."
+            self._error(
+                "Shared nodes detected",
+                f"The specified element blocks share {len(shared_nodes)} nodes with other "
+                f"element blocks: {node_list}. Use unmerge_element_blocks() first."
+            )
+
+    def _translate_nodes(self, offset: List[float], node_indices: Union[str, List[int]] = "all"):
+        """
+        Translate nodes by the given offset.
+
+        Parameters
+        ----------
+        offset : list of float
+            Translation offset [dx, dy, dz]
+        node_indices : str or list of int, optional
+            Node indices to translate (1-based) or "all" (default: "all")
+        """
+        dx, dy, dz = [float(x) for x in offset]
+        if node_indices == "all":
+            self.nodes = [[x + dx, y + dy, z + dz] for x, y, z in self.nodes]
+        else:
+            for index in node_indices:
+                # Convert 1-based to 0-based
+                zero_based_idx = index - 1
+                if 0 <= zero_based_idx < len(self.nodes):
+                    self.nodes[zero_based_idx][0] += dx
+                    self.nodes[zero_based_idx][1] += dy
+                    self.nodes[zero_based_idx][2] += dz
+
+    def _scale_nodes(self, scale_factor: float, node_indices: Union[str, List[int]] = "all",
+                     adjust_displacement_field: Union[str, bool] = "auto"):
+        """
+        Scale nodes by the given scale factor.
+
+        Parameters
+        ----------
+        scale_factor : float
+            Scale factor
+        node_indices : str or list of int, optional
+            Node indices to scale (1-based) or "all" (default: "all")
+        adjust_displacement_field : str or bool, optional
+            Whether to adjust displacement field (default: "auto")
+        """
+        scale_factor = float(scale_factor)
+        if adjust_displacement_field == "auto":
+            adjust_displacement_field = False  # Displacement field not yet implemented
+
+        # Scale the nodal coordinates
+        if node_indices == "all":
+            self.nodes = [[x * scale_factor for x in n] for n in self.nodes]
+        else:
+            for index in node_indices:
+                # Convert 1-based to 0-based
+                zero_based_idx = index - 1
+                if 0 <= zero_based_idx < len(self.nodes):
+                    self.nodes[zero_based_idx] = [x * scale_factor for x in self.nodes[zero_based_idx]]
+
+        # TODO: Scale the displacement field when implemented
+        # if adjust_displacement_field:
+        #     ...
+
+    def _rotate_nodes(self, axis: List[float], angle_in_degrees: float,
+                     node_indices: Union[str, List[int]] = "all",
+                     adjust_displacement_field: Union[str, bool] = "auto"):
+        """
+        Rotate nodes about an axis by the given angle.
+
+        Parameters
+        ----------
+        axis : list of float
+            Rotation axis direction [x, y, z]
+        angle_in_degrees : float
+            Rotation angle in degrees
+        node_indices : str or list of int, optional
+            Node indices to rotate (1-based) or "all" (default: "all")
+        adjust_displacement_field : str or bool, optional
+            Whether to adjust displacement field (default: "auto")
+        """
+        import math
+
+        if adjust_displacement_field == "auto":
+            adjust_displacement_field = False  # Displacement field not yet implemented
+
+        # Normalize axis
+        scale = math.sqrt(sum(x * x for x in axis))
+        ux, uy, uz = [float(x) / scale for x in axis]
+
+        # Convert angle to radians
+        theta = float(angle_in_degrees) * math.pi / 180
+        cost = math.cos(theta)
+        sint = math.sin(theta)
+
+        # If angle is a multiple of 90 degrees, make sin and cos exact to avoid roundoff
+        if angle_in_degrees % 90 == 0:
+            sint = math.floor(sint + 0.5)
+            cost = math.floor(cost + 0.5)
+
+        # Build rotation matrix (Rodrigues' rotation formula)
+        rxx = cost + ux * ux * (1 - cost)
+        rxy = ux * uy * (1 - cost) - uz * sint
+        rxz = ux * uz * (1 - cost) + uy * sint
+        ryx = uy * ux * (1 - cost) + uz * sint
+        ryy = cost + uy * uy * (1 - cost)
+        ryz = uy * uz * (1 - cost) - ux * sint
+        rzx = uz * ux * (1 - cost) - uy * sint
+        rzy = uz * uy * (1 - cost) + ux * sint
+        rzz = cost + uz * uz * (1 - cost)
+
+        # Rotate nodes
+        if node_indices == "all":
+            self.nodes = [
+                [
+                    rxx * x + rxy * y + rxz * z,
+                    ryx * x + ryy * y + ryz * z,
+                    rzx * x + rzy * y + rzz * z,
+                ]
+                for x, y, z in self.nodes
+            ]
+        else:
+            for index in node_indices:
+                # Convert 1-based to 0-based
+                zero_based_idx = index - 1
+                if 0 <= zero_based_idx < len(self.nodes):
+                    n = self.nodes[zero_based_idx]
+                    self.nodes[zero_based_idx] = [
+                        rxx * n[0] + rxy * n[1] + rxz * n[2],
+                        ryx * n[0] + ryy * n[1] + ryz * n[2],
+                        rzx * n[0] + rzy * n[1] + rzz * n[2],
+                    ]
+
+        # TODO: Rotate the displacement field when implemented
+        # if adjust_displacement_field:
+        #     ...
+
     # ========================================================================
     # File I/O Operations
     # ========================================================================
@@ -1031,9 +1191,12 @@ class ExodusModel:
 
         return sorted(node_set)
 
-    def duplicate_element_block(self, source_id: int, target_id: int, duplicate_nodes: bool = False):
+    def duplicate_element_block(self, source_id: int, target_id: int, duplicate_nodes: bool = True):
         """
-        Duplicate an element block.
+        Create a duplicate of the given element block.
+
+        Nodes are duplicated by default. The new element block references
+        these duplicated nodes, not the original ones.
 
         Parameters
         ----------
@@ -1042,12 +1205,90 @@ class ExodusModel:
         target_id : int
             Target element block ID
         duplicate_nodes : bool, optional
-            Whether to duplicate nodes (default: False)
+            Whether to duplicate nodes (default: True)
+
+        Examples
+        --------
+        >>> model.duplicate_element_block(1, 2)
+        >>> model.duplicate_element_block(1, 3, duplicate_nodes=False)
         """
-        raise NotImplementedError(
-            "duplicate_element_block() is not yet implemented. "
-            "Implementation planned for Phase 3."
-        )
+        # Check that source block exists
+        if source_id not in self.element_blocks:
+            self._error(f"Element block {source_id} does not exist")
+
+        # Check that target block doesn't exist
+        if target_id in self.element_blocks:
+            self._error(f"Element block {target_id} already exists")
+
+        # Get source block data
+        name, info, connectivity, fields = self.element_blocks[source_id]
+        info = list(info)  # Make a copy
+        old_connectivity = connectivity
+
+        # Create new nodes if requested
+        if duplicate_nodes:
+            # Get unique nodes from connectivity
+            unique_node_indices = sorted(set(
+                node_idx for element in old_connectivity for node_idx in element
+            ))
+
+            # Create node mapping
+            node_map = {}
+            new_node_offset = len(self.nodes)
+
+            # Duplicate the nodes
+            for old_idx in unique_node_indices:
+                # Convert to 0-based index
+                zero_based_idx = old_idx - 1
+                if 0 <= zero_based_idx < len(self.nodes):
+                    # Add new node
+                    self.nodes.append(list(self.nodes[zero_based_idx]))
+                    node_map[old_idx] = new_node_offset + 1  # 1-based indexing
+                    new_node_offset += 1
+
+            # Create new connectivity with new node indices
+            new_connectivity = []
+            for element in old_connectivity:
+                new_element = [node_map.get(node_idx, node_idx) for node_idx in element]
+                new_connectivity.append(new_element)
+        else:
+            # Just copy the connectivity
+            new_connectivity = [list(element) for element in old_connectivity]
+
+        # Create the new element block
+        self.create_element_block(target_id, info, new_connectivity)
+
+        # Copy the name if it exists
+        if name:
+            self.element_blocks[target_id][0] = name + "_copy"
+
+        # Copy fields
+        new_fields = {}
+        for field_name, all_values in fields.items():
+            new_fields[field_name] = [list(values) for values in all_values]
+        self.element_blocks[target_id][3] = new_fields
+
+        # Update side sets to include references to new block
+        for side_set_id in self.get_side_set_ids():
+            name, members, fields = self.side_sets[side_set_id]
+            new_members = []
+            source_indices = []
+
+            for idx, member in enumerate(members):
+                if member[0] == source_id:
+                    # Add a duplicate member for the new block
+                    new_members.append((target_id, member[1], member[2]))
+                    source_indices.append(idx)
+
+            if new_members:
+                # Add new members
+                members.extend(new_members)
+
+                # Duplicate field values for new members
+                for field_name, all_values in fields.items():
+                    for values in all_values:
+                        new_values = [values[idx] for idx in source_indices]
+                        values.extend(new_values)
 
     def combine_element_blocks(self, element_block_ids: List[int], target_element_block_id: Union[str, int] = "auto"):
         """
@@ -1094,23 +1335,127 @@ class ExodusModel:
         )
 
     def translate_element_blocks(self, element_block_ids: Union[str, List[int]], offset: List[float],
-                                duplicate_nodes: bool = False):
-        """Translate element blocks."""
-        raise NotImplementedError("translate_element_blocks() is not yet implemented.")
+                                 check_for_merged_nodes: bool = True):
+        """
+        Translate the specified element blocks by the given offset.
+
+        Parameters
+        ----------
+        element_block_ids : str, int, or list of int
+            Element block IDs to translate or "all"
+        offset : list of float
+            Translation offset [dx, dy, dz]
+        check_for_merged_nodes : bool, optional
+            Whether to check for shared nodes (default: True)
+
+        Examples
+        --------
+        >>> model.translate_element_blocks(1, [1.0, 2.0, 3.0])
+        >>> model.translate_element_blocks([1, 2], [5.0, 0.0, 0.0])
+        """
+        # Handle "all" case
+        if element_block_ids == "all":
+            element_block_ids = list(self.element_blocks.keys())
+        # Convert single ID to list
+        elif isinstance(element_block_ids, int):
+            element_block_ids = [element_block_ids]
+
+        if check_for_merged_nodes:
+            self._ensure_no_shared_nodes(element_block_ids)
+
+        affected_nodes = self.get_nodes_in_element_block(element_block_ids)
+        self._translate_nodes(offset, affected_nodes)
 
     def reflect_element_blocks(self, element_block_ids: Union[str, List[int]], *args, **kwargs):
         """Reflect element blocks."""
         raise NotImplementedError("reflect_element_blocks() is not yet implemented.")
 
     def scale_element_blocks(self, element_block_ids: Union[str, List[int]], scale_factor: float,
-                            duplicate_nodes: bool = False):
-        """Scale element blocks."""
-        raise NotImplementedError("scale_element_blocks() is not yet implemented.")
+                             check_for_merged_nodes: bool = True,
+                             adjust_displacement_field: Union[str, bool] = "auto"):
+        """
+        Scale all nodes in the given element blocks by the given amount.
+
+        By default, if a displacement field exists, this will also scale the
+        displacement field.
+
+        Parameters
+        ----------
+        element_block_ids : str, int, or list of int
+            Element block IDs to scale or "all"
+        scale_factor : float
+            Scale factor
+        check_for_merged_nodes : bool, optional
+            Whether to check for shared nodes (default: True)
+        adjust_displacement_field : str or bool, optional
+            Whether to adjust displacement field (default: "auto")
+
+        Examples
+        --------
+        >>> model.scale_element_blocks(1, 0.0254)  # Convert inches to meters
+        >>> model.scale_element_blocks([1, 2], 2.0)  # Double size
+        """
+        # Handle "all" case
+        if element_block_ids == "all":
+            element_block_ids = list(self.element_blocks.keys())
+        # Convert single ID to list
+        elif isinstance(element_block_ids, int):
+            element_block_ids = [element_block_ids]
+
+        if adjust_displacement_field == "auto":
+            adjust_displacement_field = False  # Displacement field not yet implemented
+
+        if check_for_merged_nodes:
+            self._ensure_no_shared_nodes(element_block_ids)
+
+        affected_nodes = self.get_nodes_in_element_block(element_block_ids)
+        self._scale_nodes(scale_factor, affected_nodes, adjust_displacement_field)
 
     def rotate_element_blocks(self, element_block_ids: Union[str, List[int]], axis: List[float],
-                             angle_in_degrees: float, duplicate_nodes: bool = False):
-        """Rotate element blocks."""
-        raise NotImplementedError("rotate_element_blocks() is not yet implemented.")
+                              angle_in_degrees: float, check_for_merged_nodes: bool = True,
+                              adjust_displacement_field: Union[str, bool] = "auto"):
+        """
+        Rotate all nodes in the given element blocks by the given amount.
+
+        By default, if a displacement field exists, this will also rotate the
+        displacement field.
+
+        The rotation axis includes the origin and points in the direction of
+        the 'axis' parameter.
+
+        Parameters
+        ----------
+        element_block_ids : str, int, or list of int
+            Element block IDs to rotate or "all"
+        axis : list of float
+            Rotation axis direction [x, y, z]
+        angle_in_degrees : float
+            Rotation angle in degrees
+        check_for_merged_nodes : bool, optional
+            Whether to check for shared nodes (default: True)
+        adjust_displacement_field : str or bool, optional
+            Whether to adjust displacement field (default: "auto")
+
+        Examples
+        --------
+        >>> model.rotate_element_blocks(1, [1, 0, 0], 90)  # Rotate 90° around X-axis
+        >>> model.rotate_element_blocks([1, 2], [0, 0, 1], 45)  # Rotate 45° around Z-axis
+        """
+        # Handle "all" case
+        if element_block_ids == "all":
+            element_block_ids = list(self.element_blocks.keys())
+        # Convert single ID to list
+        elif isinstance(element_block_ids, int):
+            element_block_ids = [element_block_ids]
+
+        if adjust_displacement_field == "auto":
+            adjust_displacement_field = False  # Displacement field not yet implemented
+
+        if check_for_merged_nodes:
+            self._ensure_no_shared_nodes(element_block_ids)
+
+        affected_nodes = self.get_nodes_in_element_block(element_block_ids)
+        self._rotate_nodes(axis, angle_in_degrees, affected_nodes, adjust_displacement_field)
 
     def displace_element_blocks(self, element_block_ids: Union[str, List[int]], *args, **kwargs):
         """Displace element blocks using displacement field."""
@@ -1170,8 +1515,62 @@ class ExodusModel:
         raise NotImplementedError("get_element_block_centroid() is not yet implemented.")
 
     def get_element_block_extents(self, element_block_ids: Union[str, List[int]] = "all") -> List[Tuple[float, float]]:
-        """Get bounding box extents of element blocks."""
-        raise NotImplementedError("get_element_block_extents() is not yet implemented.")
+        """
+        Return the extents of the element blocks as a list.
+
+        The results are returned in the following format:
+        [[min_x, max_x], [min_y, max_y], [min_z, max_z]]
+
+        Parameters
+        ----------
+        element_block_ids : str or list of int, optional
+            Element block IDs or "all" (default: "all")
+
+        Returns
+        -------
+        list of tuple
+            Bounding box extents [[min_x, max_x], [min_y, max_y], [min_z, max_z]]
+
+        Examples
+        --------
+        >>> extents = model.get_element_block_extents(1)
+        >>> extents = model.get_element_block_extents([1, 2])
+        >>> extents = model.get_element_block_extents("all")
+        """
+        # Handle "all" case
+        if element_block_ids == "all":
+            element_block_ids = list(self.element_blocks.keys())
+        # Convert single ID to list
+        elif isinstance(element_block_ids, int):
+            element_block_ids = [element_block_ids]
+
+        if not element_block_ids:
+            self._error("No element blocks specified")
+
+        # Get a set of all nodes within the given element blocks
+        all_nodes = set()
+        for block_id in element_block_ids:
+            if block_id not in self.element_blocks:
+                self._warning(f"Element block {block_id} does not exist")
+                continue
+            connectivity = self.get_connectivity(block_id)
+            for element in connectivity:
+                all_nodes.update(element)
+
+        if not all_nodes:
+            # Return zero extents if no nodes
+            return [[0.0, 0.0], [0.0, 0.0], [0.0, 0.0]]
+
+        # Convert 1-based indices to 0-based
+        all_nodes_zero_based = [idx - 1 for idx in all_nodes if 0 < idx <= len(self.nodes)]
+
+        # Find the extents
+        extents = []
+        for d in range(3):  # x, y, z dimensions
+            node_coords = [self.nodes[node_idx][d] for node_idx in all_nodes_zero_based]
+            extents.append([min(node_coords), max(node_coords)])
+
+        return extents
 
     def get_element_edge_length_info(self, element_block_ids: Union[str, List[int]] = "all") -> Tuple[float, float]:
         """Get minimum and average element edge lengths."""

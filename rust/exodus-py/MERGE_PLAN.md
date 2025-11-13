@@ -61,7 +61,7 @@ The ExodusModel class needs to maintain:
 - ✅ `get_element_block_dimension(element_block_id)` - Get dimension
 
 ### 3.2 Advanced Operations
-- ⬜ `duplicate_element_block(source_id, target_id, duplicate_nodes)` - Duplicate block
+- ✅ `duplicate_element_block(source_id, target_id, duplicate_nodes)` - Duplicate block
 - ⬜ `combine_element_blocks(ids, target_id)` - Combine blocks
 - ⬜ `unmerge_element_blocks(element_block_ids)` - Unmerge blocks
 - ⬜ `process_element_fields(element_block_ids)` - Process fields
@@ -73,10 +73,10 @@ The ExodusModel class needs to maintain:
 - ✅ `get_nodes_in_element_block(element_block_ids)` - Get node list
 
 ### 3.4 Geometric Transformations
-- ⬜ `translate_element_blocks(element_block_ids, offset, ...)` - Translate blocks
+- ✅ `translate_element_blocks(element_block_ids, offset, ...)` - Translate blocks
 - ⬜ `reflect_element_blocks(element_block_ids, ...)` - Reflect blocks
-- ⬜ `scale_element_blocks(element_block_ids, scale_factor, ...)` - Scale blocks
-- ⬜ `rotate_element_blocks(element_block_ids, axis, angle, ...)` - Rotate blocks
+- ✅ `scale_element_blocks(element_block_ids, scale_factor, ...)` - Scale blocks
+- ✅ `rotate_element_blocks(element_block_ids, axis, angle, ...)` - Rotate blocks
 - ⬜ `displace_element_blocks(element_block_ids, ...)` - Displace blocks
 
 ### 3.5 Element Type Conversions
@@ -96,7 +96,7 @@ The ExodusModel class needs to maintain:
 - ⬜ `calculate_element_volumes(element_block_ids, ...)` - Calculate volumes
 - ⬜ `get_element_block_volume(element_block_ids, ...)` - Get total volume
 - ⬜ `get_element_block_centroid(element_block_ids, ...)` - Get centroid
-- ⬜ `get_element_block_extents(element_block_ids)` - Get bounding box
+- ✅ `get_element_block_extents(element_block_ids)` - Get bounding box
 - ⬜ `get_element_edge_length_info(element_block_ids)` - Get edge length stats
 
 ## Phase 4: Node Operations (✅ COMPLETED)
