@@ -592,7 +592,240 @@ c-to-rust/
 
 ---
 
-## Appendix: Test Execution
+## Appendix: Building and Running Tests
+
+### Prerequisites
+
+#### System Dependencies
+
+Install basic build tools and libraries:
+
+**Ubuntu/Debian:**
+```bash
+# Install development tools
+apt-get update
+apt-get install -y gcc g++ gfortran cmake make pkg-config git curl
+
+# Install HDF5 and NetCDF development libraries
+apt-get install -y libhdf5-dev libnetcdf-dev pkg-config
+
+# Verify installation
+pkg-config --modversion hdf5
+pkg-config --modversion netcdf
+```
+
+**Note:** If you don't have sudo access, you can install without sudo:
+```bash
+apt-get install -y libhdf5-dev libnetcdf-dev pkg-config
+```
+
+**macOS:**
+```bash
+# Install Homebrew if not already installed
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+
+# Install dependencies
+brew install hdf5 netcdf cmake
+
+# Set environment variables (add to ~/.zshrc or ~/.bashrc)
+export HDF5_DIR=$(brew --prefix hdf5)
+export NETCDF_DIR=$(brew --prefix netcdf)
+```
+
+#### Install Rust
+
+If Rust is not installed:
+```bash
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+source $HOME/.cargo/env
+```
+
+### Building TPLs (Third-Party Libraries) - For C Compatibility Tests
+
+If you want to run full C compatibility tests, you need to build the C Exodus library from source. This is optional and only needed for full bidirectional testing.
+
+**One-Time Setup:**
+```bash
+cd /path/to/seacas/rust/compat-tests
+
+# Build HDF5, NetCDF, and C Exodus library from source
+# This takes ~10 minutes
+./setup-environment.sh
+
+# For faster builds (use more CPU cores)
+./setup-environment.sh --jobs 8
+
+# To rebuild from scratch
+./setup-environment.sh --clean
+```
+
+This script:
+- Downloads and builds HDF5 1.14.6 and NetCDF 4.9.2 from source
+- Compiles the SEACAS C Exodus library
+- Creates the C verification tool (`verify`)
+- Sets up environment configuration in `env-compat.sh`
+
+### Building the Test Suite
+
+**Build the Rust test file generator:**
+```bash
+cd rust/compat-tests/rust-to-c
+
+# Build the test generator
+cargo build
+
+# Build in release mode for faster execution
+cargo build --release
+```
+
+**Verify the build:**
+```bash
+# List available test commands
+cargo run -- --help
+```
+
+### Running Compatibility Tests
+
+#### Quick Test - Generate Test Files Only
+
+Generate test files without C verification:
+
+```bash
+cd rust/compat-tests/rust-to-c
+
+# Generate a single test file
+cargo run -- qa-records
+
+# Generate all 22 test files
+cargo run -- all
+
+# Check generated files
+ls -lh output/
+```
+
+Available test commands:
+- `basic-mesh-2d` - 2D QUAD4 mesh
+- `basic-mesh-3d` - 3D HEX8 mesh
+- `multiple-blocks` - Multiple element blocks
+- `node-sets` - Node sets with dist factors
+- `side-sets` - Side sets
+- `element-sets` - Element sets
+- `all-sets` - All set types combined
+- `global-variables` - Global variables with time series
+- `nodal-variables` - Nodal variables
+- `element-variables` - Element variables
+- `all-variables` - All variable types
+- `qa-records` - QA records
+- `info-records` - Info records
+- `qa-and-info` - Both QA and info records
+- `node-id-map` - Custom node numbering
+- `element-id-map` - Custom element IDs
+- `both-id-maps` - Both node and element ID maps
+- `block-names` - Named element blocks
+- `set-names` - Named node/side sets
+- `coordinate-names` - Custom axis names
+- `variable-names` - Descriptive variable names
+- `all-names` - All naming features
+- `all` - Generate all test files
+
+#### Full Compatibility Testing - With C Verification
+
+Run full Rust → C compatibility tests:
+
+```bash
+cd rust/compat-tests
+
+# Source the environment (sets library paths)
+source ./env-compat.sh
+
+# Run all compatibility tests (generates files + C verification)
+./run-compat-tests.sh
+
+# Verbose output
+./run-compat-tests.sh --verbose
+
+# Keep failed files for debugging
+./run-compat-tests.sh --keep-failures
+```
+
+#### Manual Testing
+
+Test individual files with C verification:
+
+```bash
+cd rust/compat-tests
+
+# Source environment
+source ./env-compat.sh
+
+# Generate a test file
+cd rust-to-c
+cargo run -- basic-mesh-2d
+
+# Verify with C library
+./verify output/basic_mesh_2d.exo
+
+# Check exit code
+echo $?  # Should be 0 for success
+```
+
+### Inspecting Test Files
+
+Use NetCDF tools to inspect generated Exodus files:
+
+```bash
+# View file header and structure
+ncdump -h output/basic_mesh_2d.exo
+
+# View all data
+ncdump output/basic_mesh_2d.exo
+
+# View with high precision
+ncdump -p 15 output/basic_mesh_2d.exo
+```
+
+### Troubleshooting
+
+**"HDF5/NetCDF library not found" during build:**
+```bash
+# Check if libraries are installed
+pkg-config --modversion hdf5 netcdf
+
+# If not found, install them
+apt-get install -y libhdf5-dev libnetcdf-dev  # Ubuntu/Debian
+brew install hdf5 netcdf  # macOS
+
+# Set PKG_CONFIG_PATH if needed
+export PKG_CONFIG_PATH=/usr/local/lib/pkgconfig:$PKG_CONFIG_PATH
+```
+
+**"cannot find -lexodus" when running verify:**
+```bash
+# Make sure you've sourced the environment
+source ./env-compat.sh
+
+# Or set LD_LIBRARY_PATH manually (Linux)
+export LD_LIBRARY_PATH=/path/to/exodus/lib:$LD_LIBRARY_PATH
+
+# Or DYLD_LIBRARY_PATH (macOS)
+export DYLD_LIBRARY_PATH=/path/to/exodus/lib:$DYLD_LIBRARY_PATH
+```
+
+**Build fails with "buffer size mismatch":**
+This is a known issue with certain test cases. Skip those tests for now:
+```bash
+# Generate individual working tests instead of "all"
+cargo run -- qa-records
+cargo run -- node-id-map
+cargo run -- block-names
+```
+
+**Clean up test files:**
+```bash
+cd rust/compat-tests
+./tools/clean.sh          # Remove generated files
+./tools/clean.sh --all    # Also remove build artifacts
+```
 
 ### Running Compatibility Tests
 
@@ -604,7 +837,7 @@ source ./env-compat.sh
 
 # Individual test
 cd rust-to-c
-cargo run --features netcdf4 -- basic_mesh_2d
+cargo run -- basic_mesh_2d
 ./verify output/basic_mesh_2d.exo
 ```
 

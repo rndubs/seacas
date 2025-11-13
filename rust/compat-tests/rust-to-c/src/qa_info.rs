@@ -4,7 +4,7 @@
 //! and can be read by the C Exodus library.
 
 use anyhow::Result;
-use exodus_rs::{CreateMode, CreateOptions, ExodusFile, InitParams, InfoRecord, QaRecord};
+use exodus_rs::{Block, CreateMode, CreateOptions, EntityType, ExodusFile, InitParams, QaRecord, Topology};
 use std::path::Path;
 
 /// Generate a file with QA records
@@ -21,8 +21,8 @@ pub fn generate_qa_records(path: &Path) -> Result<()> {
         title: "QA Records Test".to_string(),
         num_dim: 2,
         num_nodes: 4,
-        num_elem: 1,
-        num_elem_blk: 1,
+        num_elems: 1,
+        num_elem_blocks: 1,
         num_node_sets: 0,
         num_side_sets: 0,
         ..Default::default()
@@ -33,20 +33,20 @@ pub fn generate_qa_records(path: &Path) -> Result<()> {
     // Add multiple QA records
     let qa_records = vec![
         QaRecord {
-            code: "exodus-rs".to_string(),
-            version: "1.0.0".to_string(),
+            code_name: "exodus-rs".to_string(),
+            code_version: "1.0.0".to_string(),
             date: "2025-11-13".to_string(),
             time: "12:00:00".to_string(),
         },
         QaRecord {
-            code: "rust-to-c-test".to_string(),
-            version: "0.1.0".to_string(),
+            code_name: "rust-to-c-test".to_string(),
+            code_version: "0.1.0".to_string(),
             date: "2025-11-13".to_string(),
             time: "12:00:01".to_string(),
         },
         QaRecord {
-            code: "compatibility".to_string(),
-            version: "1.0".to_string(),
+            code_name: "compatibility".to_string(),
+            code_version: "1.0".to_string(),
             date: "2025-11-13".to_string(),
             time: "12:00:02".to_string(),
         },
@@ -57,21 +57,23 @@ pub fn generate_qa_records(path: &Path) -> Result<()> {
     // Write coordinates
     let x = vec![0.0, 1.0, 1.0, 0.0];
     let y = vec![0.0, 0.0, 1.0, 1.0];
-    file.put_coords(&x, &y, &[])?;
+    file.put_coords(&x, Some(&y), None)?;
 
     // Write element block
-    file.put_block(
-        exodus_rs::types::EntityType::ElemBlock,
-        1,
-        "QUAD4",
-        1,
-        4,
-        0,
-        0,
-    )?;
+    let block = Block {
+        id: 1,
+        entity_type: EntityType::ElemBlock,
+        topology: Topology::Quad4.to_string(),
+        num_entries: 1,
+        num_nodes_per_entry: 4,
+        num_edges_per_entry: 0,
+        num_faces_per_entry: 0,
+        num_attributes: 0,
+    };
+    file.put_block(&block)?;
 
-    let connectivity = vec![1, 2, 3, 4];
-    file.put_connectivity(exodus_rs::types::EntityType::ElemBlock, 1, &connectivity)?;
+    let connectivity = vec![1_i64, 2, 3, 4];
+    file.put_connectivity(1, &connectivity)?;
 
     Ok(())
 }
@@ -90,8 +92,8 @@ pub fn generate_info_records(path: &Path) -> Result<()> {
         title: "Info Records Test".to_string(),
         num_dim: 2,
         num_nodes: 4,
-        num_elem: 1,
-        num_elem_blk: 1,
+        num_elems: 1,
+        num_elem_blocks: 1,
         num_node_sets: 0,
         num_side_sets: 0,
         ..Default::default()
@@ -99,23 +101,13 @@ pub fn generate_info_records(path: &Path) -> Result<()> {
 
     file.init(&params)?;
 
-    // Add multiple info records
+    // Add multiple info records (InfoRecord is just a String)
     let info_records = vec![
-        InfoRecord {
-            text: "This file tests info record compatibility".to_string(),
-        },
-        InfoRecord {
-            text: "Info records store arbitrary text information".to_string(),
-        },
-        InfoRecord {
-            text: "Line 3: Created by exodus-rs Rust implementation".to_string(),
-        },
-        InfoRecord {
-            text: "Line 4: Testing C library interoperability".to_string(),
-        },
-        InfoRecord {
-            text: "Line 5: Should be readable by C Exodus library".to_string(),
-        },
+        "This file tests info record compatibility".to_string(),
+        "Info records store arbitrary text information".to_string(),
+        "Line 3: Created by exodus-rs Rust implementation".to_string(),
+        "Line 4: Testing C library interoperability".to_string(),
+        "Line 5: Should be readable by C Exodus library".to_string(),
     ];
 
     file.put_info_records(&info_records)?;
@@ -123,21 +115,23 @@ pub fn generate_info_records(path: &Path) -> Result<()> {
     // Write coordinates
     let x = vec![0.0, 1.0, 1.0, 0.0];
     let y = vec![0.0, 0.0, 1.0, 1.0];
-    file.put_coords(&x, &y, &[])?;
+    file.put_coords(&x, Some(&y), None)?;
 
     // Write element block
-    file.put_block(
-        exodus_rs::types::EntityType::ElemBlock,
-        1,
-        "QUAD4",
-        1,
-        4,
-        0,
-        0,
-    )?;
+    let block = Block {
+        id: 1,
+        entity_type: EntityType::ElemBlock,
+        topology: Topology::Quad4.to_string(),
+        num_entries: 1,
+        num_nodes_per_entry: 4,
+        num_edges_per_entry: 0,
+        num_faces_per_entry: 0,
+        num_attributes: 0,
+    };
+    file.put_block(&block)?;
 
-    let connectivity = vec![1, 2, 3, 4];
-    file.put_connectivity(exodus_rs::types::EntityType::ElemBlock, 1, &connectivity)?;
+    let connectivity = vec![1_i64, 2, 3, 4];
+    file.put_connectivity(1, &connectivity)?;
 
     Ok(())
 }
@@ -156,8 +150,8 @@ pub fn generate_qa_and_info(path: &Path) -> Result<()> {
         title: "QA and Info Records Test".to_string(),
         num_dim: 2,
         num_nodes: 4,
-        num_elem: 1,
-        num_elem_blk: 1,
+        num_elems: 1,
+        num_elem_blocks: 1,
         num_node_sets: 0,
         num_side_sets: 0,
         ..Default::default()
@@ -168,14 +162,14 @@ pub fn generate_qa_and_info(path: &Path) -> Result<()> {
     // Add QA records
     let qa_records = vec![
         QaRecord {
-            code: "exodus-rs".to_string(),
-            version: "1.0.0".to_string(),
+            code_name: "exodus-rs".to_string(),
+            code_version: "1.0.0".to_string(),
             date: "2025-11-13".to_string(),
             time: "12:00:00".to_string(),
         },
         QaRecord {
-            code: "combined-test".to_string(),
-            version: "0.1.0".to_string(),
+            code_name: "combined-test".to_string(),
+            code_version: "0.1.0".to_string(),
             date: "2025-11-13".to_string(),
             time: "12:00:01".to_string(),
         },
@@ -185,15 +179,9 @@ pub fn generate_qa_and_info(path: &Path) -> Result<()> {
 
     // Add info records
     let info_records = vec![
-        InfoRecord {
-            text: "This file contains both QA and info records".to_string(),
-        },
-        InfoRecord {
-            text: "Testing combined metadata functionality".to_string(),
-        },
-        InfoRecord {
-            text: "Should preserve both record types".to_string(),
-        },
+        "This file contains both QA and info records".to_string(),
+        "Testing combined metadata functionality".to_string(),
+        "Should preserve both record types".to_string(),
     ];
 
     file.put_info_records(&info_records)?;
@@ -201,21 +189,23 @@ pub fn generate_qa_and_info(path: &Path) -> Result<()> {
     // Write coordinates
     let x = vec![0.0, 1.0, 1.0, 0.0];
     let y = vec![0.0, 0.0, 1.0, 1.0];
-    file.put_coords(&x, &y, &[])?;
+    file.put_coords(&x, Some(&y), None)?;
 
     // Write element block
-    file.put_block(
-        exodus_rs::types::EntityType::ElemBlock,
-        1,
-        "QUAD4",
-        1,
-        4,
-        0,
-        0,
-    )?;
+    let block = Block {
+        id: 1,
+        entity_type: EntityType::ElemBlock,
+        topology: Topology::Quad4.to_string(),
+        num_entries: 1,
+        num_nodes_per_entry: 4,
+        num_edges_per_entry: 0,
+        num_faces_per_entry: 0,
+        num_attributes: 0,
+    };
+    file.put_block(&block)?;
 
-    let connectivity = vec![1, 2, 3, 4];
-    file.put_connectivity(exodus_rs::types::EntityType::ElemBlock, 1, &connectivity)?;
+    let connectivity = vec![1_i64, 2, 3, 4];
+    file.put_connectivity(1, &connectivity)?;
 
     Ok(())
 }

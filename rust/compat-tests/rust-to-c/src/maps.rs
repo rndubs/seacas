@@ -4,7 +4,7 @@
 //! and can be read by the C Exodus library.
 
 use anyhow::Result;
-use exodus_rs::{CreateMode, CreateOptions, ExodusFile, InitParams};
+use exodus_rs::{Block, CreateMode, CreateOptions, EntityType, ExodusFile, InitParams, Topology};
 use std::path::Path;
 
 /// Generate a file with custom node ID map
@@ -21,8 +21,8 @@ pub fn generate_node_id_map(path: &Path) -> Result<()> {
         title: "Node ID Map Test".to_string(),
         num_dim: 2,
         num_nodes: 9, // 3x3 grid
-        num_elem: 4,  // 4 quad elements
-        num_elem_blk: 1,
+        num_elems: 4, // 4 quad elements
+        num_elem_blocks: 1,
         num_node_sets: 0,
         num_side_sets: 0,
         ..Default::default()
@@ -38,23 +38,25 @@ pub fn generate_node_id_map(path: &Path) -> Result<()> {
         300, 301, 302, // Top row: IDs 300-302
     ];
 
-    file.put_node_id_map(&node_id_map)?;
+    file.put_id_map(EntityType::NodeMap, &node_id_map)?;
 
     // Write coordinates for 3x3 grid
     let x = vec![0.0, 1.0, 2.0, 0.0, 1.0, 2.0, 0.0, 1.0, 2.0];
     let y = vec![0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 2.0, 2.0, 2.0];
-    file.put_coords(&x, &y, &[])?;
+    file.put_coords(&x, Some(&y), None)?;
 
     // Write element block
-    file.put_block(
-        exodus_rs::types::EntityType::ElemBlock,
-        1,
-        "QUAD4",
-        4,
-        4,
-        0,
-        0,
-    )?;
+    let block = Block {
+        id: 1,
+        entity_type: EntityType::ElemBlock,
+        topology: Topology::Quad4.to_string(),
+        num_entries: 4,
+        num_nodes_per_entry: 4,
+        num_edges_per_entry: 0,
+        num_faces_per_entry: 0,
+        num_attributes: 0,
+    };
+    file.put_block(&block)?;
 
     // Connectivity uses internal (1-based) node indices
     let connectivity = vec![
@@ -63,7 +65,7 @@ pub fn generate_node_id_map(path: &Path) -> Result<()> {
         4, 5, 8, 7, // Element 3
         5, 6, 9, 8, // Element 4
     ];
-    file.put_connectivity(exodus_rs::types::EntityType::ElemBlock, 1, &connectivity)?;
+    file.put_connectivity(1, &connectivity)?;
 
     Ok(())
 }
@@ -82,8 +84,8 @@ pub fn generate_element_id_map(path: &Path) -> Result<()> {
         title: "Element ID Map Test".to_string(),
         num_dim: 2,
         num_nodes: 6,
-        num_elem: 4,
-        num_elem_blk: 1,
+        num_elems: 4,
+        num_elem_blocks: 1,
         num_node_sets: 0,
         num_side_sets: 0,
         ..Default::default()
@@ -99,23 +101,25 @@ pub fn generate_element_id_map(path: &Path) -> Result<()> {
         4000, // Element 4 -> ID 4000
     ];
 
-    file.put_element_id_map(&element_id_map)?;
+    file.put_id_map(EntityType::ElemMap, &element_id_map)?;
 
     // Write coordinates
     let x = vec![0.0, 1.0, 2.0, 0.0, 1.0, 2.0];
     let y = vec![0.0, 0.0, 0.0, 1.0, 1.0, 1.0];
-    file.put_coords(&x, &y, &[])?;
+    file.put_coords(&x, Some(&y), None)?;
 
     // Write element block with triangles
-    file.put_block(
-        exodus_rs::types::EntityType::ElemBlock,
-        1,
-        "TRI3",
-        4,
-        3,
-        0,
-        0,
-    )?;
+    let block = Block {
+        id: 1,
+        entity_type: EntityType::ElemBlock,
+        topology: Topology::Tri3.to_string(),
+        num_entries: 4,
+        num_nodes_per_entry: 3,
+        num_edges_per_entry: 0,
+        num_faces_per_entry: 0,
+        num_attributes: 0,
+    };
+    file.put_block(&block)?;
 
     let connectivity = vec![
         1, 2, 4, // Triangle 1 (ID 1000)
@@ -123,7 +127,7 @@ pub fn generate_element_id_map(path: &Path) -> Result<()> {
         2, 3, 5, // Triangle 3 (ID 3000)
         3, 6, 5, // Triangle 4 (ID 4000)
     ];
-    file.put_connectivity(exodus_rs::types::EntityType::ElemBlock, 1, &connectivity)?;
+    file.put_connectivity(1, &connectivity)?;
 
     Ok(())
 }
@@ -142,8 +146,8 @@ pub fn generate_both_id_maps(path: &Path) -> Result<()> {
         title: "Both ID Maps Test".to_string(),
         num_dim: 2,
         num_nodes: 8, // Hexagonal arrangement
-        num_elem: 6,  // 6 triangles
-        num_elem_blk: 1,
+        num_elems: 6, // 6 triangles
+        num_elem_blocks: 1,
         num_node_sets: 0,
         num_side_sets: 0,
         ..Default::default()
@@ -153,17 +157,17 @@ pub fn generate_both_id_maps(path: &Path) -> Result<()> {
 
     // Custom node IDs (hexagonal pattern)
     let node_id_map = vec![
-        1,   // Center node
-        10,  // Node at 0°
-        20,  // Node at 60°
-        30,  // Node at 120°
-        40,  // Node at 180°
-        50,  // Node at 240°
-        60,  // Node at 300°
-        70,  // Outer node
+        1,  // Center node
+        10, // Node at 0°
+        20, // Node at 60°
+        30, // Node at 120°
+        40, // Node at 180°
+        50, // Node at 240°
+        60, // Node at 300°
+        70, // Outer node
     ];
 
-    file.put_node_id_map(&node_id_map)?;
+    file.put_id_map(EntityType::NodeMap, &node_id_map)?;
 
     // Custom element IDs (non-sequential)
     let element_id_map = vec![
@@ -171,7 +175,7 @@ pub fn generate_both_id_maps(path: &Path) -> Result<()> {
         201, 202, 203, // Last three triangles
     ];
 
-    file.put_element_id_map(&element_id_map)?;
+    file.put_id_map(EntityType::ElemMap, &element_id_map)?;
 
     // Hexagonal coordinates
     use std::f64::consts::PI;
@@ -186,18 +190,20 @@ pub fn generate_both_id_maps(path: &Path) -> Result<()> {
     x.push(2.0); // Outer node
     y.push(0.0);
 
-    file.put_coords(&x, &y, &[])?;
+    file.put_coords(&x, Some(&y), None)?;
 
     // Write element block
-    file.put_block(
-        exodus_rs::types::EntityType::ElemBlock,
-        1,
-        "TRI3",
-        6,
-        3,
-        0,
-        0,
-    )?;
+    let block = Block {
+        id: 1,
+        entity_type: EntityType::ElemBlock,
+        topology: Topology::Tri3.to_string(),
+        num_entries: 6,
+        num_nodes_per_entry: 3,
+        num_edges_per_entry: 0,
+        num_faces_per_entry: 0,
+        num_attributes: 0,
+    };
+    file.put_block(&block)?;
 
     // Connectivity for 6 triangles radiating from center
     let connectivity = vec![
@@ -208,7 +214,7 @@ pub fn generate_both_id_maps(path: &Path) -> Result<()> {
         1, 6, 7, // Triangle 5 (ID 202)
         1, 7, 2, // Triangle 6 (ID 203)
     ];
-    file.put_connectivity(exodus_rs::types::EntityType::ElemBlock, 1, &connectivity)?;
+    file.put_connectivity(1, &connectivity)?;
 
     Ok(())
 }
