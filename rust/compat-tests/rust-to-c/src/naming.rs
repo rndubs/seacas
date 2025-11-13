@@ -312,7 +312,7 @@ pub fn generate_all_names(path: &Path) -> Result<()> {
 
     // Initialize with 2D mesh
     let params = InitParams {
-        title: "All Names Test - Complete Naming Demo".to_string(),
+        title: "All Names Test".to_string(),
         num_dim: 2,
         num_nodes: 6,
         num_elems: 2,
