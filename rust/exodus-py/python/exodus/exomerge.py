@@ -2450,8 +2450,44 @@ class ExodusModel:
         raise NotImplementedError("convert_side_set_to_cohesive_zone() is not yet implemented.")
 
     def get_nodes_in_side_set(self, side_set_id: int) -> List[int]:
-        """Get list of nodes in a side set."""
-        raise NotImplementedError("get_nodes_in_side_set() is not yet implemented.")
+        """
+        Get list of unique nodes in a side set.
+
+        Parameters
+        ----------
+        side_set_id : int
+            Side set ID
+
+        Returns
+        -------
+        list of int
+            Sorted list of unique node indices (1-based) from all elements in the side set
+
+        Notes
+        -----
+        This extracts all unique nodes from the elements referenced in the side set.
+        """
+        if side_set_id not in self.side_sets:
+            self._error(f"Side set {side_set_id} does not exist")
+
+        # Get side set members (list of (elem_id, face_id) tuples)
+        side_set_members = self.get_side_set_members(side_set_id)
+
+        # Extract unique nodes from elements
+        node_indices = set()
+        for elem_id, face_id in side_set_members:
+            # Find the element in the blocks
+            for block_id, block_data in self.element_blocks.items():
+                name, info, connectivity, fields = block_data
+                num_elems = info[1]
+
+                # elem_id is 1-based, connectivity list is 0-based
+                if 0 < elem_id <= num_elems:
+                    element_conn = connectivity[elem_id - 1]
+                    node_indices.update(element_conn)
+                    break
+
+        return sorted(node_indices)
 
     def get_side_set_area(self, side_set_ids: Union[int, List[int]]) -> float:
         """Calculate total area of side set(s)."""
@@ -2658,6 +2694,26 @@ class ExodusModel:
         # Create node set
         self.create_node_set(node_set_id, sorted(node_indices))
 
+    def get_nodes_in_node_set(self, node_set_id: int) -> List[int]:
+        """
+        Get list of nodes in a node set (alias for get_node_set_members).
+
+        Parameters
+        ----------
+        node_set_id : int
+            Node set ID
+
+        Returns
+        -------
+        list of int
+            List of node indices (1-based) in the node set
+
+        See Also
+        --------
+        get_node_set_members : Equivalent method
+        """
+        return self.get_node_set_members(node_set_id)
+
     # ========================================================================
     # Geometric Transformation Operations
     # ========================================================================
@@ -2703,9 +2759,45 @@ class ExodusModel:
         """Get the database title."""
         return self.title
 
-    def add_qa_record(self, *args):
-        """Add a QA record."""
-        raise NotImplementedError("add_qa_record() is not yet implemented.")
+    def add_qa_record(self, code_name: str = None, code_version: str = None,
+                     date: str = None, time: str = None):
+        """
+        Add a QA record.
+
+        Parameters
+        ----------
+        code_name : str, optional
+            Name of the code/software (default: "exodus.exomerge")
+        code_version : str, optional
+            Version of the code (default: module __version__)
+        date : str, optional
+            Date string (default: current date in YYYY/MM/DD format)
+        time : str, optional
+            Time string (default: current time in HH:MM:SS format)
+
+        Notes
+        -----
+        QA records are stored as tuples of (code_name, code_version, date, time).
+        If not specified, defaults will be automatically generated.
+
+        Examples
+        --------
+        >>> model.add_qa_record("MyCode", "1.0", "2024/01/15", "10:30:00")
+        >>> model.add_qa_record()  # Uses defaults
+        """
+        # Set defaults
+        if code_name is None:
+            code_name = "exodus.exomerge"
+        if code_version is None:
+            code_version = __version__
+        if date is None:
+            date = datetime.datetime.now().strftime("%Y/%m/%d")
+        if time is None:
+            time = datetime.datetime.now().strftime("%H:%M:%S")
+
+        # Add QA record as tuple
+        qa_record = (code_name, code_version, date, time)
+        self.qa_records.append(qa_record)
 
     def get_qa_records(self) -> List[Tuple]:
         """Get all QA records."""
@@ -2724,12 +2816,127 @@ class ExodusModel:
     # ========================================================================
 
     def create_timestep(self, timestep: float):
-        """Create a new timestep."""
-        raise NotImplementedError("create_timestep() is not yet implemented.")
+        """
+        Create a new timestep.
+
+        Parameters
+        ----------
+        timestep : float
+            Timestep value to create
+
+        Notes
+        -----
+        This adds a new timestep to the model. All existing fields will be extended
+        with zero-filled data for the new timestep.
+        """
+        if timestep in self.timesteps:
+            self._warning(f"Timestep {timestep} already exists")
+            return
+
+        # Add timestep
+        self.timesteps.append(timestep)
+        self.timesteps.sort()
+
+        # Extend all node fields with zero data
+        for field_name, field_data in self.node_fields.items():
+            num_nodes = len(self.nodes)
+            field_data.append([0.0] * num_nodes)
+
+        # Extend all element fields with zero data
+        for block_id, block_data in self.element_blocks.items():
+            name, info, connectivity, fields = block_data
+            num_elems = info[1]
+            for field_name, field_data in fields.items():
+                field_data.append([0.0] * num_elems)
+
+        # Extend all side set fields with zero data
+        for set_id, set_data in self.side_sets.items():
+            name, members, fields = set_data
+            num_members = len(members)
+            for field_name, field_data in fields.items():
+                field_data.append([0.0] * num_members)
+
+        # Extend all node set fields with zero data
+        for set_id, set_data in self.node_sets.items():
+            name, members, fields = set_data
+            num_members = len(members)
+            for field_name, field_data in fields.items():
+                field_data.append([0.0] * num_members)
+
+        # Extend all global variables with zero data
+        for var_name, var_data in self.global_variables.items():
+            var_data.append(0.0)
 
     def delete_timestep(self, timesteps: Union[float, List[float]]):
-        """Delete one or more timesteps."""
-        raise NotImplementedError("delete_timestep() is not yet implemented.")
+        """
+        Delete one or more timesteps.
+
+        Parameters
+        ----------
+        timesteps : float or list of float
+            Timestep value(s) to delete
+
+        Notes
+        -----
+        This removes timesteps from the model and deletes corresponding field data
+        for all fields (node, element, set, and global variables).
+        """
+        if isinstance(timesteps, (int, float)):
+            timesteps = [float(timesteps)]
+        else:
+            timesteps = [float(t) for t in timesteps]
+
+        # Get indices of timesteps to delete
+        indices_to_delete = []
+        for ts in timesteps:
+            if ts in self.timesteps:
+                indices_to_delete.append(self.timesteps.index(ts))
+
+        if not indices_to_delete:
+            return
+
+        # Sort in reverse order to delete from end first
+        indices_to_delete.sort(reverse=True)
+
+        # Delete timesteps
+        for idx in indices_to_delete:
+            del self.timesteps[idx]
+
+        # Delete corresponding data from all node fields
+        for field_name, field_data in self.node_fields.items():
+            for idx in indices_to_delete:
+                if idx < len(field_data):
+                    del field_data[idx]
+
+        # Delete corresponding data from all element fields
+        for block_id, block_data in self.element_blocks.items():
+            name, info, connectivity, fields = block_data
+            for field_name, field_data in fields.items():
+                for idx in indices_to_delete:
+                    if idx < len(field_data):
+                        del field_data[idx]
+
+        # Delete corresponding data from all side set fields
+        for set_id, set_data in self.side_sets.items():
+            name, members, fields = set_data
+            for field_name, field_data in fields.items():
+                for idx in indices_to_delete:
+                    if idx < len(field_data):
+                        del field_data[idx]
+
+        # Delete corresponding data from all node set fields
+        for set_id, set_data in self.node_sets.items():
+            name, members, fields = set_data
+            for field_name, field_data in fields.items():
+                for idx in indices_to_delete:
+                    if idx < len(field_data):
+                        del field_data[idx]
+
+        # Delete corresponding data from all global variables
+        for var_name, var_data in self.global_variables.items():
+            for idx in indices_to_delete:
+                if idx < len(var_data):
+                    del var_data[idx]
 
     def get_timesteps(self) -> List[float]:
         """Get all timesteps."""
@@ -2740,8 +2947,63 @@ class ExodusModel:
         return timestep in self.timesteps
 
     def copy_timestep(self, timestep: float, new_timestep: float):
-        """Copy a timestep."""
-        raise NotImplementedError("copy_timestep() is not yet implemented.")
+        """
+        Copy a timestep and all its field data.
+
+        Parameters
+        ----------
+        timestep : float
+            Source timestep to copy from
+        new_timestep : float
+            New timestep value to create
+
+        Notes
+        -----
+        This creates a new timestep with all field data copied from the source timestep.
+        """
+        if timestep not in self.timesteps:
+            self._error(f"Source timestep {timestep} does not exist")
+
+        if new_timestep in self.timesteps:
+            self._error(f"Target timestep {new_timestep} already exists")
+
+        # Get index of source timestep
+        source_idx = self.timesteps.index(timestep)
+
+        # Add new timestep
+        self.timesteps.append(new_timestep)
+        self.timesteps.sort()
+
+        # Copy node field data
+        for field_name, field_data in self.node_fields.items():
+            if source_idx < len(field_data):
+                field_data.append(field_data[source_idx].copy())
+
+        # Copy element field data
+        for block_id, block_data in self.element_blocks.items():
+            name, info, connectivity, fields = block_data
+            for field_name, field_data in fields.items():
+                if source_idx < len(field_data):
+                    field_data.append(field_data[source_idx].copy())
+
+        # Copy side set field data
+        for set_id, set_data in self.side_sets.items():
+            name, members, fields = set_data
+            for field_name, field_data in fields.items():
+                if source_idx < len(field_data):
+                    field_data.append(field_data[source_idx].copy())
+
+        # Copy node set field data
+        for set_id, set_data in self.node_sets.items():
+            name, members, fields = set_data
+            for field_name, field_data in fields.items():
+                if source_idx < len(field_data):
+                    field_data.append(field_data[source_idx].copy())
+
+        # Copy global variable data
+        for var_name, var_data in self.global_variables.items():
+            if source_idx < len(var_data):
+                var_data.append(var_data[source_idx])
 
     def create_interpolated_timestep(self, timestep: float, interpolation: str = "cubic"):
         """Create an interpolated timestep."""
