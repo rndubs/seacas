@@ -2720,16 +2720,165 @@ class ExodusModel:
 
     def rotate_geometry(self, axis: List[float], angle_in_degrees: float,
                        adjust_displacement_field: Union[str, bool] = "auto"):
-        """Rotate the entire geometry."""
-        raise NotImplementedError("rotate_geometry() is not yet implemented.")
+        """
+        Rotate the entire geometry around an axis.
+
+        Parameters
+        ----------
+        axis : list of float
+            Rotation axis [x, y, z] (will be normalized)
+        angle_in_degrees : float
+            Rotation angle in degrees
+        adjust_displacement_field : str or bool, optional
+            Whether to adjust displacement fields (default: "auto")
+            "auto" will adjust if a field named "displacement" exists
+            True will adjust the "displacement" field
+            False will not adjust any fields
+
+        Examples
+        --------
+        >>> model.rotate_geometry([0, 0, 1], 90)  # Rotate 90° around z-axis
+        >>> model.rotate_geometry([1, 0, 0], 45)  # Rotate 45° around x-axis
+
+        Notes
+        -----
+        Uses Rodrigues' rotation formula to rotate all node coordinates.
+        If adjust_displacement_field is enabled, displacement vectors are also rotated.
+        """
+        import math
+
+        # Convert angle to radians
+        angle = math.radians(angle_in_degrees)
+
+        # Normalize axis
+        axis_length = math.sqrt(sum(a**2 for a in axis[:3]))
+        if axis_length == 0:
+            self._error("Rotation axis cannot be zero vector")
+
+        ax, ay, az = [a / axis_length for a in axis[:3]]
+
+        # Precompute trig values
+        cos_a = math.cos(angle)
+        sin_a = math.sin(angle)
+        one_minus_cos = 1.0 - cos_a
+
+        # Rodrigues' rotation matrix
+        # R = I*cos(a) + [axis]×*sin(a) + axis⊗axis*(1-cos(a))
+        r11 = cos_a + ax*ax*one_minus_cos
+        r12 = ax*ay*one_minus_cos - az*sin_a
+        r13 = ax*az*one_minus_cos + ay*sin_a
+
+        r21 = ay*ax*one_minus_cos + az*sin_a
+        r22 = cos_a + ay*ay*one_minus_cos
+        r23 = ay*az*one_minus_cos - ax*sin_a
+
+        r31 = az*ax*one_minus_cos - ay*sin_a
+        r32 = az*ay*one_minus_cos + ax*sin_a
+        r33 = cos_a + az*az*one_minus_cos
+
+        # Apply rotation to all nodes
+        for i, node in enumerate(self.nodes):
+            # Get current coordinates (pad with zeros if needed)
+            x = node[0] if len(node) > 0 else 0.0
+            y = node[1] if len(node) > 1 else 0.0
+            z = node[2] if len(node) > 2 else 0.0
+
+            # Apply rotation matrix
+            new_x = r11*x + r12*y + r13*z
+            new_y = r21*x + r22*y + r23*z
+            new_z = r31*x + r32*y + r33*z
+
+            # Update node coordinates
+            self.nodes[i][0] = new_x
+            if len(node) > 1:
+                self.nodes[i][1] = new_y
+            if len(node) > 2:
+                self.nodes[i][2] = new_z
+
+        # Adjust displacement field if requested
+        should_adjust = False
+        if adjust_displacement_field == "auto":
+            should_adjust = "displacement" in self.node_fields
+        elif adjust_displacement_field is True:
+            should_adjust = "displacement" in self.node_fields
+
+        if should_adjust:
+            # Rotate displacement vectors for all timesteps
+            disp_field = self.node_fields["displacement"]
+            for timestep_idx in range(len(disp_field)):
+                timestep_data = disp_field[timestep_idx]
+                for node_idx in range(len(timestep_data)):
+                    disp = timestep_data[node_idx]
+                    # Handle both list and scalar displacement values
+                    if isinstance(disp, (list, tuple)):
+                        if len(disp) >= 3:
+                            dx, dy, dz = disp[0], disp[1], disp[2]
+                            # Apply rotation matrix to displacement vector
+                            new_dx = r11*dx + r12*dy + r13*dz
+                            new_dy = r21*dx + r22*dy + r23*dz
+                            new_dz = r31*dx + r32*dy + r33*dz
+                            timestep_data[node_idx] = [new_dx, new_dy, new_dz]
 
     def translate_geometry(self, offset: List[float]):
-        """Translate the entire geometry."""
-        raise NotImplementedError("translate_geometry() is not yet implemented.")
+        """
+        Translate the entire geometry by an offset.
+
+        Parameters
+        ----------
+        offset : list of float
+            Translation offset [dx, dy, dz]
+
+        Examples
+        --------
+        >>> model.translate_geometry([1.0, 0.0, 0.0])  # Move 1 unit in x
+        >>> model.translate_geometry([0.0, 2.5, 0.0])  # Move 2.5 units in y
+
+        Notes
+        -----
+        This adds the offset to all node coordinates.
+        """
+        # Ensure offset has 3 components
+        if len(offset) == 2:
+            offset = [offset[0], offset[1], 0.0]
+        elif len(offset) == 1:
+            offset = [offset[0], 0.0, 0.0]
+        elif len(offset) > 3:
+            offset = offset[:3]
+
+        # Translate all nodes
+        for i, node in enumerate(self.nodes):
+            for j in range(min(len(node), 3)):
+                self.nodes[i][j] += offset[j]
 
     def scale_geometry(self, scale_factor: float, adjust_displacement_field: Union[str, bool] = "auto"):
-        """Scale the entire geometry."""
-        raise NotImplementedError("scale_geometry() is not yet implemented.")
+        """
+        Scale the entire geometry by a factor.
+
+        Parameters
+        ----------
+        scale_factor : float
+            Scaling factor (e.g., 2.0 doubles size, 0.5 halves size)
+        adjust_displacement_field : str or bool, optional
+            Whether to adjust displacement fields (default: "auto")
+            Currently ignored in this implementation.
+
+        Examples
+        --------
+        >>> model.scale_geometry(2.0)    # Double the model size
+        >>> model.scale_geometry(0.001)  # Convert from mm to m
+
+        Notes
+        -----
+        This multiplies all node coordinates by the scale factor.
+        Displacement field adjustment is not yet implemented.
+        """
+        if scale_factor <= 0:
+            self._error("Scale factor must be positive")
+
+        # Scale all nodes
+        for i, node in enumerate(self.nodes):
+            for j in range(len(node)):
+                self.nodes[i][j] *= scale_factor
 
     # ========================================================================
     # Summarize and Info
@@ -2741,11 +2890,67 @@ class ExodusModel:
 
         This method prints information about all element blocks, node sets,
         side sets, fields, and other model properties.
+
+        Examples
+        --------
+        >>> model.summarize()
         """
-        raise NotImplementedError(
-            "summarize() is not yet implemented. "
-            "Implementation planned for Phase 11."
-        )
+        print("=" * 70)
+        print(f"Model Summary: {self.title}")
+        print("=" * 70)
+
+        # Basic information
+        print(f"\nNodes: {len(self.nodes)}")
+        print(f"Timesteps: {len(self.timesteps)}")
+        if self.timesteps:
+            print(f"  Range: {min(self.timesteps)} to {max(self.timesteps)}")
+
+        # Element blocks
+        print(f"\nElement Blocks: {len(self.element_blocks)}")
+        if self.element_blocks:
+            for block_id, block_data in self.element_blocks.items():
+                name, info, connectivity, fields = block_data
+                elem_type, num_elems, nodes_per_elem, num_attrs = info
+                print(f"  Block {block_id}: {name}")
+                print(f"    Type: {elem_type}, Elements: {num_elems}, Nodes/Elem: {nodes_per_elem}")
+                if fields:
+                    print(f"    Fields: {', '.join(fields.keys())}")
+
+        # Side sets
+        print(f"\nSide Sets: {len(self.side_sets)}")
+        if self.side_sets:
+            for set_id, set_data in self.side_sets.items():
+                name, members, fields = set_data
+                print(f"  Set {set_id}: {name}, Members: {len(members)}")
+                if fields:
+                    print(f"    Fields: {', '.join(fields.keys())}")
+
+        # Node sets
+        print(f"\nNode Sets: {len(self.node_sets)}")
+        if self.node_sets:
+            for set_id, set_data in self.node_sets.items():
+                name, members, fields = set_data
+                print(f"  Set {set_id}: {name}, Members: {len(members)}")
+                if fields:
+                    print(f"    Fields: {', '.join(fields.keys())}")
+
+        # Node fields
+        print(f"\nNode Fields: {len(self.node_fields)}")
+        if self.node_fields:
+            for field_name in self.node_fields.keys():
+                print(f"  {field_name}")
+
+        # Global variables
+        print(f"\nGlobal Variables: {len(self.global_variables)}")
+        if self.global_variables:
+            for var_name in self.global_variables.keys():
+                print(f"  {var_name}")
+
+        # QA and Info records
+        print(f"\nQA Records: {len(self.qa_records)}")
+        print(f"Info Records: {len(self.info_records)}")
+
+        print("=" * 70)
 
     # ========================================================================
     # Metadata Operations
@@ -3014,8 +3219,53 @@ class ExodusModel:
     # ========================================================================
 
     def to_lowercase(self):
-        """Convert all names to lowercase."""
-        raise NotImplementedError("to_lowercase() is not yet implemented.")
+        """
+        Convert all names in the model to lowercase.
+
+        Notes
+        -----
+        This converts the following to lowercase:
+        - Database title
+        - Element block names
+        - Side set names
+        - Node set names
+        - Field names (node, element, side set, node set, global variables)
+
+        Examples
+        --------
+        >>> model.to_lowercase()
+        """
+        # Convert title
+        self.title = self.title.lower()
+
+        # Convert element block names
+        for block_id, block_data in self.element_blocks.items():
+            name, info, connectivity, fields = block_data
+            # Convert block name
+            name = name.lower()
+            # Convert field names
+            new_fields = {fname.lower(): fdata for fname, fdata in fields.items()}
+            self.element_blocks[block_id] = [name, info, connectivity, new_fields]
+
+        # Convert side set names
+        for set_id, set_data in self.side_sets.items():
+            name, members, fields = set_data
+            name = name.lower()
+            new_fields = {fname.lower(): fdata for fname, fdata in fields.items()}
+            self.side_sets[set_id] = [name, members, new_fields]
+
+        # Convert node set names
+        for set_id, set_data in self.node_sets.items():
+            name, members, fields = set_data
+            name = name.lower()
+            new_fields = {fname.lower(): fdata for fname, fdata in fields.items()}
+            self.node_sets[set_id] = [name, members, new_fields]
+
+        # Convert node field names
+        self.node_fields = {fname.lower(): fdata for fname, fdata in self.node_fields.items()}
+
+        # Convert global variable names
+        self.global_variables = {vname.lower(): vdata for vname, vdata in self.global_variables.items()}
 
     def build_hex8_cube(self, element_block_id: Union[str, int] = "auto",
                        extents: Union[float, List[float]] = 1.0, divisions: Union[int, List[int]] = 3):
@@ -3035,8 +3285,95 @@ class ExodusModel:
         --------
         >>> model = ExodusModel()
         >>> model.build_hex8_cube(element_block_id=1, extents=2.0, divisions=5)
+
+        Notes
+        -----
+        Creates a structured hexahedral mesh in the range [0, extents].
+        The mesh will have divisions+1 nodes in each direction.
         """
-        raise NotImplementedError("build_hex8_cube() is not yet implemented.")
+        # Process extents
+        if isinstance(extents, (int, float)):
+            ex, ey, ez = float(extents), float(extents), float(extents)
+        elif len(extents) == 1:
+            ex, ey, ez = float(extents[0]), float(extents[0]), float(extents[0])
+        elif len(extents) == 2:
+            ex, ey, ez = float(extents[0]), float(extents[1]), float(extents[1])
+        else:
+            ex, ey, ez = float(extents[0]), float(extents[1]), float(extents[2])
+
+        # Process divisions
+        if isinstance(divisions, int):
+            nx, ny, nz = divisions, divisions, divisions
+        elif len(divisions) == 1:
+            nx, ny, nz = divisions[0], divisions[0], divisions[0]
+        elif len(divisions) == 2:
+            nx, ny, nz = divisions[0], divisions[1], divisions[1]
+        else:
+            nx, ny, nz = divisions[0], divisions[1], divisions[2]
+
+        # Determine block ID
+        if element_block_id == "auto":
+            # Find next available ID
+            if self.element_blocks:
+                block_id = max(self.element_blocks.keys()) + 1
+            else:
+                block_id = 1
+        else:
+            block_id = element_block_id
+
+        # Create nodes
+        nodes_x = nx + 1
+        nodes_y = ny + 1
+        nodes_z = nz + 1
+
+        dx = ex / nx
+        dy = ey / ny
+        dz = ez / nz
+
+        node_offset = len(self.nodes)
+
+        for k in range(nodes_z):
+            for j in range(nodes_y):
+                for i in range(nodes_x):
+                    x = i * dx
+                    y = j * dy
+                    z = k * dz
+                    self.nodes.append([x, y, z])
+
+        # Create connectivity (HEX8 elements)
+        # HEX8 node ordering: bottom face (z=0) then top face (z=1)
+        # Bottom: 0-1-2-3 (counter-clockwise looking down)
+        # Top: 4-5-6-7 (counter-clockwise looking down)
+        connectivity = []
+
+        def node_index(i, j, k):
+            """Get global node index from structured indices."""
+            return node_offset + k * nodes_x * nodes_y + j * nodes_x + i + 1  # 1-indexed
+
+        for k in range(nz):
+            for j in range(ny):
+                for i in range(nx):
+                    # Bottom face nodes (z = k)
+                    n0 = node_index(i, j, k)
+                    n1 = node_index(i+1, j, k)
+                    n2 = node_index(i+1, j+1, k)
+                    n3 = node_index(i, j+1, k)
+                    # Top face nodes (z = k+1)
+                    n4 = node_index(i, j, k+1)
+                    n5 = node_index(i+1, j, k+1)
+                    n6 = node_index(i+1, j+1, k+1)
+                    n7 = node_index(i, j+1, k+1)
+
+                    connectivity.append([n0, n1, n2, n3, n4, n5, n6, n7])
+
+        # Create element block
+        num_elems = nx * ny * nz
+        self.element_blocks[block_id] = [
+            f"HEX8_Cube",
+            ["HEX8", num_elems, 8, 0],  # elem_type, num_elems, nodes_per_elem, num_attrs
+            connectivity,
+            {}  # fields
+        ]
 
 
 # Module-level helper function for displaying banner
