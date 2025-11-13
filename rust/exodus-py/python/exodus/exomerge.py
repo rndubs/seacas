@@ -792,15 +792,41 @@ class ExodusModel:
         """
         Get a text representation of the input deck.
 
+        Many SIERRA applications, when running a problem, will store the input
+        deck within the results file. This function retrieves that
+        information, if it exists. Note that due to format restriction, the
+        retrieved input deck may not exactly match the original file.
+
         Returns
         -------
         str
-            String representation of the model
+            String representation of the model input deck
+
+        Examples
+        --------
+        >>> model = import_model('results.e')
+        >>> input_deck = model.get_input_deck()
         """
-        raise NotImplementedError(
-            "get_input_deck() is not yet implemented. "
-            "Implementation planned for Phase 2."
-        )
+        continuation = False
+        input_deck = []
+        begin_depth = 0
+        first_word = None
+
+        for line in self.info_records:
+            if not continuation:
+                first_word = line.strip().split(" ", 1)[0].lower() if line.strip() else ""
+            if not continuation and first_word == "begin":
+                begin_depth += 1
+            if begin_depth > 0:
+                if continuation:
+                    input_deck[-1] = input_deck[-1][:-1] + line
+                else:
+                    input_deck.append(line)
+            continuation = begin_depth > 0 and len(line) == 80 and line.endswith("\\")
+            if not continuation and first_word == "end":
+                begin_depth -= 1
+
+        return "\n".join(input_deck)
 
     # ========================================================================
     # Element Block Operations
@@ -1290,49 +1316,301 @@ class ExodusModel:
                         new_values = [values[idx] for idx in source_indices]
                         values.extend(new_values)
 
-    def combine_element_blocks(self, element_block_ids: List[int], target_element_block_id: Union[str, int] = "auto"):
+    def combine_element_blocks(self, element_block_ids: Union[str, List[int]], target_element_block_id: Union[str, int] = "auto"):
         """
-        Combine multiple element blocks into one.
+        Combine multiple element blocks into a single block.
+
+        By default, the target element block id will be the smallest of the
+        merged element block ids. The element blocks to combine must have the
+        same element type.
 
         Parameters
         ----------
-        element_block_ids : list of int
-            Element block IDs to combine
+        element_block_ids : str or list of int
+            Element block IDs to combine or "all"
         target_element_block_id : str or int, optional
-            Target element block ID (default: "auto")
+            Target element block ID (default: "auto" uses smallest ID)
+
+        Examples
+        --------
+        >>> model.combine_element_blocks([1, 2, 3])
+        >>> model.combine_element_blocks('all', 1)
         """
-        raise NotImplementedError(
-            "combine_element_blocks() is not yet implemented. "
-            "Implementation planned for Phase 3."
+        # Handle "all" case
+        if element_block_ids == "all":
+            element_block_ids = list(self.element_blocks.keys())
+        elif isinstance(element_block_ids, int):
+            element_block_ids = [element_block_ids]
+
+        if not element_block_ids:
+            self._error("No element blocks specified")
+
+        # Determine target block ID
+        if target_element_block_id == "auto":
+            target_element_block_id = min(element_block_ids)
+
+        # Single block - just rename if needed
+        if len(element_block_ids) == 1:
+            if element_block_ids[0] != target_element_block_id:
+                self.rename_element_block(element_block_ids[0], target_element_block_id)
+            return
+
+        # Ensure all blocks have the same number of nodes per element
+        nodes_per_element_set = set(
+            self.get_nodes_per_element(block_id) for block_id in element_block_ids
         )
+        if len(nodes_per_element_set) != 1:
+            self._error(
+                "Incompatible element types",
+                "The number of nodes per element on each element block to be merged "
+                "must be the same. This is an ExodusII file requirement."
+            )
+
+        # Warn if element types differ
+        element_types = set()
+        for block_id in element_block_ids:
+            if block_id not in self.element_blocks:
+                self._error(f"Element block {block_id} does not exist")
+            element_types.add(self.element_blocks[block_id][1][0].lower())
+
+        if len(element_types) != 1:
+            self._warning(
+                "Element types vary",
+                "The element types of the merged blocks differ. This may cause issues."
+            )
+
+        # Create new connectivity by combining all blocks
+        new_connectivity = []
+        for block_id in element_block_ids:
+            new_connectivity.extend(self.get_connectivity(block_id))
+
+        # Create new info based on first block
+        first_block_info = self.element_blocks[element_block_ids[0]][1]
+        new_info = list(first_block_info)
+        new_info[1] = len(new_connectivity)  # Total element count
+
+        # Find a temporary element block ID that doesn't exist
+        temp_id = max(self.element_blocks.keys()) + 1 if self.element_blocks else 1
+        while temp_id in self.element_blocks:
+            temp_id += 1
+
+        # Create element offset mapping for side sets
+        # new_block_info[old_block_id] = (new_block_id, element_offset)
+        new_block_info = {}
+        element_offset = 0
+        for block_id in element_block_ids:
+            new_block_info[block_id] = (temp_id, element_offset)
+            element_offset += self.element_blocks[block_id][1][1]
+
+        # Get all element field names across all blocks
+        all_field_names = set()
+        for block_id in element_block_ids:
+            all_field_names.update(self.element_blocks[block_id][3].keys())
+
+        # Ensure all blocks have all fields (create missing ones)
+        give_warning = True
+        for field_name in all_field_names:
+            for block_id in element_block_ids:
+                if field_name not in self.element_blocks[block_id][3]:
+                    if give_warning:
+                        self._warning(
+                            "Inconsistent element fields",
+                            f'The element field "{field_name}" is not defined on all element blocks. '
+                            "It will be created. Future warnings of this type will be suppressed."
+                        )
+                        give_warning = False
+                    self.create_element_field(field_name, block_id)
+
+        # Combine all field data
+        new_fields = {}
+        for field_name in all_field_names:
+            num_timesteps = len(self.timesteps) if self.timesteps else 1
+            new_values = [[] for _ in range(num_timesteps)]
+            for block_id in element_block_ids:
+                field_data = self.element_blocks[block_id][3][field_name]
+                for timestep_idx, values in enumerate(field_data):
+                    new_values[timestep_idx].extend(values)
+            new_fields[field_name] = new_values
+
+        # Create the new combined block
+        self.create_element_block(temp_id, new_info, new_connectivity)
+        self.element_blocks[temp_id][3] = new_fields
+
+        # Update side set members to point to new block
+        for side_set_id in self.get_side_set_ids():
+            name, members, fields = self.side_sets[side_set_id]
+            new_members = []
+            for element_block_id, element_index, face_index in members:
+                if element_block_id in new_block_info:
+                    new_block_id, offset = new_block_info[element_block_id]
+                    new_members.append((new_block_id, element_index + offset, face_index))
+                else:
+                    new_members.append((element_block_id, element_index, face_index))
+            self.side_sets[side_set_id][1] = new_members
+
+        # Delete old blocks (nodes won't be orphaned by this procedure)
+        for block_id in element_block_ids:
+            self.delete_element_block(block_id, delete_orphaned_nodes=False)
+
+        # Rename temporary block to target ID
+        self.rename_element_block(temp_id, target_element_block_id)
 
     def unmerge_element_blocks(self, element_block_ids: Union[str, List[int]] = "all"):
         """
-        Split element blocks so they don't share nodes.
+        Duplicate nodes to unmerge element blocks.
+
+        For element blocks that share one or more nodes, duplicate these nodes
+        and unmerge the element blocks. For example, if element block A and B
+        share node 1, that node will be duplicated, block A will use the
+        original node and block B will use the duplicate.
+
+        Node fields, node sets, and node set fields are updated accordingly.
 
         Parameters
         ----------
         element_block_ids : str or list of int, optional
             Element block IDs (default: "all")
+
+        Examples
+        --------
+        >>> model.unmerge_element_blocks()
+        >>> model.unmerge_element_blocks([1, 2, 3])
         """
-        raise NotImplementedError(
-            "unmerge_element_blocks() is not yet implemented. "
-            "Implementation planned for Phase 3."
-        )
+        # Handle "all" case
+        if element_block_ids == "all":
+            element_block_ids = list(self.element_blocks.keys())
+        elif isinstance(element_block_ids, int):
+            element_block_ids = [element_block_ids]
+
+        if len(element_block_ids) <= 1:
+            return
+
+        # Separate each pair of blocks
+        # Keep nodes on block id1 the same and create new nodes for block id2
+        import itertools
+        for id1, id2 in itertools.combinations(element_block_ids, 2):
+            # Find shared nodes between the two blocks
+            nodes1 = set(self.get_nodes_in_element_block(id1))
+            nodes2 = set(self.get_nodes_in_element_block(id2))
+            shared_nodes_set = nodes1 & nodes2
+            shared_nodes = sorted(shared_nodes_set)
+
+            if not shared_nodes:
+                continue
+
+            # Create duplicate nodes
+            new_node_coords = [list(self.nodes[node_idx - 1]) for node_idx in shared_nodes]
+            new_node_indices = list(range(len(self.nodes), len(self.nodes) + len(shared_nodes)))
+            self.create_nodes(new_node_coords)
+
+            # Create mapping from old to new node indices (1-based)
+            node_mapping = {old_idx: new_idx + 1 for old_idx, new_idx in zip(shared_nodes, new_node_indices)}
+
+            # Update element block 2 connectivity to use new nodes
+            connectivity = self.get_connectivity(id2)
+            for elem_idx, element_nodes in enumerate(connectivity):
+                connectivity[elem_idx] = [node_mapping.get(n, n) for n in element_nodes]
+
+            # Update node fields for the new nodes
+            for field_name, timestep_data in self.node_fields.items():
+                for timestep_values in timestep_data:
+                    for old_node, new_node in zip(shared_nodes, new_node_indices):
+                        # Node indices in node_fields are 0-based
+                        old_idx = old_node - 1
+                        if old_idx < len(timestep_values):
+                            timestep_values.append(timestep_values[old_idx])
+
+            # Update node sets: if a shared node is in a node set, add its duplicate
+            for node_set_id in self.get_node_set_ids():
+                name, members, fields = self.node_sets[node_set_id]
+                new_members = []
+                member_indices = []
+                for idx, member_node in enumerate(members):
+                    if member_node in shared_nodes:
+                        new_member = node_mapping[member_node]
+                        new_members.append(new_member)
+                        member_indices.append(idx)
+
+                if new_members:
+                    members.extend(new_members)
+                    # Duplicate field values for new members
+                    for field_name, timestep_data in fields.items():
+                        for timestep_values in timestep_data:
+                            for idx in member_indices:
+                                timestep_values.append(timestep_values[idx])
 
     def process_element_fields(self, element_block_ids: Union[str, List[int]] = "all"):
         """
-        Process element fields to ensure consistency.
+        Process element field information to create node based fields.
+
+        For element fields with 8 integration points, this takes the average.
+        This is useful for fully integrated or selective deviatoric elements
+        within the SIERRA/SM code.
+
+        For element fields with 9 integration points, this takes the first one.
+        This is useful for q1p0 elements within the SIERRA/SM code.
+
+        This function is provided as a convenience for post processing hex8
+        elements with multiple integration points.
 
         Parameters
         ----------
         element_block_ids : str or list of int, optional
             Element block IDs (default: "all")
+
+        Examples
+        --------
+        >>> model.process_element_fields()
+        >>> model.process_element_fields([1, 2])
         """
-        raise NotImplementedError(
-            "process_element_fields() is not yet implemented. "
-            "Implementation planned for Phase 3."
-        )
+        import re
+
+        # Handle "all" case
+        if element_block_ids == "all":
+            element_block_ids = list(self.element_blocks.keys())
+        elif isinstance(element_block_ids, int):
+            element_block_ids = [element_block_ids]
+
+        # For each element block
+        for block_id in element_block_ids:
+            if block_id not in self.element_blocks:
+                self._warning(f"Element block {block_id} does not exist")
+                continue
+
+            element_field_names = self.get_element_field_names(block_id)
+            for element_field_name in element_field_names:
+                # If it's the first integration point, count the total number
+                # and process accordingly
+                if re.match(r"^.*_1$", element_field_name):
+                    prefix = element_field_name[:-1]
+                    points = 1
+                    while self.element_field_exists(prefix + str(points + 1), block_id):
+                        points += 1
+
+                    if points == 9:
+                        # For 9 points, use the first one
+                        self.rename_element_field(prefix + "1", prefix[:-1], block_id)
+                        for i in range(2, 10):
+                            self.delete_element_field(prefix + str(i), block_id)
+                    elif points == 8:
+                        # For 8 points, average them
+                        self.create_averaged_element_field(
+                            [prefix + str(x) for x in range(1, 9)],
+                            prefix[:-1],
+                            block_id,
+                        )
+                        for i in range(1, 9):
+                            self.delete_element_field(prefix + str(i), block_id)
+
+        # Convert all element fields to node fields
+        all_element_field_names = self.get_element_field_names()
+        for element_field_name in all_element_field_names:
+            self.convert_element_field_to_node_field(element_field_name)
+
+        # Delete all element fields
+        for block_id in self.get_element_block_ids():
+            for field_name in list(self.element_blocks[block_id][3].keys()):
+                self.delete_element_field(field_name, block_id)
 
     def translate_element_blocks(self, element_block_ids: Union[str, List[int]], offset: List[float],
                                  check_for_merged_nodes: bool = True):
@@ -1366,9 +1644,69 @@ class ExodusModel:
         affected_nodes = self.get_nodes_in_element_block(element_block_ids)
         self._translate_nodes(offset, affected_nodes)
 
-    def reflect_element_blocks(self, element_block_ids: Union[str, List[int]], *args, **kwargs):
-        """Reflect element blocks."""
-        raise NotImplementedError("reflect_element_blocks() is not yet implemented.")
+    def reflect_element_blocks(self, element_block_ids: Union[str, List[int]],
+                               normal: List[float], point: Optional[List[float]] = None,
+                               check_for_merged_nodes: bool = True):
+        """
+        Reflect element blocks across a plane.
+
+        Parameters
+        ----------
+        element_block_ids : str, int, or list of int
+            Element block IDs to reflect or "all"
+        normal : list of float
+            Normal vector to the reflection plane [nx, ny, nz]
+        point : list of float, optional
+            Point on the reflection plane [x, y, z] (default: origin)
+        check_for_merged_nodes : bool, optional
+            Whether to check for shared nodes (default: True)
+
+        Examples
+        --------
+        >>> model.reflect_element_blocks(1, [1, 0, 0])  # Reflect across yz-plane
+        >>> model.reflect_element_blocks([1, 2], [0, 1, 0], [0, 0, 0])
+        """
+        import math
+
+        # Handle "all" case
+        if element_block_ids == "all":
+            element_block_ids = list(self.element_blocks.keys())
+        elif isinstance(element_block_ids, int):
+            element_block_ids = [element_block_ids]
+
+        if check_for_merged_nodes:
+            self._ensure_no_shared_nodes(element_block_ids)
+
+        # Default point is origin
+        if point is None:
+            point = [0.0, 0.0, 0.0]
+
+        # Normalize the normal vector
+        norm = math.sqrt(sum(n * n for n in normal))
+        if norm == 0:
+            self._error("Normal vector cannot be zero")
+        nx, ny, nz = [n / norm for n in normal]
+        px, py, pz = point
+
+        # Get affected nodes
+        affected_nodes = self.get_nodes_in_element_block(element_block_ids)
+
+        # Reflect each node across the plane
+        # Reflection formula: v' = v - 2 * dot(v-p, n) * n
+        for node_idx in affected_nodes:
+            zero_based_idx = node_idx - 1
+            if 0 <= zero_based_idx < len(self.nodes):
+                x, y, z = self.nodes[zero_based_idx]
+                # Vector from point to node
+                vx, vy, vz = x - px, y - py, z - pz
+                # Dot product with normal
+                dot = vx * nx + vy * ny + vz * nz
+                # Reflected position
+                self.nodes[zero_based_idx] = [
+                    x - 2 * dot * nx,
+                    y - 2 * dot * ny,
+                    z - 2 * dot * nz
+                ]
 
     def scale_element_blocks(self, element_block_ids: Union[str, List[int]], scale_factor: float,
                              check_for_merged_nodes: bool = True,
@@ -1457,9 +1795,85 @@ class ExodusModel:
         affected_nodes = self.get_nodes_in_element_block(element_block_ids)
         self._rotate_nodes(axis, angle_in_degrees, affected_nodes, adjust_displacement_field)
 
-    def displace_element_blocks(self, element_block_ids: Union[str, List[int]], *args, **kwargs):
-        """Displace element blocks using displacement field."""
-        raise NotImplementedError("displace_element_blocks() is not yet implemented.")
+    def displace_element_blocks(self, element_block_ids: Union[str, List[int]],
+                                node_field_name: Optional[str] = None,
+                                timestep: Union[str, float] = "last",
+                                scale_factor: float = 1.0,
+                                check_for_merged_nodes: bool = True):
+        """
+        Displace element blocks using a displacement field.
+
+        Parameters
+        ----------
+        element_block_ids : str, int, or list of int
+            Element block IDs to displace or "all"
+        node_field_name : str, optional
+            Name of displacement field prefix (looks for DISP_X, DISP_Y, DISP_Z or field_X, field_Y, field_Z)
+        timestep : str or float, optional
+            Timestep to use (default: "last")
+        scale_factor : float, optional
+            Scale factor for displacement (default: 1.0)
+        check_for_merged_nodes : bool, optional
+            Whether to check for shared nodes (default: True)
+
+        Examples
+        --------
+        >>> model.displace_element_blocks(1)  # Use default DISP field
+        >>> model.displace_element_blocks([1, 2], "DISP", 1.0, 2.0)
+        """
+        # Handle "all" case
+        if element_block_ids == "all":
+            element_block_ids = list(self.element_blocks.keys())
+        elif isinstance(element_block_ids, int):
+            element_block_ids = [element_block_ids]
+
+        if check_for_merged_nodes:
+            self._ensure_no_shared_nodes(element_block_ids)
+
+        # Determine displacement field name
+        if node_field_name is None:
+            node_field_name = "DISP"
+
+        # Look for displacement components
+        disp_x_name = f"{node_field_name}_X"
+        disp_y_name = f"{node_field_name}_Y"
+        disp_z_name = f"{node_field_name}_Z"
+
+        # Check if displacement fields exist
+        if not all(self.node_field_exists(name) for name in [disp_x_name, disp_y_name, disp_z_name]):
+            self._error(
+                "Displacement fields not found",
+                f"Could not find displacement fields {disp_x_name}, {disp_y_name}, {disp_z_name}"
+            )
+
+        # Get timestep index
+        if timestep == "last":
+            timestep_idx = len(self.timesteps) - 1 if self.timesteps else 0
+        elif timestep == "first":
+            timestep_idx = 0
+        else:
+            # Find closest timestep
+            if not self.timesteps:
+                self._error("No timesteps available")
+            timestep_idx = min(range(len(self.timesteps)),
+                             key=lambda i: abs(self.timesteps[i] - float(timestep)))
+
+        # Get displacement values
+        disp_x = self.get_node_field_values(disp_x_name, timestep_idx)
+        disp_y = self.get_node_field_values(disp_y_name, timestep_idx)
+        disp_z = self.get_node_field_values(disp_z_name, timestep_idx)
+
+        # Get affected nodes
+        affected_nodes = self.get_nodes_in_element_block(element_block_ids)
+
+        # Apply displacement to each node
+        for node_idx in affected_nodes:
+            zero_based_idx = node_idx - 1
+            if 0 <= zero_based_idx < len(self.nodes):
+                if zero_based_idx < len(disp_x):
+                    self.nodes[zero_based_idx][0] += scale_factor * disp_x[zero_based_idx]
+                    self.nodes[zero_based_idx][1] += scale_factor * disp_y[zero_based_idx]
+                    self.nodes[zero_based_idx][2] += scale_factor * disp_z[zero_based_idx]
 
     def convert_element_blocks(self, element_block_ids: Union[str, List[int]], new_element_type: str):
         """Convert element blocks to a new element type."""
@@ -1811,32 +2225,280 @@ class ExodusModel:
 
     def calculate_element_field_maximum(self, element_field_names: Union[str, List[str]],
                                        element_block_ids: Union[str, List[int]] = "all",
-                                       calculate_location: bool = False,
-                                       calculate_block_id: bool = False) -> Union[float, Tuple]:
-        """Find maximum value of element field(s)."""
-        raise NotImplementedError("calculate_element_field_maximum() is not yet implemented.")
+                                       timestep: Union[str, float] = "last") -> Union[float, Dict[str, float]]:
+        """
+        Find maximum value of element field(s).
+
+        Parameters
+        ----------
+        element_field_names : str or list of str
+            Element field name(s) to find maximum for
+        element_block_ids : str or list of int, optional
+            Element block IDs (default: "all")
+        timestep : str or float, optional
+            Timestep to use (default: "last")
+
+        Returns
+        -------
+        float or dict
+            Maximum value(s) of the field(s)
+        """
+        if element_block_ids == "all":
+            element_block_ids = list(self.element_blocks.keys())
+        elif isinstance(element_block_ids, int):
+            element_block_ids = [element_block_ids]
+
+        if isinstance(element_field_names, str):
+            element_field_names = [element_field_names]
+
+        # Get timestep index
+        if timestep == "last":
+            timestep_idx = len(self.timesteps) - 1 if self.timesteps else 0
+        elif timestep == "first":
+            timestep_idx = 0
+        else:
+            timestep_idx = min(range(len(self.timesteps)),
+                             key=lambda i: abs(self.timesteps[i] - float(timestep)))
+
+        max_values = {}
+        for field_name in element_field_names:
+            max_val = float('-inf')
+            for block_id in element_block_ids:
+                if block_id in self.element_blocks:
+                    fields = self.element_blocks[block_id][3]
+                    if field_name in fields:
+                        values = fields[field_name][timestep_idx]
+                        if values:
+                            max_val = max(max_val, max(values))
+            max_values[field_name] = max_val if max_val != float('-inf') else None
+
+        return max_values if len(element_field_names) > 1 else max_values[element_field_names[0]]
 
     def calculate_element_field_minimum(self, element_field_names: Union[str, List[str]],
                                        element_block_ids: Union[str, List[int]] = "all",
-                                       calculate_location: bool = False,
-                                       calculate_block_id: bool = False) -> Union[float, Tuple]:
-        """Find minimum value of element field(s)."""
-        raise NotImplementedError("calculate_element_field_minimum() is not yet implemented.")
+                                       timestep: Union[str, float] = "last") -> Union[float, Dict[str, float]]:
+        """
+        Find minimum value of element field(s).
+
+        Parameters
+        ----------
+        element_field_names : str or list of str
+            Element field name(s) to find minimum for
+        element_block_ids : str or list of int, optional
+            Element block IDs (default: "all")
+        timestep : str or float, optional
+            Timestep to use (default: "last")
+
+        Returns
+        -------
+        float or dict
+            Minimum value(s) of the field(s)
+        """
+        if element_block_ids == "all":
+            element_block_ids = list(self.element_blocks.keys())
+        elif isinstance(element_block_ids, int):
+            element_block_ids = [element_block_ids]
+
+        if isinstance(element_field_names, str):
+            element_field_names = [element_field_names]
+
+        # Get timestep index
+        if timestep == "last":
+            timestep_idx = len(self.timesteps) - 1 if self.timesteps else 0
+        elif timestep == "first":
+            timestep_idx = 0
+        else:
+            timestep_idx = min(range(len(self.timesteps)),
+                             key=lambda i: abs(self.timesteps[i] - float(timestep)))
+
+        min_values = {}
+        for field_name in element_field_names:
+            min_val = float('inf')
+            for block_id in element_block_ids:
+                if block_id in self.element_blocks:
+                    fields = self.element_blocks[block_id][3]
+                    if field_name in fields:
+                        values = fields[field_name][timestep_idx]
+                        if values:
+                            min_val = min(min_val, min(values))
+            min_values[field_name] = min_val if min_val != float('inf') else None
+
+        return min_values if len(element_field_names) > 1 else min_values[element_field_names[0]]
 
     def create_averaged_element_field(self, element_field_names: Union[str, List[str]],
-                                     new_field_name: str, element_block_ids: Union[str, List[int]] = "all"):
-        """Create averaged element field from multiple fields."""
-        raise NotImplementedError("create_averaged_element_field() is not yet implemented.")
+                                     new_field_name: str, element_block_id: int):
+        """
+        Create an element field by averaging existing fields.
 
-    def convert_element_field_to_node_field(self, element_field_name: str, node_field_name: str = None,
-                                           element_block_ids: Union[str, List[int]] = "all"):
-        """Convert element field to node field."""
-        raise NotImplementedError("convert_element_field_to_node_field() is not yet implemented.")
+        Parameters
+        ----------
+        element_field_names : str or list of str
+            Element field name(s) to average
+        new_field_name : str
+            Name for the new averaged field
+        element_block_id : int
+            Element block ID
 
-    def convert_node_field_to_element_field(self, node_field_name: str, element_field_name: str = None,
-                                           element_block_ids: Union[str, List[int]] = "all"):
-        """Convert node field to element field."""
-        raise NotImplementedError("convert_node_field_to_element_field() is not yet implemented.")
+        Examples
+        --------
+        >>> model.create_averaged_element_field(["stress_1", "stress_2"], "avg_stress", 1)
+        """
+        if element_block_id not in self.element_blocks:
+            self._error(f"Element block {element_block_id} does not exist")
+
+        if isinstance(element_field_names, str):
+            element_field_names = [element_field_names]
+
+        # Verify all fields exist
+        for field_name in element_field_names:
+            if not self.element_field_exists(field_name, element_block_id):
+                self._error(f"Element field '{field_name}' does not exist in block {element_block_id}")
+
+        # Create new field
+        self.create_element_field(new_field_name, element_block_id, 0.0)
+
+        # Average the values
+        fields = self.element_blocks[element_block_id][3]
+        num_timesteps = len(self.timesteps) if self.timesteps else 1
+
+        for timestep_idx in range(num_timesteps):
+            num_elems = len(fields[element_field_names[0]][timestep_idx])
+            new_values = [0.0] * num_elems
+
+            for elem_idx in range(num_elems):
+                total = 0.0
+                for field_name in element_field_names:
+                    total += fields[field_name][timestep_idx][elem_idx]
+                new_values[elem_idx] = total / len(element_field_names)
+
+            fields[new_field_name][timestep_idx] = new_values
+
+    def convert_element_field_to_node_field(self, element_field_name: str,
+                                              node_field_name: Optional[str] = None,
+                                              element_block_ids: Union[str, List[int]] = "all"):
+        """
+        Convert element field to node field by averaging element values at each node.
+
+        Parameters
+        ----------
+        element_field_name : str
+            Element field name to convert
+        node_field_name : str, optional
+            Name for node field (default: same as element_field_name)
+        element_block_ids : str or list of int, optional
+            Element block IDs (default: "all")
+
+        Examples
+        --------
+        >>> model.convert_element_field_to_node_field("stress")
+        >>> model.convert_element_field_to_node_field("stress", "node_stress", [1, 2])
+        """
+        if node_field_name is None:
+            node_field_name = element_field_name
+
+        if element_block_ids == "all":
+            element_block_ids = list(self.element_blocks.keys())
+        elif isinstance(element_block_ids, int):
+            element_block_ids = [element_block_ids]
+
+        # Create node field
+        self.create_node_field(node_field_name, 0.0)
+
+        num_timesteps = len(self.timesteps) if self.timesteps else 1
+
+        for timestep_idx in range(num_timesteps):
+            # Accumulate values and counts for each node
+            node_sum = [0.0] * len(self.nodes)
+            node_count = [0] * len(self.nodes)
+
+            for block_id in element_block_ids:
+                if block_id not in self.element_blocks:
+                    continue
+
+                fields = self.element_blocks[block_id][3]
+                if element_field_name not in fields:
+                    continue
+
+                connectivity = self.get_connectivity(block_id)
+                elem_values = fields[element_field_name][timestep_idx]
+
+                for elem_idx, elem_nodes in enumerate(connectivity):
+                    if elem_idx < len(elem_values):
+                        elem_value = elem_values[elem_idx]
+                        for node_idx in elem_nodes:
+                            zero_based_idx = node_idx - 1
+                            if 0 <= zero_based_idx < len(self.nodes):
+                                node_sum[zero_based_idx] += elem_value
+                                node_count[zero_based_idx] += 1
+
+            # Calculate averages
+            node_values = [
+                node_sum[i] / node_count[i] if node_count[i] > 0 else 0.0
+                for i in range(len(self.nodes))
+            ]
+
+            self.node_fields[node_field_name][timestep_idx] = node_values
+
+    def convert_node_field_to_element_field(self, node_field_name: str,
+                                              element_field_name: Optional[str] = None,
+                                              element_block_ids: Union[str, List[int]] = "all"):
+        """
+        Convert node field to element field by averaging nodal values for each element.
+
+        Parameters
+        ----------
+        node_field_name : str
+            Node field name to convert
+        element_field_name : str, optional
+            Name for element field (default: same as node_field_name)
+        element_block_ids : str or list of int, optional
+            Element block IDs (default: "all")
+
+        Examples
+        --------
+        >>> model.convert_node_field_to_element_field("temperature")
+        >>> model.convert_node_field_to_element_field("temperature", "elem_temp", [1, 2])
+        """
+        if element_field_name is None:
+            element_field_name = node_field_name
+
+        if node_field_name not in self.node_fields:
+            self._error(f"Node field '{node_field_name}' does not exist")
+
+        if element_block_ids == "all":
+            element_block_ids = list(self.element_blocks.keys())
+        elif isinstance(element_block_ids, int):
+            element_block_ids = [element_block_ids]
+
+        num_timesteps = len(self.timesteps) if self.timesteps else 1
+
+        for block_id in element_block_ids:
+            if block_id not in self.element_blocks:
+                continue
+
+            # Create element field for this block
+            self.create_element_field(element_field_name, block_id, 0.0)
+
+            connectivity = self.get_connectivity(block_id)
+            fields = self.element_blocks[block_id][3]
+
+            for timestep_idx in range(num_timesteps):
+                node_values = self.node_fields[node_field_name][timestep_idx]
+                elem_values = []
+
+                for elem_nodes in connectivity:
+                    # Average node values for this element
+                    total = 0.0
+                    count = 0
+                    for node_idx in elem_nodes:
+                        zero_based_idx = node_idx - 1
+                        if 0 <= zero_based_idx < len(node_values):
+                            total += node_values[zero_based_idx]
+                            count += 1
+                    elem_value = total / count if count > 0 else 0.0
+                    elem_values.append(elem_value)
+
+                fields[element_field_name][timestep_idx] = elem_values
 
     # ========================================================================
     # Field Operations - Node Fields
@@ -1986,22 +2648,113 @@ class ExodusModel:
         )
 
     def calculate_node_field_maximum(self, node_field_names: Union[str, List[str]],
-                                    calculate_location: bool = False) -> Union[float, Tuple]:
-        """Find maximum value of node field(s)."""
-        raise NotImplementedError("calculate_node_field_maximum() is not yet implemented.")
+                                      timestep: Union[str, float] = "last") -> Union[float, Dict[str, float]]:
+        """
+        Calculate maximum value of node field(s).
+
+        Parameters
+        ----------
+        node_field_names : str or list of str
+            Node field name(s) to find maximum for
+        timestep : str or float, optional
+            Timestep to use (default: "last")
+
+        Returns
+        -------
+        float or dict
+            Maximum value(s) of the field(s)
+        """
+        if isinstance(node_field_names, str):
+            node_field_names = [node_field_names]
+
+        # Get timestep index
+        if timestep == "last":
+            timestep_idx = len(self.timesteps) - 1 if self.timesteps else 0
+        elif timestep == "first":
+            timestep_idx = 0
+        else:
+            timestep_idx = min(range(len(self.timesteps)),
+                             key=lambda i: abs(self.timesteps[i] - float(timestep)))
+
+        max_values = {}
+        for field_name in node_field_names:
+            if field_name in self.node_fields:
+                values = self.node_fields[field_name][timestep_idx]
+                max_values[field_name] = max(values) if values else None
+            else:
+                max_values[field_name] = None
+
+        return max_values if len(node_field_names) > 1 else max_values[node_field_names[0]]
 
     def calculate_node_field_minimum(self, node_field_names: Union[str, List[str]],
-                                    calculate_location: bool = False) -> Union[float, Tuple]:
-        """Find minimum value of node field(s)."""
-        raise NotImplementedError("calculate_node_field_minimum() is not yet implemented.")
+                                      timestep: Union[str, float] = "last") -> Union[float, Dict[str, float]]:
+        """
+        Calculate minimum value of node field(s).
+
+        Parameters
+        ----------
+        node_field_names : str or list of str
+            Node field name(s) to find minimum for
+        timestep : str or float, optional
+            Timestep to use (default: "last")
+
+        Returns
+        -------
+        float or dict
+            Minimum value(s) of the field(s)
+        """
+        if isinstance(node_field_names, str):
+            node_field_names = [node_field_names]
+
+        # Get timestep index
+        if timestep == "last":
+            timestep_idx = len(self.timesteps) - 1 if self.timesteps else 0
+        elif timestep == "first":
+            timestep_idx = 0
+        else:
+            timestep_idx = min(range(len(self.timesteps)),
+                             key=lambda i: abs(self.timesteps[i] - float(timestep)))
+
+        min_values = {}
+        for field_name in node_field_names:
+            if field_name in self.node_fields:
+                values = self.node_fields[field_name][timestep_idx]
+                min_values[field_name] = min(values) if values else None
+            else:
+                min_values[field_name] = None
+
+        return min_values if len(node_field_names) > 1 else min_values[node_field_names[0]]
 
     def displacement_field_exists(self) -> bool:
-        """Check if displacement field exists."""
-        raise NotImplementedError("displacement_field_exists() is not yet implemented.")
+        """
+        Check if displacement fields exist.
 
-    def create_displacement_field(self):
-        """Create displacement field."""
-        raise NotImplementedError("create_displacement_field() is not yet implemented.")
+        Returns
+        -------
+        bool
+            True if DISP_X, DISP_Y, and DISP_Z fields all exist
+        """
+        return (self.node_field_exists("DISP_X") and
+                self.node_field_exists("DISP_Y") and
+                self.node_field_exists("DISP_Z"))
+
+    def create_displacement_field(self, default_value: float = 0.0):
+        """
+        Create displacement fields (DISP_X, DISP_Y, DISP_Z).
+
+        Parameters
+        ----------
+        default_value : float, optional
+            Initial value for displacement fields (default: 0.0)
+
+        Examples
+        --------
+        >>> model.create_displacement_field()
+        >>> model.create_displacement_field(0.0)
+        """
+        self.create_node_field("DISP_X", default_value)
+        self.create_node_field("DISP_Y", default_value)
+        self.create_node_field("DISP_Z", default_value)
 
     # ========================================================================
     # Field Operations - Global Variables
@@ -2112,9 +2865,69 @@ class ExodusModel:
             "Implementation planned for Phase 4."
         )
 
-    def output_global_variables(self, expressions: List[str], *args, **kwargs):
-        """Output global variables calculated from expressions."""
-        raise NotImplementedError("output_global_variables() is not yet implemented.")
+    def output_global_variables(self, expressions: Union[Dict, List, str],
+                                output_file: Optional[str] = None) -> str:
+        """
+        Output global variables to file or return as string.
+
+        Parameters
+        ----------
+        expressions : dict, list, or str
+            Variable names or expressions to output
+        output_file : str, optional
+            File path to write output (default: return as string)
+
+        Returns
+        -------
+        str
+            Tab-separated output of global variables
+
+        Examples
+        --------
+        >>> output = model.output_global_variables(["energy", "volume"])
+        >>> model.output_global_variables({"energy": "energy"}, "output.txt")
+        """
+        lines = []
+        lines.append("# Global Variables")
+        lines.append(f"# Timesteps: {len(self.timesteps)}")
+        lines.append("")
+
+        # Header
+        header = ["Timestep"]
+        if isinstance(expressions, dict):
+            header.extend(expressions.keys())
+            var_names = list(expressions.keys())
+        elif isinstance(expressions, list):
+            var_names = expressions
+            header.extend(var_names)
+        else:
+            var_names = [expressions]
+            header.extend(var_names)
+
+        lines.append("\t".join(header))
+
+        # Data rows
+        num_timesteps = len(self.timesteps) if self.timesteps else 1
+        for timestep_idx in range(num_timesteps):
+            row = [str(self.timesteps[timestep_idx]) if self.timesteps else str(timestep_idx)]
+            for var_name in var_names:
+                if var_name in self.global_variables:
+                    values = self.global_variables[var_name]
+                    if timestep_idx < len(values):
+                        row.append(str(values[timestep_idx]))
+                    else:
+                        row.append("0.0")
+                else:
+                    row.append("0.0")
+            lines.append("\t".join(row))
+
+        result = "\n".join(lines)
+
+        if output_file:
+            with open(output_file, 'w') as f:
+                f.write(result)
+
+        return result
 
     # ========================================================================
     # Field Operations - Side Set Fields
@@ -3766,9 +4579,113 @@ class ExodusModel:
             if source_idx < len(var_data):
                 var_data.append(var_data[source_idx])
 
-    def create_interpolated_timestep(self, timestep: float, interpolation: str = "cubic"):
-        """Create an interpolated timestep."""
-        raise NotImplementedError("create_interpolated_timestep() is not yet implemented.")
+    def create_interpolated_timestep(self, timestep: float, interpolation: str = "linear"):
+        """
+        Create a new timestep by interpolating between existing timesteps.
+
+        Parameters
+        ----------
+        timestep : float
+            New timestep value
+        interpolation : str, optional
+            Interpolation method (default: "linear")
+
+        Examples
+        --------
+        >>> model.create_interpolated_timestep(1.5)  # Interpolate at t=1.5
+        """
+        if not self.timesteps:
+            self._error("No timesteps available for interpolation")
+
+        timestep = float(timestep)
+
+        # Check if timestep already exists
+        if timestep in self.timesteps:
+            self._warning(f"Timestep {timestep} already exists")
+            return
+
+        # Find surrounding timesteps
+        lower_idx = None
+        upper_idx = None
+
+        for idx, ts in enumerate(self.timesteps):
+            if ts < timestep:
+                lower_idx = idx
+            elif ts > timestep and upper_idx is None:
+                upper_idx = idx
+                break
+
+        if lower_idx is None:
+            # Before first timestep - use first two
+            lower_idx = 0
+            upper_idx = 1 if len(self.timesteps) > 1 else 0
+        elif upper_idx is None:
+            # After last timestep - use last two
+            upper_idx = len(self.timesteps) - 1
+            lower_idx = upper_idx - 1 if len(self.timesteps) > 1 else upper_idx
+
+        t_lower = self.timesteps[lower_idx]
+        t_upper = self.timesteps[upper_idx]
+
+        # Calculate interpolation factor
+        if t_upper == t_lower:
+            factor = 0.5
+        else:
+            factor = (timestep - t_lower) / (t_upper - t_lower)
+
+        # Insert timestep in sorted order
+        insert_idx = upper_idx
+        self.timesteps.insert(insert_idx, timestep)
+
+        # Interpolate node fields
+        for field_name, timestep_data in self.node_fields.items():
+            lower_values = timestep_data[lower_idx]
+            upper_values = timestep_data[upper_idx]
+            interp_values = [
+                lower_values[i] * (1 - factor) + upper_values[i] * factor
+                for i in range(len(lower_values))
+            ]
+            timestep_data.insert(insert_idx, interp_values)
+
+        # Interpolate global variables
+        for var_name, timestep_data in self.global_variables.items():
+            lower_value = timestep_data[lower_idx]
+            upper_value = timestep_data[upper_idx]
+            interp_value = lower_value * (1 - factor) + upper_value * factor
+            timestep_data.insert(insert_idx, interp_value)
+
+        # Interpolate element fields
+        for block_id, (name, info, connectivity, fields) in self.element_blocks.items():
+            for field_name, timestep_data in fields.items():
+                lower_values = timestep_data[lower_idx]
+                upper_values = timestep_data[upper_idx]
+                interp_values = [
+                    lower_values[i] * (1 - factor) + upper_values[i] * factor
+                    for i in range(len(lower_values))
+                ]
+                timestep_data.insert(insert_idx, interp_values)
+
+        # Interpolate side set fields
+        for side_set_id, (name, members, fields) in self.side_sets.items():
+            for field_name, timestep_data in fields.items():
+                lower_values = timestep_data[lower_idx]
+                upper_values = timestep_data[upper_idx]
+                interp_values = [
+                    lower_values[i] * (1 - factor) + upper_values[i] * factor
+                    for i in range(len(lower_values))
+                ]
+                timestep_data.insert(insert_idx, interp_values)
+
+        # Interpolate node set fields
+        for node_set_id, (name, members, fields) in self.node_sets.items():
+            for field_name, timestep_data in fields.items():
+                lower_values = timestep_data[lower_idx]
+                upper_values = timestep_data[upper_idx]
+                interp_values = [
+                    lower_values[i] * (1 - factor) + upper_values[i] * factor
+                    for i in range(len(lower_values))
+                ]
+                timestep_data.insert(insert_idx, interp_values)
 
     # ========================================================================
     # Utility and Mesh Generation
