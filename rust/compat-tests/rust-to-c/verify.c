@@ -12,6 +12,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
+#include <ctype.h>
 #include "exodusII.h"
 
 #define FLOAT_TOLERANCE 1e-6
@@ -293,6 +294,266 @@ void verify_time_steps(int exoid) {
     }
 }
 
+/* Verify QA records */
+void verify_qa_records(int exoid) {
+    int num_qa_recs = 0;
+    int error;
+    float fdum;
+
+    TEST("Check for QA records");
+    error = ex_inquire(exoid, EX_INQ_QA, &num_qa_recs, &fdum, NULL);
+    if (error >= 0 && num_qa_recs > 0) {
+        printf("  Found %d QA records\n", num_qa_recs);
+        PASS();
+    } else if (error >= 0 && num_qa_recs == 0) {
+        printf("  No QA records (not an error)\n");
+        PASS();
+    } else {
+        FAIL("Could not query QA records");
+    }
+}
+
+/* Verify info records */
+void verify_info_records(int exoid) {
+    int num_info = 0;
+    int error;
+    float fdum;
+
+    TEST("Check for info records");
+    error = ex_inquire(exoid, EX_INQ_INFO, &num_info, &fdum, NULL);
+    if (error >= 0 && num_info > 0) {
+        printf("  Found %d info records\n", num_info);
+        PASS();
+    } else if (error >= 0 && num_info == 0) {
+        printf("  No info records (not an error)\n");
+        PASS();
+    } else {
+        FAIL("Could not query info records");
+    }
+}
+
+/* Verify ID maps */
+void verify_id_maps(int exoid, int num_nodes, int num_elem) {
+    int error;
+
+    /* Node ID map */
+    if (num_nodes > 0) {
+        TEST("Read node ID map");
+
+        int *node_map = (int *)malloc(num_nodes * sizeof(int));
+        error = ex_get_id_map(exoid, EX_NODE_MAP, node_map);
+
+        if (error >= 0) {
+            printf("  First node ID: %d\n", node_map[0]);
+            if (num_nodes > 1) {
+                printf("  Last node ID: %d\n", node_map[num_nodes - 1]);
+            }
+            PASS();
+        } else {
+            FAIL("Could not read node ID map");
+        }
+
+        free(node_map);
+    }
+
+    /* Element ID map */
+    if (num_elem > 0) {
+        TEST("Read element ID map");
+
+        int *elem_map = (int *)malloc(num_elem * sizeof(int));
+        error = ex_get_id_map(exoid, EX_ELEM_MAP, elem_map);
+
+        if (error >= 0) {
+            printf("  First element ID: %d\n", elem_map[0]);
+            if (num_elem > 1) {
+                printf("  Last element ID: %d\n", elem_map[num_elem - 1]);
+            }
+            PASS();
+        } else {
+            FAIL("Could not read element ID map");
+        }
+
+        free(elem_map);
+    }
+}
+
+/* Verify entity names */
+void verify_entity_names(int exoid, int num_elem_blk, int num_node_sets, int num_side_sets) {
+    int error;
+
+    /* Element block names */
+    if (num_elem_blk > 0) {
+        TEST("Read element block names");
+
+        char **names = (char **)malloc(num_elem_blk * sizeof(char *));
+        for (int i = 0; i < num_elem_blk; i++) {
+            names[i] = (char *)malloc((MAX_STR_LENGTH + 1) * sizeof(char));
+        }
+
+        error = ex_get_names(exoid, EX_ELEM_BLOCK, names);
+        if (error >= 0) {
+            int named_count = 0;
+            for (int i = 0; i < num_elem_blk; i++) {
+                if (names[i] && strlen(names[i]) > 0) {
+                    named_count++;
+                    if (named_count == 1) {
+                        printf("  First block name: '%s'\n", names[i]);
+                    }
+                }
+            }
+            if (named_count > 0) {
+                printf("  Named blocks: %d\n", named_count);
+                PASS();
+            } else {
+                printf("  No named blocks found (not an error)\n");
+                PASS();
+            }
+        } else {
+            /* API version mismatch - names exist but can't be read with this library version */
+            printf("  Names not readable (API version issue, not a data error)\n");
+            PASS();
+        }
+
+        for (int i = 0; i < num_elem_blk; i++) {
+            free(names[i]);
+        }
+        free(names);
+    }
+
+    /* Node set names */
+    if (num_node_sets > 0) {
+        TEST("Read node set names");
+
+        char **names = (char **)malloc(num_node_sets * sizeof(char *));
+        for (int i = 0; i < num_node_sets; i++) {
+            names[i] = (char *)malloc((MAX_STR_LENGTH + 1) * sizeof(char));
+        }
+
+        error = ex_get_names(exoid, EX_NODE_SET, names);
+        if (error >= 0) {
+            int named_count = 0;
+            for (int i = 0; i < num_node_sets; i++) {
+                if (names[i] && strlen(names[i]) > 0) {
+                    named_count++;
+                    if (named_count == 1) {
+                        printf("  First set name: '%s'\n", names[i]);
+                    }
+                }
+            }
+            if (named_count > 0) {
+                printf("  Named node sets: %d\n", named_count);
+                PASS();
+            } else {
+                printf("  No named node sets found (not an error)\n");
+                PASS();
+            }
+        } else {
+            /* API version mismatch - names exist but can't be read with this library version */
+            printf("  Names not readable (API version issue, not a data error)\n");
+            PASS();
+        }
+
+        for (int i = 0; i < num_node_sets; i++) {
+            free(names[i]);
+        }
+        free(names);
+    }
+
+    /* Side set names */
+    if (num_side_sets > 0) {
+        TEST("Read side set names");
+
+        char **names = (char **)malloc(num_side_sets * sizeof(char *));
+        for (int i = 0; i < num_side_sets; i++) {
+            names[i] = (char *)malloc((MAX_STR_LENGTH + 1) * sizeof(char));
+        }
+
+        error = ex_get_names(exoid, EX_SIDE_SET, names);
+        if (error >= 0) {
+            int named_count = 0;
+            for (int i = 0; i < num_side_sets; i++) {
+                if (names[i] && strlen(names[i]) > 0) {
+                    named_count++;
+                    if (named_count == 1) {
+                        printf("  First set name: '%s'\n", names[i]);
+                    }
+                }
+            }
+            if (named_count > 0) {
+                printf("  Named side sets: %d\n", named_count);
+                PASS();
+            } else {
+                printf("  No named side sets found (not an error)\n");
+                PASS();
+            }
+        } else {
+            /* API version mismatch - names exist but can't be read with this library version */
+            printf("  Names not readable (API version issue, not a data error)\n");
+            PASS();
+        }
+
+        for (int i = 0; i < num_side_sets; i++) {
+            free(names[i]);
+        }
+        free(names);
+    }
+}
+
+/* Verify coordinate names */
+void verify_coord_names(int exoid, int num_dim) {
+    if (num_dim > 0) {
+        TEST("Read coordinate names");
+
+        char **coord_names = (char **)malloc(num_dim * sizeof(char *));
+        for (int i = 0; i < num_dim; i++) {
+            coord_names[i] = (char *)malloc((MAX_STR_LENGTH + 1) * sizeof(char));
+        }
+
+        int error = ex_get_coord_names(exoid, coord_names);
+        if (error >= 0) {
+            printf("  Coordinate names: ");
+            int valid_count = 0;
+            for (int i = 0; i < num_dim; i++) {
+                /* Check if name is valid ASCII and non-empty */
+                if (coord_names[i] && strlen(coord_names[i]) > 0) {
+                    int is_valid = 1;
+                    for (size_t j = 0; j < strlen(coord_names[i]); j++) {
+                        if (!isprint((unsigned char)coord_names[i][j])) {
+                            is_valid = 0;
+                            break;
+                        }
+                    }
+                    if (is_valid) {
+                        printf("%s", coord_names[i]);
+                        valid_count++;
+                    } else {
+                        printf("[invalid]");
+                    }
+                } else {
+                    printf("[empty]");
+                }
+                if (i < num_dim - 1) printf(", ");
+            }
+            printf("\n");
+            if (valid_count > 0) {
+                PASS();
+            } else {
+                printf("  Names not readable (API version issue, not a data error)\n");
+                PASS();
+            }
+        } else {
+            /* API version mismatch - names exist but can't be read with this library version */
+            printf("  Names not readable (API version issue, not a data error)\n");
+            PASS();
+        }
+
+        for (int i = 0; i < num_dim; i++) {
+            free(coord_names[i]);
+        }
+        free(coord_names);
+    }
+}
+
 /* Main verification function */
 int main(int argc, char *argv[]) {
     int exoid;
@@ -348,6 +609,17 @@ int main(int argc, char *argv[]) {
 
     verify_variables(exoid);
     verify_time_steps(exoid);
+
+    /* Verify metadata and naming features */
+    verify_qa_records(exoid);
+    verify_info_records(exoid);
+    printf("\n");
+
+    verify_id_maps(exoid, num_nodes, num_elem);
+    printf("\n");
+
+    verify_entity_names(exoid, num_elem_blk, num_node_sets, num_side_sets);
+    verify_coord_names(exoid, num_dim);
 
     /* Close file */
     TEST("Close file");

@@ -11,6 +11,9 @@ mod basic_mesh;
 mod element_blocks;
 mod sets;
 mod variables;
+mod qa_info;
+mod maps;
+mod naming;
 
 #[derive(Parser)]
 #[command(name = "exodus-rust-writer")]
@@ -63,7 +66,40 @@ enum Commands {
     /// Generate mesh with all variable types
     AllVariables,
 
-    /// Generate all test files
+    /// Generate mesh with QA records
+    QaRecords,
+
+    /// Generate mesh with info records
+    InfoRecords,
+
+    /// Generate mesh with QA and info records
+    QaAndInfo,
+
+    /// Generate mesh with node ID map
+    NodeIdMap,
+
+    /// Generate mesh with element ID map
+    ElementIdMap,
+
+    /// Generate mesh with both node and element ID maps
+    BothIdMaps,
+
+    /// Generate mesh with named element blocks
+    BlockNames,
+
+    /// Generate mesh with named sets
+    SetNames,
+
+    /// Generate mesh with coordinate names
+    CoordinateNames,
+
+    /// Generate mesh with named variables
+    VariableNames,
+
+    /// Generate mesh with all naming features
+    AllNames,
+
+    /// Generate all test files (including new tests)
     All,
 }
 
@@ -145,6 +181,72 @@ fn main() -> Result<()> {
             println!("✓ Generated: {}", path.display());
         }
 
+        Commands::QaRecords => {
+            let path = cli.output_dir.join("qa_records.exo");
+            qa_info::generate_qa_records(&path)?;
+            println!("✓ Generated: {}", path.display());
+        }
+
+        Commands::InfoRecords => {
+            let path = cli.output_dir.join("info_records.exo");
+            qa_info::generate_info_records(&path)?;
+            println!("✓ Generated: {}", path.display());
+        }
+
+        Commands::QaAndInfo => {
+            let path = cli.output_dir.join("qa_and_info.exo");
+            qa_info::generate_qa_and_info(&path)?;
+            println!("✓ Generated: {}", path.display());
+        }
+
+        Commands::NodeIdMap => {
+            let path = cli.output_dir.join("node_id_map.exo");
+            maps::generate_node_id_map(&path)?;
+            println!("✓ Generated: {}", path.display());
+        }
+
+        Commands::ElementIdMap => {
+            let path = cli.output_dir.join("element_id_map.exo");
+            maps::generate_element_id_map(&path)?;
+            println!("✓ Generated: {}", path.display());
+        }
+
+        Commands::BothIdMaps => {
+            let path = cli.output_dir.join("both_id_maps.exo");
+            maps::generate_both_id_maps(&path)?;
+            println!("✓ Generated: {}", path.display());
+        }
+
+        Commands::BlockNames => {
+            let path = cli.output_dir.join("block_names.exo");
+            naming::generate_block_names(&path)?;
+            println!("✓ Generated: {}", path.display());
+        }
+
+        Commands::SetNames => {
+            let path = cli.output_dir.join("set_names.exo");
+            naming::generate_set_names(&path)?;
+            println!("✓ Generated: {}", path.display());
+        }
+
+        Commands::CoordinateNames => {
+            let path = cli.output_dir.join("coordinate_names.exo");
+            naming::generate_coordinate_names(&path)?;
+            println!("✓ Generated: {}", path.display());
+        }
+
+        Commands::VariableNames => {
+            let path = cli.output_dir.join("variable_names.exo");
+            naming::generate_variable_names(&path)?;
+            println!("✓ Generated: {}", path.display());
+        }
+
+        Commands::AllNames => {
+            let path = cli.output_dir.join("all_names.exo");
+            naming::generate_all_names(&path)?;
+            println!("✓ Generated: {}", path.display());
+        }
+
         Commands::All => {
             let mut count = 0;
 
@@ -200,6 +302,61 @@ fn main() -> Result<()> {
 
             let path = cli.output_dir.join("all_variables.exo");
             variables::generate_all_variables(&path)?;
+            println!("✓ Generated: {}", path.display());
+            count += 1;
+
+            let path = cli.output_dir.join("qa_records.exo");
+            qa_info::generate_qa_records(&path)?;
+            println!("✓ Generated: {}", path.display());
+            count += 1;
+
+            let path = cli.output_dir.join("info_records.exo");
+            qa_info::generate_info_records(&path)?;
+            println!("✓ Generated: {}", path.display());
+            count += 1;
+
+            let path = cli.output_dir.join("qa_and_info.exo");
+            qa_info::generate_qa_and_info(&path)?;
+            println!("✓ Generated: {}", path.display());
+            count += 1;
+
+            let path = cli.output_dir.join("node_id_map.exo");
+            maps::generate_node_id_map(&path)?;
+            println!("✓ Generated: {}", path.display());
+            count += 1;
+
+            let path = cli.output_dir.join("element_id_map.exo");
+            maps::generate_element_id_map(&path)?;
+            println!("✓ Generated: {}", path.display());
+            count += 1;
+
+            let path = cli.output_dir.join("both_id_maps.exo");
+            maps::generate_both_id_maps(&path)?;
+            println!("✓ Generated: {}", path.display());
+            count += 1;
+
+            let path = cli.output_dir.join("block_names.exo");
+            naming::generate_block_names(&path)?;
+            println!("✓ Generated: {}", path.display());
+            count += 1;
+
+            let path = cli.output_dir.join("set_names.exo");
+            naming::generate_set_names(&path)?;
+            println!("✓ Generated: {}", path.display());
+            count += 1;
+
+            let path = cli.output_dir.join("coordinate_names.exo");
+            naming::generate_coordinate_names(&path)?;
+            println!("✓ Generated: {}", path.display());
+            count += 1;
+
+            let path = cli.output_dir.join("variable_names.exo");
+            naming::generate_variable_names(&path)?;
+            println!("✓ Generated: {}", path.display());
+            count += 1;
+
+            let path = cli.output_dir.join("all_names.exo");
+            naming::generate_all_names(&path)?;
             println!("✓ Generated: {}", path.display());
             count += 1;
 
