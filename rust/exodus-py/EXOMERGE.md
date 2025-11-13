@@ -4,6 +4,10 @@
 
 This document summarizes the API compatibility between the `exodus.exomerge` module and the legacy `exomerge3.py` module. The goal is to provide a 1-to-1 API mapping where possible, clearly documenting any deviations or limitations.
 
+The legacy `exomerge3.py` file can be found here:
+
+- packages/seacas/scripts/exomerge3.py
+
 **Status**: Initial framework complete. All method signatures have been defined, with implementation in progress.
 
 **Module Location**: `python/exodus/exomerge.py`
