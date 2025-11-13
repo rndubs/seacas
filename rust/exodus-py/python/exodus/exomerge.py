@@ -1,0 +1,1246 @@
+"""
+Exomerge is a lightweight Python interface for manipulating ExodusII files.
+
+This module provides a Python API compatible with the legacy exomerge3.py module,
+built on top of the modern exodus-py Rust bindings.
+
+Author: exodus-rs development team
+Based on: exomerge3.py by Tim Kostka (tdkostk@sandia.gov)
+
+Simple example:
+>>> import exodus.exomerge as exomerge
+>>> model = exomerge.import_model('results.e')
+>>> model.delete_element_block(1)
+>>> model.export_model('most_results.e')
+
+For documentation on the original exomerge API:
+"Exomerge User's Manual: A lightweight Python interface for manipulating
+Exodus files" (SAND2013-0725)
+"""
+
+import sys
+import datetime
+from typing import Optional, List, Dict, Any, Union, Tuple
+
+# Import the exodus-py module (Rust bindings)
+try:
+    from . import exodus
+except ImportError:
+    import exodus
+
+__version__ = "0.1.0"
+VERSION = __version__
+
+# Contact person for issues
+CONTACT = "exodus-rs development team"
+
+# Show banner on first use
+SHOW_BANNER = True
+
+# If true, will crash if warnings are generated
+EXIT_ON_WARNING = False
+
+# Deprecated function mappings
+DEPRECATED_FUNCTIONS = {
+    "write": "export"
+}
+
+
+def import_model(filename: str, *args, **kwargs) -> 'ExodusModel':
+    """
+    Load information from an ExodusII file.
+
+    This function is a wrapper around 'ExodusModel.import_model(...)' and is
+    provided for convenience.
+
+    Parameters
+    ----------
+    filename : str
+        Path to the Exodus II file to load
+    *args : tuple
+        Additional positional arguments passed to import_model
+    **kwargs : dict
+        Additional keyword arguments passed to import_model
+
+    Returns
+    -------
+    ExodusModel
+        The loaded model
+
+    Examples
+    --------
+    >>> model = import_model('mesh.e')
+    >>> print(model.get_element_block_ids())
+    """
+    model = ExodusModel()
+    model.import_model(filename, *args, **kwargs)
+    return model
+
+
+class ExodusModel:
+    """
+    Main class for manipulating Exodus II finite element models.
+
+    This class provides a high-level interface for reading, modifying, and
+    writing Exodus II files. It maintains an in-memory representation of the
+    mesh including nodes, elements, sets, fields, and timesteps.
+
+    Attributes
+    ----------
+    nodes : list
+        List of [x, y, z] node coordinates
+    node_fields : dict
+        Dictionary mapping field names to timestep data
+    global_variables : dict
+        Dictionary mapping variable names to timestep data
+    element_blocks : dict
+        Dictionary mapping block IDs to [name, info, connectivity, fields]
+    side_sets : dict
+        Dictionary mapping side set IDs to [name, members, fields]
+    node_sets : dict
+        Dictionary mapping node set IDs to [name, members, fields]
+    timesteps : list
+        List of timestep values
+    title : str
+        Database title string
+    qa_records : list
+        List of QA record tuples
+    info_records : list
+        List of info record strings
+    """
+
+    def __init__(self):
+        """Initialize an empty ExodusModel."""
+        # Core data structures
+        self.nodes: List[List[float]] = []
+        self.node_fields: Dict[str, List[Any]] = {}
+        self.global_variables: Dict[str, List[float]] = {}
+        self.element_blocks: Dict[int, List[Any]] = {}
+        self.side_sets: Dict[int, List[Any]] = {}
+        self.node_sets: Dict[int, List[Any]] = {}
+        self.timesteps: List[float] = []
+        self.title: str = ""
+        self.qa_records: List[Tuple] = []
+        self.info_records: List[str] = []
+
+        # Internal state
+        self._reader: Optional[Any] = None
+        self._filename: Optional[str] = None
+
+    def __getattr__(self, name: str):
+        """
+        Handle deprecated function names.
+
+        If a deprecated function is called, issue a warning and redirect
+        to the new function name if available.
+        """
+        if name in DEPRECATED_FUNCTIONS:
+            new_name = DEPRECATED_FUNCTIONS[name]
+            self._warning(
+                f"Function '{name}' is deprecated",
+                f"Please use '{new_name}' instead"
+            )
+            if new_name:
+                return getattr(self, new_name)
+            else:
+                self._error(
+                    f"Function '{name}' has been removed",
+                    "Please update your code to use the new API"
+                )
+        raise AttributeError(f"'{type(self).__name__}' object has no attribute '{name}'")
+
+    # ========================================================================
+    # Error and Warning Handling
+    # ========================================================================
+
+    def _error(self, short: str = "Unspecified error", detailed: str = "", exit_code: int = 1):
+        """Print an error message and exit."""
+        print(f"\nERROR: {short}")
+        if detailed:
+            print(f"  {detailed}")
+        if exit_code:
+            sys.exit(exit_code)
+
+    def _warning(self, short: str = "Unspecified warning", detailed: str = ""):
+        """Print a warning message."""
+        print(f"\nWARNING: {short}")
+        if detailed:
+            print(f"  {detailed}")
+        if EXIT_ON_WARNING:
+            sys.exit(1)
+
+    # ========================================================================
+    # File I/O Operations
+    # ========================================================================
+
+    def import_model(self, filename: str, *args, **kwargs):
+        """
+        Load data from an ExodusII file.
+
+        This method reads all data from an Exodus II file into memory,
+        including nodes, elements, sets, fields, and timesteps.
+
+        Parameters
+        ----------
+        filename : str
+            Path to the Exodus II file to load
+        *args : tuple
+            Additional positional arguments (for compatibility)
+        **kwargs : dict
+            Additional keyword arguments (for compatibility)
+
+        Examples
+        --------
+        >>> model = ExodusModel()
+        >>> model.import_model('mesh.e')
+        """
+        raise NotImplementedError(
+            "import_model() is not yet implemented. "
+            "This requires reading all Exodus data into the in-memory data structures. "
+            "Implementation planned for Phase 2."
+        )
+
+    def export_model(self, filename: str, *args, **kwargs):
+        """
+        Write the model to an ExodusII file.
+
+        This method writes all in-memory data to an Exodus II file,
+        including nodes, elements, sets, fields, and timesteps.
+
+        Parameters
+        ----------
+        filename : str
+            Path to the output Exodus II file
+        *args : tuple
+            Additional positional arguments (for compatibility)
+        **kwargs : dict
+            Additional keyword arguments (for compatibility)
+
+        Examples
+        --------
+        >>> model.export_model('output.e')
+        """
+        raise NotImplementedError(
+            "export_model() is not yet implemented. "
+            "This requires writing all in-memory data structures to an Exodus file. "
+            "Implementation planned for Phase 2."
+        )
+
+    def export(self, filename: str, *args, **kwargs):
+        """
+        Export model to file (auto-detect format).
+
+        This method auto-detects the output format based on file extension:
+        - .e, .exo: Exodus II format
+        - .wrl: VRML format (not implemented)
+        - .stl: STL format (not implemented)
+
+        Parameters
+        ----------
+        filename : str
+            Path to the output file
+        *args : tuple
+            Additional positional arguments
+        **kwargs : dict
+            Additional keyword arguments
+
+        Examples
+        --------
+        >>> model.export('output.e')
+        """
+        if filename.endswith('.e') or filename.endswith('.exo'):
+            return self.export_model(filename, *args, **kwargs)
+        elif filename.endswith('.wrl'):
+            return self.export_wrl_model(filename, *args, **kwargs)
+        elif filename.endswith('.stl'):
+            return self.export_stl_file(filename, *args, **kwargs)
+        else:
+            self._error(
+                "Unknown file format",
+                f"File extension not recognized: {filename}"
+            )
+
+    def export_stl_file(self, filename: str, element_block_ids=None, displacement_timestep=None):
+        """
+        Export model to STL format.
+
+        NOT IMPLEMENTED: This functionality requires STL mesh generation
+        which is not available in the exodus-rs library.
+
+        Parameters
+        ----------
+        filename : str
+            Path to output STL file
+        element_block_ids : list, optional
+            Element blocks to export
+        displacement_timestep : float, optional
+            Timestep for displacement field
+
+        Raises
+        ------
+        NotImplementedError
+            STL export is not available in this implementation
+        """
+        raise NotImplementedError(
+            "export_stl_file() is not implementable with the current exodus-rs backend. "
+            "STL export requires extensive geometry processing and mesh generation "
+            "capabilities that are not part of the Exodus II format specification. "
+            "Consider using the original exomerge3.py or dedicated mesh conversion tools."
+        )
+
+    def export_wrl_model(self, filename: str, node_field_name=None, *args, **kwargs):
+        """
+        Export model to VRML (WRL) format.
+
+        NOT IMPLEMENTED: This functionality requires VRML generation
+        which is not available in the exodus-rs library.
+
+        Parameters
+        ----------
+        filename : str
+            Path to output WRL file
+        node_field_name : str, optional
+            Node field to use for coloring
+        *args : tuple
+            Additional positional arguments
+        **kwargs : dict
+            Additional keyword arguments
+
+        Raises
+        ------
+        NotImplementedError
+            VRML export is not available in this implementation
+        """
+        raise NotImplementedError(
+            "export_wrl_model() is not implementable with the current exodus-rs backend. "
+            "VRML export requires extensive 3D graphics generation capabilities "
+            "that are not part of the Exodus II format specification. "
+            "Consider using the original exomerge3.py or dedicated visualization tools."
+        )
+
+    def get_input_deck(self) -> str:
+        """
+        Get a text representation of the input deck.
+
+        Returns
+        -------
+        str
+            String representation of the model
+        """
+        raise NotImplementedError(
+            "get_input_deck() is not yet implemented. "
+            "Implementation planned for Phase 2."
+        )
+
+    # ========================================================================
+    # Element Block Operations
+    # ========================================================================
+
+    def create_element_block(self, element_block_id: int, info: List, connectivity: Optional[List] = None):
+        """
+        Create a new element block.
+
+        Parameters
+        ----------
+        element_block_id : int
+            ID for the new element block
+        info : list
+            Element block info [element_type, num_elements, nodes_per_element, num_attributes]
+        connectivity : list, optional
+            Connectivity array for the elements
+
+        Examples
+        --------
+        >>> model.create_element_block(1, ['HEX8', 10, 8, 0], connectivity_array)
+        """
+        raise NotImplementedError(
+            "create_element_block() is not yet implemented. "
+            "Implementation planned for Phase 3."
+        )
+
+    def delete_element_block(self, element_block_ids: Union[int, List[int]], delete_orphaned_nodes: bool = True):
+        """
+        Delete one or more element blocks.
+
+        Parameters
+        ----------
+        element_block_ids : int or list of int
+            Element block ID(s) to delete
+        delete_orphaned_nodes : bool, optional
+            Whether to delete nodes that become orphaned (default: True)
+
+        Examples
+        --------
+        >>> model.delete_element_block(1)
+        >>> model.delete_element_block([1, 2, 3])
+        """
+        raise NotImplementedError(
+            "delete_element_block() is not yet implemented. "
+            "Implementation planned for Phase 3."
+        )
+
+    def element_block_exists(self, element_block_id: int) -> bool:
+        """
+        Check if an element block exists.
+
+        Parameters
+        ----------
+        element_block_id : int
+            Element block ID to check
+
+        Returns
+        -------
+        bool
+            True if element block exists, False otherwise
+        """
+        raise NotImplementedError(
+            "element_block_exists() is not yet implemented. "
+            "Implementation planned for Phase 3."
+        )
+
+    def rename_element_block(self, element_block_id: int, new_element_block_id: int):
+        """
+        Rename an element block.
+
+        Parameters
+        ----------
+        element_block_id : int
+            Current element block ID
+        new_element_block_id : int
+            New element block ID
+
+        Examples
+        --------
+        >>> model.rename_element_block(1, 100)
+        """
+        raise NotImplementedError(
+            "rename_element_block() is not yet implemented. "
+            "Implementation planned for Phase 3."
+        )
+
+    def get_element_block_ids(self) -> List[int]:
+        """
+        Get all element block IDs.
+
+        Returns
+        -------
+        list of int
+            List of element block IDs
+
+        Examples
+        --------
+        >>> ids = model.get_element_block_ids()
+        >>> print(ids)
+        [1, 2, 3]
+        """
+        raise NotImplementedError(
+            "get_element_block_ids() is not yet implemented. "
+            "Implementation planned for Phase 3."
+        )
+
+    def get_element_block_name(self, element_block_id: int) -> str:
+        """
+        Get the name of an element block.
+
+        Parameters
+        ----------
+        element_block_id : int
+            Element block ID
+
+        Returns
+        -------
+        str
+            Element block name
+        """
+        raise NotImplementedError(
+            "get_element_block_name() is not yet implemented. "
+            "Implementation planned for Phase 3."
+        )
+
+    def get_all_element_block_names(self) -> Dict[int, str]:
+        """
+        Get names of all element blocks.
+
+        Returns
+        -------
+        dict
+            Dictionary mapping element block IDs to names
+        """
+        raise NotImplementedError(
+            "get_all_element_block_names() is not yet implemented. "
+            "Implementation planned for Phase 3."
+        )
+
+    def get_element_count(self, element_block_ids: Union[str, List[int]] = "all") -> int:
+        """
+        Get total element count.
+
+        Parameters
+        ----------
+        element_block_ids : str or list of int, optional
+            Element blocks to count (default: "all")
+
+        Returns
+        -------
+        int
+            Total number of elements
+        """
+        raise NotImplementedError(
+            "get_element_count() is not yet implemented. "
+            "Implementation planned for Phase 3."
+        )
+
+    def get_element_block_dimension(self, element_block_id: int) -> int:
+        """
+        Get the spatial dimension of an element block.
+
+        Parameters
+        ----------
+        element_block_id : int
+            Element block ID
+
+        Returns
+        -------
+        int
+            Spatial dimension (1, 2, or 3)
+        """
+        raise NotImplementedError(
+            "get_element_block_dimension() is not yet implemented. "
+            "Implementation planned for Phase 3."
+        )
+
+    def get_nodes_per_element(self, element_block_id: int) -> int:
+        """
+        Get number of nodes per element in a block.
+
+        Parameters
+        ----------
+        element_block_id : int
+            Element block ID
+
+        Returns
+        -------
+        int
+            Number of nodes per element
+        """
+        raise NotImplementedError(
+            "get_nodes_per_element() is not yet implemented. "
+            "Implementation planned for Phase 3."
+        )
+
+    def get_connectivity(self, element_block_id: Union[str, int] = "auto") -> List[List[int]]:
+        """
+        Get element connectivity array.
+
+        Parameters
+        ----------
+        element_block_id : str or int, optional
+            Element block ID or "auto" (default: "auto")
+
+        Returns
+        -------
+        list of list of int
+            Connectivity array
+        """
+        raise NotImplementedError(
+            "get_connectivity() is not yet implemented. "
+            "Implementation planned for Phase 3."
+        )
+
+    def get_element_block_connectivity(self, element_block_id: Union[str, int] = "auto") -> List[List[int]]:
+        """
+        Get element connectivity array (alias for get_connectivity).
+
+        Parameters
+        ----------
+        element_block_id : str or int, optional
+            Element block ID or "auto" (default: "auto")
+
+        Returns
+        -------
+        list of list of int
+            Connectivity array
+        """
+        return self.get_connectivity(element_block_id)
+
+    def get_nodes_in_element_block(self, element_block_ids: Union[str, List[int]]) -> List[int]:
+        """
+        Get list of nodes used in element blocks.
+
+        Parameters
+        ----------
+        element_block_ids : str or list of int
+            Element block IDs or "all"
+
+        Returns
+        -------
+        list of int
+            List of node indices
+        """
+        raise NotImplementedError(
+            "get_nodes_in_element_block() is not yet implemented. "
+            "Implementation planned for Phase 3."
+        )
+
+    def duplicate_element_block(self, source_id: int, target_id: int, duplicate_nodes: bool = False):
+        """
+        Duplicate an element block.
+
+        Parameters
+        ----------
+        source_id : int
+            Source element block ID
+        target_id : int
+            Target element block ID
+        duplicate_nodes : bool, optional
+            Whether to duplicate nodes (default: False)
+        """
+        raise NotImplementedError(
+            "duplicate_element_block() is not yet implemented. "
+            "Implementation planned for Phase 3."
+        )
+
+    def combine_element_blocks(self, element_block_ids: List[int], target_element_block_id: Union[str, int] = "auto"):
+        """
+        Combine multiple element blocks into one.
+
+        Parameters
+        ----------
+        element_block_ids : list of int
+            Element block IDs to combine
+        target_element_block_id : str or int, optional
+            Target element block ID (default: "auto")
+        """
+        raise NotImplementedError(
+            "combine_element_blocks() is not yet implemented. "
+            "Implementation planned for Phase 3."
+        )
+
+    def unmerge_element_blocks(self, element_block_ids: Union[str, List[int]] = "all"):
+        """
+        Split element blocks so they don't share nodes.
+
+        Parameters
+        ----------
+        element_block_ids : str or list of int, optional
+            Element block IDs (default: "all")
+        """
+        raise NotImplementedError(
+            "unmerge_element_blocks() is not yet implemented. "
+            "Implementation planned for Phase 3."
+        )
+
+    def process_element_fields(self, element_block_ids: Union[str, List[int]] = "all"):
+        """
+        Process element fields to ensure consistency.
+
+        Parameters
+        ----------
+        element_block_ids : str or list of int, optional
+            Element block IDs (default: "all")
+        """
+        raise NotImplementedError(
+            "process_element_fields() is not yet implemented. "
+            "Implementation planned for Phase 3."
+        )
+
+    def translate_element_blocks(self, element_block_ids: Union[str, List[int]], offset: List[float],
+                                duplicate_nodes: bool = False):
+        """Translate element blocks."""
+        raise NotImplementedError("translate_element_blocks() is not yet implemented.")
+
+    def reflect_element_blocks(self, element_block_ids: Union[str, List[int]], *args, **kwargs):
+        """Reflect element blocks."""
+        raise NotImplementedError("reflect_element_blocks() is not yet implemented.")
+
+    def scale_element_blocks(self, element_block_ids: Union[str, List[int]], scale_factor: float,
+                            duplicate_nodes: bool = False):
+        """Scale element blocks."""
+        raise NotImplementedError("scale_element_blocks() is not yet implemented.")
+
+    def rotate_element_blocks(self, element_block_ids: Union[str, List[int]], axis: List[float],
+                             angle_in_degrees: float, duplicate_nodes: bool = False):
+        """Rotate element blocks."""
+        raise NotImplementedError("rotate_element_blocks() is not yet implemented.")
+
+    def displace_element_blocks(self, element_block_ids: Union[str, List[int]], *args, **kwargs):
+        """Displace element blocks using displacement field."""
+        raise NotImplementedError("displace_element_blocks() is not yet implemented.")
+
+    def convert_element_blocks(self, element_block_ids: Union[str, List[int]], new_element_type: str):
+        """Convert element blocks to a new element type."""
+        raise NotImplementedError("convert_element_blocks() is not yet implemented.")
+
+    def make_elements_linear(self, element_block_ids: Union[str, List[int]] = "all"):
+        """Convert elements to linear (first-order) type."""
+        raise NotImplementedError("make_elements_linear() is not yet implemented.")
+
+    def make_elements_quadratic(self, element_block_ids: Union[str, List[int]] = "all"):
+        """Convert elements to quadratic (second-order) type."""
+        raise NotImplementedError("make_elements_quadratic() is not yet implemented.")
+
+    def convert_hex8_block_to_tet4_block(self, element_block_id: int, scheme: str = "hex24tet"):
+        """Convert HEX8 elements to TET4 elements."""
+        raise NotImplementedError("convert_hex8_block_to_tet4_block() is not yet implemented.")
+
+    def threshold_element_blocks(self, expression: str, element_block_ids: Union[str, List[int]] = "all",
+                                timestep: Union[str, float] = "last", *args, **kwargs):
+        """Filter element blocks based on expression threshold."""
+        raise NotImplementedError("threshold_element_blocks() is not yet implemented.")
+
+    def count_degenerate_elements(self, element_block_ids: Union[str, List[int]] = "all") -> int:
+        """Count degenerate elements in element blocks."""
+        raise NotImplementedError("count_degenerate_elements() is not yet implemented.")
+
+    def count_disconnected_blocks(self, element_block_ids: Union[str, List[int]] = "all") -> int:
+        """Count disconnected sub-blocks within element blocks."""
+        raise NotImplementedError("count_disconnected_blocks() is not yet implemented.")
+
+    def delete_duplicate_elements(self, element_block_ids: Union[str, List[int]] = "all"):
+        """Delete duplicate elements."""
+        raise NotImplementedError("delete_duplicate_elements() is not yet implemented.")
+
+    def calculate_element_centroids(self, element_block_ids: Union[str, List[int]] = "all",
+                                   field_prefix: str = "centroid"):
+        """Calculate element centroids and store as fields."""
+        raise NotImplementedError("calculate_element_centroids() is not yet implemented.")
+
+    def calculate_element_volumes(self, element_block_ids: Union[str, List[int]] = "all",
+                                 field_name: str = "volume"):
+        """Calculate element volumes and store as field."""
+        raise NotImplementedError("calculate_element_volumes() is not yet implemented.")
+
+    def get_element_block_volume(self, element_block_ids: Union[str, List[int]] = "all",
+                                timestep: Union[str, float] = "last") -> float:
+        """Get total volume of element blocks."""
+        raise NotImplementedError("get_element_block_volume() is not yet implemented.")
+
+    def get_element_block_centroid(self, element_block_ids: Union[str, List[int]] = "all",
+                                  timestep: Union[str, float] = "last") -> List[float]:
+        """Get centroid of element blocks."""
+        raise NotImplementedError("get_element_block_centroid() is not yet implemented.")
+
+    def get_element_block_extents(self, element_block_ids: Union[str, List[int]] = "all") -> List[Tuple[float, float]]:
+        """Get bounding box extents of element blocks."""
+        raise NotImplementedError("get_element_block_extents() is not yet implemented.")
+
+    def get_element_edge_length_info(self, element_block_ids: Union[str, List[int]] = "all") -> Tuple[float, float]:
+        """Get minimum and average element edge lengths."""
+        raise NotImplementedError("get_element_edge_length_info() is not yet implemented.")
+
+    # ========================================================================
+    # Field Operations - Element Fields
+    # ========================================================================
+
+    def create_element_field(self, element_field_name: str, element_block_id: int,
+                            default_value: Union[str, float] = "auto"):
+        """Create an element field."""
+        raise NotImplementedError("create_element_field() is not yet implemented.")
+
+    def delete_element_field(self, element_field_names: Union[str, List[str]],
+                            element_block_ids: Union[str, List[int]] = "all"):
+        """Delete element field(s)."""
+        raise NotImplementedError("delete_element_field() is not yet implemented.")
+
+    def element_field_exists(self, element_field_name: str,
+                            element_block_ids: Union[str, List[int]] = "all") -> bool:
+        """Check if element field exists."""
+        raise NotImplementedError("element_field_exists() is not yet implemented.")
+
+    def get_element_field_names(self, element_block_ids: Union[str, List[int]] = "all") -> List[str]:
+        """Get element field names."""
+        raise NotImplementedError("get_element_field_names() is not yet implemented.")
+
+    def get_element_field_values(self, element_field_name: str, element_block_id: int,
+                                timestep: Union[str, float] = "last") -> List[float]:
+        """Get element field values."""
+        raise NotImplementedError("get_element_field_values() is not yet implemented.")
+
+    def rename_element_field(self, element_field_name: str, new_element_field_name: str,
+                            element_block_ids: Union[str, List[int]] = "all"):
+        """Rename an element field."""
+        raise NotImplementedError("rename_element_field() is not yet implemented.")
+
+    def calculate_element_field(self, expression: str, element_block_ids: Union[str, List[int]] = "all"):
+        """Calculate element field from expression."""
+        raise NotImplementedError(
+            "calculate_element_field() requires expression evaluation which is not yet implemented. "
+            "This method needs a Python expression parser to evaluate mathematical expressions "
+            "on element field data. Implementation planned for Phase 4."
+        )
+
+    def calculate_element_field_maximum(self, element_field_names: Union[str, List[str]],
+                                       element_block_ids: Union[str, List[int]] = "all",
+                                       calculate_location: bool = False,
+                                       calculate_block_id: bool = False) -> Union[float, Tuple]:
+        """Find maximum value of element field(s)."""
+        raise NotImplementedError("calculate_element_field_maximum() is not yet implemented.")
+
+    def calculate_element_field_minimum(self, element_field_names: Union[str, List[str]],
+                                       element_block_ids: Union[str, List[int]] = "all",
+                                       calculate_location: bool = False,
+                                       calculate_block_id: bool = False) -> Union[float, Tuple]:
+        """Find minimum value of element field(s)."""
+        raise NotImplementedError("calculate_element_field_minimum() is not yet implemented.")
+
+    def create_averaged_element_field(self, element_field_names: Union[str, List[str]],
+                                     new_field_name: str, element_block_ids: Union[str, List[int]] = "all"):
+        """Create averaged element field from multiple fields."""
+        raise NotImplementedError("create_averaged_element_field() is not yet implemented.")
+
+    def convert_element_field_to_node_field(self, element_field_name: str, node_field_name: str = None,
+                                           element_block_ids: Union[str, List[int]] = "all"):
+        """Convert element field to node field."""
+        raise NotImplementedError("convert_element_field_to_node_field() is not yet implemented.")
+
+    def convert_node_field_to_element_field(self, node_field_name: str, element_field_name: str = None,
+                                           element_block_ids: Union[str, List[int]] = "all"):
+        """Convert node field to element field."""
+        raise NotImplementedError("convert_node_field_to_element_field() is not yet implemented.")
+
+    # ========================================================================
+    # Field Operations - Node Fields
+    # ========================================================================
+
+    def create_node_field(self, node_field_name: str, value: Union[str, float, List] = "auto"):
+        """Create a node field."""
+        raise NotImplementedError("create_node_field() is not yet implemented.")
+
+    def delete_node_field(self, node_field_names: Union[str, List[str]]):
+        """Delete node field(s)."""
+        raise NotImplementedError("delete_node_field() is not yet implemented.")
+
+    def node_field_exists(self, node_field_name: str) -> bool:
+        """Check if node field exists."""
+        raise NotImplementedError("node_field_exists() is not yet implemented.")
+
+    def get_node_field_names(self) -> List[str]:
+        """Get all node field names."""
+        raise NotImplementedError("get_node_field_names() is not yet implemented.")
+
+    def get_node_field_values(self, node_field_name: str, timestep: Union[str, float] = "last") -> List[float]:
+        """Get node field values."""
+        raise NotImplementedError("get_node_field_values() is not yet implemented.")
+
+    def rename_node_field(self, node_field_name: str, new_node_field_name: str):
+        """Rename a node field."""
+        raise NotImplementedError("rename_node_field() is not yet implemented.")
+
+    def calculate_node_field(self, expression: str):
+        """Calculate node field from expression."""
+        raise NotImplementedError(
+            "calculate_node_field() requires expression evaluation which is not yet implemented. "
+            "This method needs a Python expression parser to evaluate mathematical expressions "
+            "on node field data. Implementation planned for Phase 4."
+        )
+
+    def calculate_node_field_maximum(self, node_field_names: Union[str, List[str]],
+                                    calculate_location: bool = False) -> Union[float, Tuple]:
+        """Find maximum value of node field(s)."""
+        raise NotImplementedError("calculate_node_field_maximum() is not yet implemented.")
+
+    def calculate_node_field_minimum(self, node_field_names: Union[str, List[str]],
+                                    calculate_location: bool = False) -> Union[float, Tuple]:
+        """Find minimum value of node field(s)."""
+        raise NotImplementedError("calculate_node_field_minimum() is not yet implemented.")
+
+    def displacement_field_exists(self) -> bool:
+        """Check if displacement field exists."""
+        raise NotImplementedError("displacement_field_exists() is not yet implemented.")
+
+    def create_displacement_field(self):
+        """Create displacement field."""
+        raise NotImplementedError("create_displacement_field() is not yet implemented.")
+
+    # ========================================================================
+    # Field Operations - Global Variables
+    # ========================================================================
+
+    def create_global_variable(self, global_variable_name: str, value: Union[str, float, List] = "auto"):
+        """Create a global variable."""
+        raise NotImplementedError("create_global_variable() is not yet implemented.")
+
+    def delete_global_variable(self, global_variable_names: Union[str, List[str]]):
+        """Delete global variable(s)."""
+        raise NotImplementedError("delete_global_variable() is not yet implemented.")
+
+    def global_variable_exists(self, global_variable_name: str) -> bool:
+        """Check if global variable exists."""
+        raise NotImplementedError("global_variable_exists() is not yet implemented.")
+
+    def get_global_variable_names(self) -> List[str]:
+        """Get all global variable names."""
+        raise NotImplementedError("get_global_variable_names() is not yet implemented.")
+
+    def rename_global_variable(self, global_variable_name: str, new_global_variable_name: str):
+        """Rename a global variable."""
+        raise NotImplementedError("rename_global_variable() is not yet implemented.")
+
+    def calculate_global_variable(self, expression: str):
+        """Calculate global variable from expression."""
+        raise NotImplementedError(
+            "calculate_global_variable() requires expression evaluation which is not yet implemented. "
+            "This method needs a Python expression parser to evaluate mathematical expressions. "
+            "Implementation planned for Phase 4."
+        )
+
+    def output_global_variables(self, expressions: List[str], *args, **kwargs):
+        """Output global variables calculated from expressions."""
+        raise NotImplementedError("output_global_variables() is not yet implemented.")
+
+    # ========================================================================
+    # Field Operations - Side Set Fields
+    # ========================================================================
+
+    def create_side_set_field(self, side_set_field_name: str, side_set_id: int,
+                             default_value: Union[str, float] = "auto"):
+        """Create a side set field."""
+        raise NotImplementedError("create_side_set_field() is not yet implemented.")
+
+    def delete_side_set_field(self, side_set_field_names: Union[str, List[str]],
+                             side_set_ids: Union[str, List[int]] = "all"):
+        """Delete side set field(s)."""
+        raise NotImplementedError("delete_side_set_field() is not yet implemented.")
+
+    def side_set_field_exists(self, side_set_field_name: str,
+                             side_set_ids: Union[str, List[int]] = "all") -> bool:
+        """Check if side set field exists."""
+        raise NotImplementedError("side_set_field_exists() is not yet implemented.")
+
+    def get_side_set_field_names(self, side_set_id: int) -> List[str]:
+        """Get side set field names."""
+        raise NotImplementedError("get_side_set_field_names() is not yet implemented.")
+
+    def get_side_set_field_values(self, side_set_field_name: str, side_set_id: int,
+                                  timestep: Union[str, float] = "last") -> List[float]:
+        """Get side set field values."""
+        raise NotImplementedError("get_side_set_field_values() is not yet implemented.")
+
+    def rename_side_set_field(self, side_set_field_name: str, new_side_set_field_name: str,
+                             side_set_ids: Union[str, List[int]] = "all"):
+        """Rename a side set field."""
+        raise NotImplementedError("rename_side_set_field() is not yet implemented.")
+
+    def calculate_side_set_field(self, expression: str, side_set_ids: Union[str, List[int]] = "all"):
+        """Calculate side set field from expression."""
+        raise NotImplementedError(
+            "calculate_side_set_field() requires expression evaluation which is not yet implemented. "
+            "Implementation planned for Phase 4."
+        )
+
+    # ========================================================================
+    # Field Operations - Node Set Fields
+    # ========================================================================
+
+    def create_node_set_field(self, node_set_field_name: str, node_set_id: int,
+                             default_value: Union[str, float] = "auto"):
+        """Create a node set field."""
+        raise NotImplementedError("create_node_set_field() is not yet implemented.")
+
+    def delete_node_set_field(self, node_set_field_names: Union[str, List[str]],
+                             node_set_ids: Union[str, List[int]] = "all"):
+        """Delete node set field(s)."""
+        raise NotImplementedError("delete_node_set_field() is not yet implemented.")
+
+    def node_set_field_exists(self, node_set_field_name: str,
+                             node_set_ids: Union[str, List[int]] = "all") -> bool:
+        """Check if node set field exists."""
+        raise NotImplementedError("node_set_field_exists() is not yet implemented.")
+
+    def get_node_set_field_names(self, node_set_id: int) -> List[str]:
+        """Get node set field names."""
+        raise NotImplementedError("get_node_set_field_names() is not yet implemented.")
+
+    def get_node_set_field_values(self, node_set_field_name: str, node_set_id: int,
+                                  timestep: Union[str, float] = "last") -> List[float]:
+        """Get node set field values."""
+        raise NotImplementedError("get_node_set_field_values() is not yet implemented.")
+
+    def rename_node_set_field(self, node_set_field_name: str, new_node_set_field_name: str,
+                             node_set_ids: Union[str, List[int]] = "all"):
+        """Rename a node set field."""
+        raise NotImplementedError("rename_node_set_field() is not yet implemented.")
+
+    def calculate_node_set_field(self, expression: str, node_set_ids: Union[str, List[int]] = "all"):
+        """Calculate node set field from expression."""
+        raise NotImplementedError(
+            "calculate_node_set_field() requires expression evaluation which is not yet implemented. "
+            "Implementation planned for Phase 4."
+        )
+
+    # ========================================================================
+    # Node Operations
+    # ========================================================================
+
+    def create_nodes(self, new_nodes: List[List[float]]):
+        """Create new nodes (was create_node in original)."""
+        raise NotImplementedError("create_nodes() is not yet implemented.")
+
+    def delete_node(self, node_indices: Union[int, List[int]]):
+        """Delete node(s)."""
+        raise NotImplementedError("delete_node() is not yet implemented.")
+
+    def delete_unused_nodes(self):
+        """Delete nodes that are not referenced by any elements."""
+        raise NotImplementedError("delete_unused_nodes() is not yet implemented.")
+
+    def get_node_count(self) -> int:
+        """Get total number of nodes."""
+        return len(self.nodes)
+
+    def get_nodes(self) -> List[List[float]]:
+        """Get all node coordinates."""
+        return self.nodes
+
+    def merge_nodes(self, tolerance: float = None, *args, **kwargs):
+        """Merge nodes within tolerance distance."""
+        raise NotImplementedError("merge_nodes() is not yet implemented.")
+
+    def get_closest_node_distance(self) -> float:
+        """Get minimum distance between any two nodes."""
+        raise NotImplementedError("get_closest_node_distance() is not yet implemented.")
+
+    def get_length_scale(self) -> float:
+        """Get characteristic length scale of the model."""
+        raise NotImplementedError("get_length_scale() is not yet implemented.")
+
+    # ========================================================================
+    # Side Set Operations
+    # ========================================================================
+
+    def create_side_set(self, side_set_id: int, side_set_members: Optional[List] = None):
+        """Create a side set."""
+        raise NotImplementedError("create_side_set() is not yet implemented.")
+
+    def delete_side_set(self, side_set_ids: Union[int, List[int]]):
+        """Delete side set(s)."""
+        raise NotImplementedError("delete_side_set() is not yet implemented.")
+
+    def delete_empty_side_sets(self):
+        """Delete all empty side sets."""
+        raise NotImplementedError("delete_empty_side_sets() is not yet implemented.")
+
+    def side_set_exists(self, side_set_id: int) -> bool:
+        """Check if side set exists."""
+        raise NotImplementedError("side_set_exists() is not yet implemented.")
+
+    def rename_side_set(self, side_set_id: int, new_side_set_id: int):
+        """Rename a side set."""
+        raise NotImplementedError("rename_side_set() is not yet implemented.")
+
+    def get_side_set_ids(self) -> List[int]:
+        """Get all side set IDs."""
+        raise NotImplementedError("get_side_set_ids() is not yet implemented.")
+
+    def get_side_set_name(self, side_set_id: int) -> str:
+        """Get side set name."""
+        raise NotImplementedError("get_side_set_name() is not yet implemented.")
+
+    def get_all_side_set_names(self) -> Dict[int, str]:
+        """Get all side set names."""
+        raise NotImplementedError("get_all_side_set_names() is not yet implemented.")
+
+    def get_side_set_members(self, side_set_id: int) -> List[Tuple[int, int]]:
+        """Get side set members as list of (element_id, face_id) tuples."""
+        raise NotImplementedError("get_side_set_members() is not yet implemented.")
+
+    def add_faces_to_side_set(self, side_set_id: int, new_side_set_members: List[Tuple[int, int]]):
+        """Add faces to an existing side set."""
+        raise NotImplementedError("add_faces_to_side_set() is not yet implemented.")
+
+    def create_side_set_from_expression(self, expression: str, side_set_id: int = None, *args, **kwargs):
+        """Create side set from expression."""
+        raise NotImplementedError(
+            "create_side_set_from_expression() requires expression evaluation. "
+            "Implementation planned for Phase 6."
+        )
+
+    def convert_side_set_to_cohesive_zone(self, side_set_ids: Union[int, List[int]], new_element_block_id: int):
+        """Convert side set to cohesive zone element block."""
+        raise NotImplementedError("convert_side_set_to_cohesive_zone() is not yet implemented.")
+
+    def get_nodes_in_side_set(self, side_set_id: int) -> List[int]:
+        """Get list of nodes in a side set."""
+        raise NotImplementedError("get_nodes_in_side_set() is not yet implemented.")
+
+    def get_side_set_area(self, side_set_ids: Union[int, List[int]]) -> float:
+        """Calculate total area of side set(s)."""
+        raise NotImplementedError("get_side_set_area() is not yet implemented.")
+
+    # ========================================================================
+    # Node Set Operations
+    # ========================================================================
+
+    def create_node_set(self, node_set_id: int, node_set_members: Optional[List[int]] = None):
+        """Create a node set."""
+        raise NotImplementedError("create_node_set() is not yet implemented.")
+
+    def delete_node_set(self, node_set_ids: Union[int, List[int]]):
+        """Delete node set(s)."""
+        raise NotImplementedError("delete_node_set() is not yet implemented.")
+
+    def delete_empty_node_sets(self):
+        """Delete all empty node sets."""
+        raise NotImplementedError("delete_empty_node_sets() is not yet implemented.")
+
+    def node_set_exists(self, node_set_id: int) -> bool:
+        """Check if node set exists."""
+        raise NotImplementedError("node_set_exists() is not yet implemented.")
+
+    def rename_node_set(self, node_set_id: int, new_node_set_id: int):
+        """Rename a node set."""
+        raise NotImplementedError("rename_node_set() is not yet implemented.")
+
+    def get_node_set_ids(self) -> List[int]:
+        """Get all node set IDs."""
+        raise NotImplementedError("get_node_set_ids() is not yet implemented.")
+
+    def get_node_set_name(self, node_set_id: int) -> str:
+        """Get node set name."""
+        raise NotImplementedError("get_node_set_name() is not yet implemented.")
+
+    def get_all_node_set_names(self) -> Dict[int, str]:
+        """Get all node set names."""
+        raise NotImplementedError("get_all_node_set_names() is not yet implemented.")
+
+    def get_node_set_members(self, node_set_id: int) -> List[int]:
+        """Get node set members."""
+        raise NotImplementedError("get_node_set_members() is not yet implemented.")
+
+    def add_nodes_to_node_set(self, node_set_id: int, new_node_set_members: List[int]):
+        """Add nodes to an existing node set."""
+        raise NotImplementedError("add_nodes_to_node_set() is not yet implemented.")
+
+    def create_node_set_from_side_set(self, node_set_id: int, side_set_id: int):
+        """Create node set from side set members."""
+        raise NotImplementedError("create_node_set_from_side_set() is not yet implemented.")
+
+    # ========================================================================
+    # Geometric Transformation Operations
+    # ========================================================================
+
+    def rotate_geometry(self, axis: List[float], angle_in_degrees: float,
+                       adjust_displacement_field: Union[str, bool] = "auto"):
+        """Rotate the entire geometry."""
+        raise NotImplementedError("rotate_geometry() is not yet implemented.")
+
+    def translate_geometry(self, offset: List[float]):
+        """Translate the entire geometry."""
+        raise NotImplementedError("translate_geometry() is not yet implemented.")
+
+    def scale_geometry(self, scale_factor: float, adjust_displacement_field: Union[str, bool] = "auto"):
+        """Scale the entire geometry."""
+        raise NotImplementedError("scale_geometry() is not yet implemented.")
+
+    # ========================================================================
+    # Summarize and Info
+    # ========================================================================
+
+    def summarize(self):
+        """
+        Print a detailed summary of the model.
+
+        This method prints information about all element blocks, node sets,
+        side sets, fields, and other model properties.
+        """
+        raise NotImplementedError(
+            "summarize() is not yet implemented. "
+            "Implementation planned for Phase 11."
+        )
+
+    # ========================================================================
+    # Metadata Operations
+    # ========================================================================
+
+    def set_title(self, title: str):
+        """Set the database title."""
+        self.title = title
+
+    def get_title(self) -> str:
+        """Get the database title."""
+        return self.title
+
+    def add_qa_record(self, *args):
+        """Add a QA record."""
+        raise NotImplementedError("add_qa_record() is not yet implemented.")
+
+    def get_qa_records(self) -> List[Tuple]:
+        """Get all QA records."""
+        return self.qa_records
+
+    def add_info_record(self, record: str):
+        """Add an info record."""
+        self.info_records.append(record)
+
+    def get_info_records(self) -> List[str]:
+        """Get all info records."""
+        return self.info_records
+
+    # ========================================================================
+    # Timestep Operations
+    # ========================================================================
+
+    def create_timestep(self, timestep: float):
+        """Create a new timestep."""
+        raise NotImplementedError("create_timestep() is not yet implemented.")
+
+    def delete_timestep(self, timesteps: Union[float, List[float]]):
+        """Delete one or more timesteps."""
+        raise NotImplementedError("delete_timestep() is not yet implemented.")
+
+    def get_timesteps(self) -> List[float]:
+        """Get all timesteps."""
+        return self.timesteps
+
+    def timestep_exists(self, timestep: float) -> bool:
+        """Check if a timestep exists."""
+        return timestep in self.timesteps
+
+    def copy_timestep(self, timestep: float, new_timestep: float):
+        """Copy a timestep."""
+        raise NotImplementedError("copy_timestep() is not yet implemented.")
+
+    def create_interpolated_timestep(self, timestep: float, interpolation: str = "cubic"):
+        """Create an interpolated timestep."""
+        raise NotImplementedError("create_interpolated_timestep() is not yet implemented.")
+
+    # ========================================================================
+    # Utility and Mesh Generation
+    # ========================================================================
+
+    def to_lowercase(self):
+        """Convert all names to lowercase."""
+        raise NotImplementedError("to_lowercase() is not yet implemented.")
+
+    def build_hex8_cube(self, element_block_id: Union[str, int] = "auto",
+                       extents: Union[float, List[float]] = 1.0, divisions: Union[int, List[int]] = 3):
+        """
+        Build a HEX8 cube mesh.
+
+        Parameters
+        ----------
+        element_block_id : str or int, optional
+            Element block ID for the cube (default: "auto")
+        extents : float or list of float, optional
+            Size of cube (single value or [x, y, z]) (default: 1.0)
+        divisions : int or list of int, optional
+            Number of divisions (single value or [nx, ny, nz]) (default: 3)
+
+        Examples
+        --------
+        >>> model = ExodusModel()
+        >>> model.build_hex8_cube(element_block_id=1, extents=2.0, divisions=5)
+        """
+        raise NotImplementedError("build_hex8_cube() is not yet implemented.")
+
+
+# Module-level helper function for displaying banner
+def _show_banner():
+    """Show the exomerge banner (for compatibility)."""
+    if SHOW_BANNER:
+        print("=" * 70)
+        print(f"exodus.exomerge version {__version__}")
+        print("Python API for manipulating Exodus II files")
+        print("Built on exodus-py (Rust bindings)")
+        print(f"Contact: {CONTACT}")
+        print("=" * 70)
