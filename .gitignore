@@ -147,3 +147,8 @@ build/
 # SEACAS build and install directories
 build/
 install/
+
+# Compatibility test build and output
+build-compat/
+rust/compat-tests/test-*.txt
+rust/compat-tests/rust-to-c/output/
