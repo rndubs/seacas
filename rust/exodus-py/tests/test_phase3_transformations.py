@@ -1,18 +1,18 @@
-#!/usr/bin/env python3
 """
-Test script for Phase 3 element block operations in exomerge module.
+Test Phase 3 geometric transformations and advanced operations in exomerge module.
 Tests: transformation operations, duplicate_element_block, get_element_block_extents
 """
 
+import pytest
 import sys
-import math
 sys.path.insert(0, 'python')
 
 from exodus.exomerge import ExodusModel
 
-def test_translate_element_blocks():
-    """Test translating element blocks."""
-    print("Testing translate_element_blocks...")
+
+@pytest.fixture
+def quad_model():
+    """Create a model with two separate quad blocks."""
     model = ExodusModel()
 
     # Create two separate blocks with their own nodes
@@ -22,20 +22,22 @@ def test_translate_element_blocks():
     model.create_nodes([[5.0, 0.0, 0.0], [6.0, 0.0, 0.0], [6.0, 1.0, 0.0], [5.0, 1.0, 0.0]])
     model.create_element_block(2, ['quad4', 1, 4, 0], [[5, 6, 7, 8]])
 
+    return model
+
+
+def test_translate_element_blocks(quad_model):
+    """Test translating element blocks."""
     # Translate block 1
-    model.translate_element_blocks(1, [10.0, 0.0, 0.0])
+    quad_model.translate_element_blocks(1, [10.0, 0.0, 0.0])
 
     # Check that block 1 nodes moved
-    assert abs(model.nodes[0][0] - 10.0) < 1e-10, f"Node 0 x should be 10.0, got {model.nodes[0][0]}"
+    assert abs(quad_model.nodes[0][0] - 10.0) < 1e-10, f"Node 0 x should be 10.0, got {quad_model.nodes[0][0]}"
     # Check that block 2 nodes didn't move
-    assert abs(model.nodes[4][0] - 5.0) < 1e-10, f"Node 4 x should be 5.0, got {model.nodes[4][0]}"
+    assert abs(quad_model.nodes[4][0] - 5.0) < 1e-10, f"Node 4 x should be 5.0, got {quad_model.nodes[4][0]}"
 
-    print("✓ translate_element_blocks passed")
-    return model
 
 def test_scale_element_blocks():
     """Test scaling element blocks."""
-    print("\nTesting scale_element_blocks...")
     model = ExodusModel()
 
     # Create a simple block
@@ -49,11 +51,9 @@ def test_scale_element_blocks():
     assert abs(model.nodes[1][0] - 2.0) < 1e-10, f"Node 1 x should be 2.0, got {model.nodes[1][0]}"
     assert abs(model.nodes[2][1] - 2.0) < 1e-10, f"Node 2 y should be 2.0, got {model.nodes[2][1]}"
 
-    print("✓ scale_element_blocks passed")
 
 def test_rotate_element_blocks():
     """Test rotating element blocks."""
-    print("\nTesting rotate_element_blocks...")
     model = ExodusModel()
 
     # Create a simple block
@@ -67,11 +67,9 @@ def test_rotate_element_blocks():
     assert abs(model.nodes[0][0] - 0.0) < 1e-10, f"Node 0 x should be ~0.0, got {model.nodes[0][0]}"
     assert abs(model.nodes[0][1] - 1.0) < 1e-10, f"Node 0 y should be ~1.0, got {model.nodes[0][1]}"
 
-    print("✓ rotate_element_blocks passed")
 
 def test_duplicate_element_block():
     """Test duplicating element blocks."""
-    print("\nTesting duplicate_element_block...")
     model = ExodusModel()
 
     # Create a block
@@ -92,11 +90,9 @@ def test_duplicate_element_block():
     assert model.element_block_exists(3), "Element block 3 should exist"
     assert len(model.nodes) == original_node_count + 4, "Node count should not change"
 
-    print("✓ duplicate_element_block passed")
 
 def test_get_element_block_extents():
     """Test getting element block extents."""
-    print("\nTesting get_element_block_extents...")
     model = ExodusModel()
 
     # Create a block with known extents
@@ -115,11 +111,9 @@ def test_get_element_block_extents():
     assert extents[1] == [0.0, 3.0], f"Y extents should be [0.0, 3.0], got {extents[1]}"
     assert extents[2] == [0.0, 2.0], f"Z extents should be [0.0, 2.0], got {extents[2]}"
 
-    print("✓ get_element_block_extents passed")
 
 def test_combined_operations():
-    """Test combined operations."""
-    print("\nTesting combined operations...")
+    """Test combined operations: duplicate, translate, and scale."""
     model = ExodusModel()
 
     # Create a cube
@@ -150,35 +144,3 @@ def test_combined_operations():
     # Original (0,1) -> translate (+2) -> (2,3) -> scale (0.5) -> (1, 1.5)
     assert abs(extents2[0][0] - 1.0) < 1e-10, f"Block 2 min X should be 1.0, got {extents2[0][0]}"
     assert abs(extents2[0][1] - 1.5) < 1e-10, f"Block 2 max X should be 1.5, got {extents2[0][1]}"
-
-    print("✓ combined operations passed")
-
-def main():
-    """Run all tests."""
-    print("="*60)
-    print("Testing Phase 3 Element Block Operations")
-    print("="*60)
-
-    try:
-        test_translate_element_blocks()
-        test_scale_element_blocks()
-        test_rotate_element_blocks()
-        test_duplicate_element_block()
-        test_get_element_block_extents()
-        test_combined_operations()
-
-        print("\n" + "="*60)
-        print("All tests passed! ✓")
-        print("="*60)
-        return 0
-    except AssertionError as e:
-        print(f"\n✗ Test failed: {e}")
-        return 1
-    except Exception as e:
-        print(f"\n✗ Unexpected error: {e}")
-        import traceback
-        traceback.print_exc()
-        return 1
-
-if __name__ == "__main__":
-    sys.exit(main())
