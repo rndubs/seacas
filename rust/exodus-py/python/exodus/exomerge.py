@@ -778,6 +778,65 @@ class ExodusModel:
         """Set the database title."""
         self.title = title
 
+    def to_lowercase(self):
+        """
+        Convert all names in the model to lowercase.
+
+        This includes:
+        - Model title
+        - Element block names
+        - Side set names
+        - Node set names
+        - Field names (node, element, global)
+        """
+        # Convert title
+        self.title = self.title.lower()
+
+        # Convert element block names
+        for block_id, block_data in self.element_blocks.items():
+            block_data.name = block_data.name.lower()
+
+        # Convert side set names
+        for set_id, set_data in self.side_sets.items():
+            set_data.name = set_data.name.lower()
+
+        # Convert node set names
+        for set_id, set_data in self.node_sets.items():
+            set_data.name = set_data.name.lower()
+
+        # Convert node field names
+        new_node_fields = {}
+        for field_name, field_data in self.node_fields.items():
+            new_node_fields[field_name.lower()] = field_data
+        self.node_fields = new_node_fields
+
+        # Convert element field names in all blocks
+        for block_id, block_data in self.element_blocks.items():
+            new_fields = {}
+            for field_name, field_data in block_data.fields.items():
+                new_fields[field_name.lower()] = field_data
+            block_data.fields = new_fields
+
+        # Convert global variable names
+        new_global_vars = {}
+        for var_name, var_data in self.global_variables.items():
+            new_global_vars[var_name.lower()] = var_data
+        self.global_variables = new_global_vars
+
+        # Convert side set field names
+        for set_id, set_data in self.side_sets.items():
+            new_fields = {}
+            for field_name, field_data in set_data.fields.items():
+                new_fields[field_name.lower()] = field_data
+            set_data.fields = new_fields
+
+        # Convert node set field names
+        for set_id, set_data in self.node_sets.items():
+            new_fields = {}
+            for field_name, field_data in set_data.fields.items():
+                new_fields[field_name.lower()] = field_data
+            set_data.fields = new_fields
+
     def get_qa_records(self) -> List[Tuple]:
         """Return QA records."""
         return self.qa_records
@@ -1456,6 +1515,33 @@ class ExodusModel:
         if self.coords_z:
             self.coords_z = new_z
 
+        # Adjust displacement field if requested
+        if adjust_displacement_field is True or (adjust_displacement_field == "auto" and "displacement" in self.node_fields):
+            # Look for displacement field (try both "displacement" and component fields)
+            if "displacement" in self.node_fields:
+                # Rotate each displacement vector for each timestep
+                for timestep_idx, timestep_data in enumerate(self.node_fields["displacement"]):
+                    rotated_displacements = []
+                    for node_idx, disp in enumerate(timestep_data):
+                        # Handle different displacement formats
+                        if isinstance(disp, (list, tuple)) and len(disp) >= 3:
+                            # Vector format [dx, dy, dz]
+                            dx, dy, dz = disp[0], disp[1], disp[2]
+                        else:
+                            dx = dy = dz = 0.0
+
+                        # Apply rotation matrix to displacement vector
+                        new_dx = r11*dx + r12*dy + r13*dz
+                        new_dy = r21*dx + r22*dy + r23*dz
+                        new_dz = r31*dx + r32*dy + r33*dz
+
+                        if isinstance(disp, (list, tuple)):
+                            rotated_displacements.append([new_dx, new_dy, new_dz])
+                        else:
+                            rotated_displacements.append(new_dx)
+
+                    self.node_fields["displacement"][timestep_idx] = rotated_displacements
+
     def scale_geometry(self, scale_factor: float, adjust_displacement_field: Union[str, bool] = "auto"):
         """
         Scale the entire geometry by a factor.
@@ -1566,7 +1652,7 @@ class ExodusModel:
                       (f" ({name})" if name else ""))
 
         if self.node_sets:
-            print(f"\nNode sets: {len(self.node_sets)}")
+            print(f"\nNode Sets: {len(self.node_sets)}")
             for ns_id in sorted(self.node_sets.keys()):
                 name = self.get_node_set_name(ns_id)
                 members = self.get_node_set_members(ns_id)
@@ -1574,7 +1660,7 @@ class ExodusModel:
                       (f" ({name})" if name else ""))
 
         if self.side_sets:
-            print(f"\nSide sets: {len(self.side_sets)}")
+            print(f"\nSide Sets: {len(self.side_sets)}")
             for ss_id in sorted(self.side_sets.keys()):
                 name = self.get_side_set_name(ss_id)
                 print(f"  Side set {ss_id}" + (f" ({name})" if name else ""))
@@ -1582,6 +1668,15 @@ class ExodusModel:
         if self.node_fields:
             print(f"\nNode fields: {len(self.node_fields)}")
             for field_name in sorted(self.node_fields.keys()):
+                print(f"  {field_name}")
+
+        # Collect all unique element field names across all blocks
+        element_field_names = set()
+        for block_id, block_data in self.element_blocks.items():
+            element_field_names.update(block_data.fields.keys())
+        if element_field_names:
+            print(f"\nElement fields: {len(element_field_names)}")
+            for field_name in sorted(element_field_names):
                 print(f"  {field_name}")
 
         if self.global_variables:
@@ -3690,6 +3785,65 @@ class ExodusModel:
 
             block_data.fields[element_field_name] = field_data
 
+    def create_averaged_element_field(self, field_names: List[str],
+                                      output_name: str, block_id: int):
+        """
+        Create a new element field by averaging existing fields.
+
+        Parameters
+        ----------
+        field_names : list of str
+            Names of fields to average
+        output_name : str
+            Name for the averaged output field
+        block_id : int
+            Element block ID
+
+        Examples
+        --------
+        >>> model.create_averaged_element_field(["stress_x", "stress_y"], "stress_avg", 1)
+        """
+        if block_id not in self.element_blocks:
+            raise ValueError(f"Element block {block_id} does not exist")
+
+        block_data = self.element_blocks[block_id]
+
+        # Verify all fields exist
+        for field_name in field_names:
+            if field_name not in block_data.fields:
+                raise ValueError(f"Field '{field_name}' does not exist in block {block_id}")
+
+        # Get number of timesteps from first field
+        num_timesteps = len(block_data.fields[field_names[0]])
+        num_elems = block_data.block.num_entries
+
+        # Create averaged field
+        averaged_data = []
+        for timestep_idx in range(num_timesteps):
+            timestep_avg = []
+            for elem_idx in range(num_elems):
+                # Average values from all fields for this element
+                values = []
+                for field_name in field_names:
+                    field_data = block_data.fields[field_name]
+                    if timestep_idx < len(field_data):
+                        elem_values = field_data[timestep_idx]
+                        if elem_idx < len(elem_values):
+                            values.append(elem_values[elem_idx])
+
+                # Compute average
+                if values:
+                    avg_value = sum(values) / len(values)
+                else:
+                    avg_value = 0.0
+
+                timestep_avg.append(avg_value)
+
+            averaged_data.append(timestep_avg)
+
+        # Store the averaged field
+        block_data.fields[output_name] = averaged_data
+
     def node_field_exists(self, node_field_name: str) -> bool:
         """
         Check if node field exists.
@@ -5203,7 +5357,7 @@ class ExodusModel:
         block = Block(
             id=block_id,
             entity_type=EntityType.ElemBlock,
-            topology="hex8",
+            topology="HEX8",
             num_entries=num_elems,
             num_nodes_per_entry=8,
             num_attributes=0
