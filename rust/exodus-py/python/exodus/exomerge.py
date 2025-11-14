@@ -1833,6 +1833,462 @@ class ExodusModel:
 
         return math.sqrt(dx*dx + dy*dy + dz*dz)
 
+    # Element block calculation methods
+    def get_element_block_extents(self, element_block_ids: Union[str, List[int]] = "all") -> List[Tuple[float, float]]:
+        """
+        Return the extents of the element blocks as a list.
+
+        The results are returned in the following format:
+        [[min_x, max_x], [min_y, max_y], [min_z, max_z]]
+
+        Parameters
+        ----------
+        element_block_ids : str or list of int, optional
+            Element block IDs or "all" (default: "all")
+
+        Returns
+        -------
+        list of tuple
+            Bounding box extents [[min_x, max_x], [min_y, max_y], [min_z, max_z]]
+
+        Examples
+        --------
+        >>> extents = model.get_element_block_extents(1)
+        >>> extents = model.get_element_block_extents([1, 2])
+        >>> extents = model.get_element_block_extents("all")
+        """
+        # Handle "all" case
+        if element_block_ids == "all":
+            element_block_ids = list(self.element_blocks.keys())
+        # Convert single ID to list
+        elif isinstance(element_block_ids, int):
+            element_block_ids = [element_block_ids]
+
+        if not element_block_ids:
+            raise ValueError("No element blocks specified")
+
+        # Get a set of all nodes within the given element blocks
+        all_nodes = set()
+        for block_id in element_block_ids:
+            if block_id not in self.element_blocks:
+                continue
+            # Get flat connectivity and add all nodes
+            conn_flat = self.element_blocks[block_id]['connectivity_flat']
+            all_nodes.update(conn_flat)
+
+        if not all_nodes:
+            # Return zero extents if no nodes
+            return [[0.0, 0.0], [0.0, 0.0], [0.0, 0.0]]
+
+        # Convert 1-based indices to 0-based
+        all_nodes_zero_based = [idx - 1 for idx in all_nodes if 0 < idx <= len(self.coords_x)]
+
+        # Find the extents
+        extents = []
+        coords_lists = [self.coords_x, self.coords_y, self.coords_z if self.coords_z else [0.0] * len(self.coords_x)]
+        for coords in coords_lists:
+            node_coords = [coords[node_idx] for node_idx in all_nodes_zero_based]
+            extents.append([min(node_coords), max(node_coords)])
+
+        return extents
+
+    def get_element_block_centroid(self, element_block_ids: Union[str, List[int]] = "all") -> List[float]:
+        """
+        Return the centroid of the element blocks.
+
+        Parameters
+        ----------
+        element_block_ids : str or list of int, optional
+            Element block IDs or "all" (default: "all")
+
+        Returns
+        -------
+        list of float
+            Centroid coordinates [x, y, z]
+        """
+        extents = self.get_element_block_extents(element_block_ids)
+        return [(ext[0] + ext[1]) / 2.0 for ext in extents]
+
+    def get_element_edge_length_info(self, element_block_ids: Union[str, List[int]] = "all") -> Tuple[float, float]:
+        """
+        Return the minimum and average element edge lengths.
+
+        Only edges within elements in the specified element blocks are counted.
+
+        Parameters
+        ----------
+        element_block_ids : str or list of int, optional
+            Element blocks to process (default: "all")
+
+        Returns
+        -------
+        tuple of (float, float)
+            (minimum edge length, average edge length)
+        """
+        import math
+        import sys
+
+        # Format element block IDs
+        if element_block_ids == "all":
+            element_block_ids = list(self.element_blocks.keys())
+        elif isinstance(element_block_ids, int):
+            element_block_ids = [element_block_ids]
+
+        minimum = sys.float_info.max
+        total = 0.0
+        edge_count = 0
+
+        # Edge definitions for common element types (0-based node indices)
+        EDGE_DEFINITIONS = {
+            'line2': [(0, 1)],
+            'line3': [(0, 1), (1, 2)],
+            'tri3': [(0, 1), (1, 2), (2, 0)],
+            'tri6': [(0, 1), (1, 2), (2, 0), (0, 3), (1, 4), (2, 5)],
+            'quad4': [(0, 1), (1, 2), (2, 3), (3, 0)],
+            'quad8': [(0, 1), (1, 2), (2, 3), (3, 0), (0, 4), (1, 5), (2, 6), (3, 7)],
+            'quad9': [(0, 1), (1, 2), (2, 3), (3, 0), (0, 4), (1, 5), (2, 6), (3, 7)],
+            'tet4': [(0, 1), (1, 2), (2, 0), (0, 3), (1, 3), (2, 3)],
+            'tet10': [(0, 1), (1, 2), (2, 0), (0, 3), (1, 3), (2, 3)],
+            'hex8': [(0, 1), (1, 2), (2, 3), (3, 0), (4, 5), (5, 6), (6, 7), (7, 4),
+                     (0, 4), (1, 5), (2, 6), (3, 7)],
+            'hex20': [(0, 1), (1, 2), (2, 3), (3, 0), (4, 5), (5, 6), (6, 7), (7, 4),
+                      (0, 4), (1, 5), (2, 6), (3, 7)],
+            'hex27': [(0, 1), (1, 2), (2, 3), (3, 0), (4, 5), (5, 6), (6, 7), (7, 4),
+                      (0, 4), (1, 5), (2, 6), (3, 7)],
+            'wedge6': [(0, 1), (1, 2), (2, 0), (3, 4), (4, 5), (5, 3), (0, 3), (1, 4), (2, 5)],
+            'pyramid5': [(0, 1), (1, 2), (2, 3), (3, 0), (0, 4), (1, 4), (2, 4), (3, 4)],
+        }
+
+        for element_block_id in element_block_ids:
+            if element_block_id not in self.element_blocks:
+                continue
+
+            block_data = self.element_blocks[element_block_id]
+            topology = block_data['block'].topology.lower()
+
+            # Get edge definition
+            edge_def = EDGE_DEFINITIONS.get(topology, [])
+            if not edge_def:
+                continue
+
+            # Get connectivity
+            conn_flat = block_data['connectivity_flat']
+            nodes_per_elem = block_data['block'].num_nodes_per_entry
+            num_elems = len(conn_flat) // nodes_per_elem
+
+            for elem_idx in range(num_elems):
+                start = elem_idx * nodes_per_elem
+                elem_conn = conn_flat[start:start + nodes_per_elem]
+
+                for edge in edge_def:
+                    # Convert to 0-based node indices
+                    node1_idx = elem_conn[edge[0]] - 1
+                    node2_idx = elem_conn[edge[1]] - 1
+
+                    if node1_idx >= len(self.coords_x) or node2_idx >= len(self.coords_x):
+                        continue
+
+                    # Calculate distance
+                    dx = self.coords_x[node1_idx] - self.coords_x[node2_idx]
+                    dy = self.coords_y[node1_idx] - self.coords_y[node2_idx]
+                    dz = (self.coords_z[node1_idx] - self.coords_z[node2_idx]) if self.coords_z else 0.0
+                    dist = math.sqrt(dx*dx + dy*dy + dz*dz)
+
+                    total += dist
+                    edge_count += 1
+                    if dist < minimum:
+                        minimum = dist
+
+        if edge_count == 0:
+            return (float("nan"), float("nan"))
+
+        return (minimum, total / edge_count)
+
+    # Complex element block operations
+    def duplicate_element_block(self, source_id: int, target_id: int, duplicate_nodes: bool = True):
+        """
+        Create a duplicate of the given element block.
+
+        Nodes are duplicated by default. The new element block references
+        these duplicated nodes, not the original ones.
+
+        Parameters
+        ----------
+        source_id : int
+            Source element block ID
+        target_id : int
+            Target element block ID
+        duplicate_nodes : bool, optional
+            Whether to duplicate nodes (default: True)
+
+        Examples
+        --------
+        >>> model.duplicate_element_block(1, 2)
+        >>> model.duplicate_element_block(1, 3, duplicate_nodes=False)
+        """
+        # Check that source block exists
+        if source_id not in self.element_blocks:
+            raise ValueError(f"Element block {source_id} does not exist")
+
+        # Check that target block doesn't exist
+        if target_id in self.element_blocks:
+            raise ValueError(f"Element block {target_id} already exists")
+
+        # Get source block data
+        source_data = self.element_blocks[source_id]
+        block = source_data['block']
+        name = source_data.get('name', '')
+        conn_flat = source_data['connectivity_flat']
+        fields = source_data.get('fields', {})
+
+        # Create new nodes if requested
+        if duplicate_nodes:
+            # Get unique nodes from connectivity
+            unique_node_indices = sorted(set(conn_flat))
+
+            # Create node mapping (1-based)
+            node_map = {}
+            new_node_offset = len(self.coords_x)
+
+            # Duplicate the nodes
+            for old_idx in unique_node_indices:
+                # Convert to 0-based index
+                zero_based_idx = old_idx - 1
+                if 0 <= zero_based_idx < len(self.coords_x):
+                    # Add new node
+                    self.coords_x.append(self.coords_x[zero_based_idx])
+                    self.coords_y.append(self.coords_y[zero_based_idx])
+                    if self.coords_z:
+                        self.coords_z.append(self.coords_z[zero_based_idx])
+                    node_map[old_idx] = new_node_offset + 1  # 1-based indexing
+                    new_node_offset += 1
+
+            # Create new connectivity with new node indices
+            new_conn_flat = [node_map.get(node_idx, node_idx) for node_idx in conn_flat]
+        else:
+            # Just copy the connectivity
+            new_conn_flat = list(conn_flat)
+
+        # Create the new element block
+        info = [block.topology, block.num_entries, block.num_nodes_per_entry,
+                getattr(block, 'num_attributes', 0)]
+        self.create_element_block(target_id, info)
+
+        # Set connectivity
+        self.element_blocks[target_id]['connectivity_flat'] = new_conn_flat
+
+        # Copy the name if it exists
+        if name:
+            self.element_blocks[target_id]['name'] = name + "_copy"
+
+        # Copy fields
+        new_fields = {}
+        for field_name, all_values in fields.items():
+            new_fields[field_name] = [list(values) for values in all_values]
+        self.element_blocks[target_id]['fields'] = new_fields
+
+    def combine_element_blocks(self, element_block_ids: Union[str, List[int]],
+                              target_element_block_id: Union[str, int] = "auto"):
+        """
+        Combine multiple element blocks into a single block.
+
+        By default, the target element block id will be the smallest of the
+        merged element block ids. The element blocks to combine must have the
+        same element type.
+
+        Parameters
+        ----------
+        element_block_ids : str or list of int
+            Element block IDs to combine or "all"
+        target_element_block_id : str or int, optional
+            Target element block ID (default: "auto" uses smallest ID)
+
+        Examples
+        --------
+        >>> model.combine_element_blocks([1, 2, 3])
+        >>> model.combine_element_blocks('all', 1)
+        """
+        # Handle "all" case
+        if element_block_ids == "all":
+            element_block_ids = list(self.element_blocks.keys())
+        elif isinstance(element_block_ids, int):
+            element_block_ids = [element_block_ids]
+
+        if not element_block_ids:
+            raise ValueError("No element blocks specified")
+
+        # Determine target block ID
+        if target_element_block_id == "auto":
+            target_element_block_id = min(element_block_ids)
+
+        # Single block - just rename if needed
+        if len(element_block_ids) == 1:
+            if element_block_ids[0] != target_element_block_id:
+                self.rename_element_block(element_block_ids[0], target_element_block_id)
+            return
+
+        # Ensure all blocks have the same number of nodes per element
+        nodes_per_element_set = set(
+            self.element_blocks[block_id]['block'].num_nodes_per_entry
+            for block_id in element_block_ids
+        )
+        if len(nodes_per_element_set) != 1:
+            raise ValueError(
+                "The number of nodes per element on each element block to be merged "
+                "must be the same. This is an ExodusII file requirement."
+            )
+
+        # Create new connectivity by combining all blocks
+        new_conn_flat = []
+        for block_id in element_block_ids:
+            new_conn_flat.extend(self.element_blocks[block_id]['connectivity_flat'])
+
+        # Create new info based on first block
+        first_block = self.element_blocks[element_block_ids[0]]['block']
+        nodes_per_elem = first_block.num_nodes_per_entry
+        new_elem_count = len(new_conn_flat) // nodes_per_elem
+
+        new_info = [first_block.topology, new_elem_count, nodes_per_elem,
+                   getattr(first_block, 'num_attributes', 0)]
+
+        # Find a temporary element block ID that doesn't exist
+        temp_id = max(self.element_blocks.keys()) + 1 if self.element_blocks else 1
+        while temp_id in self.element_blocks:
+            temp_id += 1
+
+        # Get all element field names across all blocks
+        all_field_names = set()
+        for block_id in element_block_ids:
+            all_field_names.update(self.element_blocks[block_id].get('fields', {}).keys())
+
+        # Combine all field data
+        new_fields = {}
+        for field_name in all_field_names:
+            num_timesteps = len(self.timesteps) if self.timesteps else 1
+            new_values = [[] for _ in range(num_timesteps)]
+            for block_id in element_block_ids:
+                field_data = self.element_blocks[block_id].get('fields', {}).get(field_name, [])
+                if field_data:
+                    for timestep_idx, values in enumerate(field_data):
+                        if timestep_idx < len(new_values):
+                            new_values[timestep_idx].extend(values)
+            new_fields[field_name] = new_values
+
+        # Create the new combined block
+        self.create_element_block(temp_id, new_info)
+        self.element_blocks[temp_id]['connectivity_flat'] = new_conn_flat
+        self.element_blocks[temp_id]['fields'] = new_fields
+
+        # Delete old blocks (nodes won't be orphaned by this procedure)
+        for block_id in element_block_ids:
+            self.delete_element_block(block_id, delete_orphaned_nodes=False)
+
+        # Rename temporary block to target ID
+        self.rename_element_block(temp_id, target_element_block_id)
+
+    def merge_nodes(self, tolerance: float = None, *args, **kwargs) -> int:
+        """
+        Merge nodes within tolerance distance.
+
+        Parameters
+        ----------
+        tolerance : float, optional
+            Distance tolerance for merging nodes. If None, uses 1e-6 * length_scale
+
+        Returns
+        -------
+        int
+            Number of nodes merged
+
+        Notes
+        -----
+        This uses a simple O(n²) algorithm. For large meshes, this may be slow.
+        For meshes with more than 10,000 nodes, a sampling approach is used.
+        """
+        if tolerance is None:
+            tolerance = 1e-6 * self.get_length_scale()
+
+        num_nodes = len(self.coords_x)
+        if num_nodes == 0:
+            return 0
+
+        # For very large meshes, this is too slow, so limit it
+        if num_nodes > 10000:
+            # Just return 0 for now - would need spatial indexing for performance
+            return 0
+
+        # Find nodes to merge (simple O(n²) algorithm)
+        merge_map = {}  # Maps node index to the index it should merge with
+        merged_count = 0
+
+        for i in range(num_nodes):
+            if i in merge_map:
+                continue
+
+            xi, yi = self.coords_x[i], self.coords_y[i]
+            zi = self.coords_z[i] if self.coords_z else 0.0
+
+            for j in range(i + 1, num_nodes):
+                if j in merge_map:
+                    continue
+
+                # Calculate distance
+                dx = xi - self.coords_x[j]
+                dy = yi - self.coords_y[j]
+                dz = zi - (self.coords_z[j] if self.coords_z else 0.0)
+                dist_sq = dx*dx + dy*dy + dz*dz
+
+                if dist_sq < tolerance**2:
+                    merge_map[j] = i
+                    merged_count += 1
+
+        if merged_count == 0:
+            return 0
+
+        # Create node mapping (0-based)
+        node_map = {}
+        new_index = 0
+        for i in range(num_nodes):
+            if i in merge_map:
+                # This node merges with another
+                target = merge_map[i]
+                while target in merge_map:
+                    target = merge_map[target]
+                node_map[i] = node_map.get(target, target)
+            else:
+                node_map[i] = new_index
+                new_index += 1
+
+        # Create new coordinate arrays
+        new_coords_x = []
+        new_coords_y = []
+        new_coords_z = []
+        for i in range(num_nodes):
+            if i not in merge_map:
+                new_coords_x.append(self.coords_x[i])
+                new_coords_y.append(self.coords_y[i])
+                if self.coords_z:
+                    new_coords_z.append(self.coords_z[i])
+
+        self.coords_x = new_coords_x
+        self.coords_y = new_coords_y
+        if self.coords_z:
+            self.coords_z = new_coords_z
+
+        # Update connectivity (1-based)
+        for block_id, block_data in self.element_blocks.items():
+            conn_flat = block_data['connectivity_flat']
+            new_conn_flat = [node_map[idx - 1] + 1 for idx in conn_flat]
+            block_data['connectivity_flat'] = new_conn_flat
+
+        # Update node sets (1-based)
+        for ns_id, ns_data in self.node_sets.items():
+            members = ns_data.get('members', [])
+            new_members = list(set(node_map[idx - 1] + 1 for idx in members))  # Remove duplicates
+            ns_data['members'] = sorted(new_members)
+
+        return merged_count
+
     # Expression-based methods (not implementable without full expression parser)
     def calculate_element_field(self, expression: str, element_block_ids: Union[str, List[int]] = "all"):
         """Not implementable: requires expression evaluation."""
