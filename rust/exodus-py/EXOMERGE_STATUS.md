@@ -11,10 +11,10 @@ This document provides a comprehensive status of the `exodus.exomerge` module im
 ## Current Implementation Statistics
 
 - **Total Methods**: ~150 public methods
-- **Fully Implemented**: 125+ methods (83%)
+- **Fully Implemented**: 134+ methods (89%)
 - **Not Implementable**: 2 methods (STL/WRL export)
 - **Requires Expression Parser**: 8 methods (blocked)
-- **Complex Geometry/Topology**: 15 methods (not yet implemented)
+- **Complex Geometry/Topology**: 6 methods (not yet implemented)
 
 ### Status Legend
 
@@ -78,13 +78,13 @@ This document provides a comprehensive status of the `exodus.exomerge` module im
 - ✅ `rotate_element_blocks()` - Rotate about an axis
 - ✅ `displace_element_blocks()` - Displace using displacement fields
 
-**Geometric Calculations (⬜ Not Implemented)**
+**Geometric Calculations (✅ COMPLETED)**
 - ✅ `get_element_block_extents()` - Get bounding box
-- ⬜ `calculate_element_centroids()` - Calculate centroids (requires element-specific formulas)
-- ⬜ `calculate_element_volumes()` - Calculate volumes (requires element-specific formulas)
-- ⬜ `get_element_block_volume()` - Get total volume
-- ⬜ `get_element_block_centroid()` - Get weighted centroid
-- ⬜ `get_element_edge_length_info()` - Get edge length statistics
+- ✅ `calculate_element_centroids()` - Calculate centroids
+- ✅ `calculate_element_volumes()` - Calculate volumes
+- ✅ `get_element_block_volume()` - Get total volume
+- ✅ `get_element_block_centroid()` - Get weighted centroid
+- ✅ `get_element_edge_length_info()` - Get edge length statistics
 
 **Element Type Conversions (⬜ Not Implemented)**
 - ⬜ `convert_element_blocks()` - Convert element types (complex topology)
@@ -92,10 +92,10 @@ This document provides a comprehensive status of the `exodus.exomerge` module im
 - ⬜ `make_elements_quadratic()` - Convert to quadratic elements
 - ⬜ `convert_hex8_block_to_tet4_block()` - Hex to tet conversion (complex subdivision)
 
-**Analysis & Filtering**
-- ⬜ `count_degenerate_elements()` - Count degenerate elements
-- ⬜ `count_disconnected_blocks()` - Count disconnected sub-blocks
-- ⬜ `delete_duplicate_elements()` - Remove duplicate elements
+**Analysis & Filtering (✅ MOSTLY COMPLETED)**
+- ✅ `count_degenerate_elements()` - Count degenerate elements
+- ✅ `count_disconnected_blocks()` - Count disconnected sub-blocks
+- ✅ `delete_duplicate_elements()` - Remove duplicate elements
 - 🔄 `threshold_element_blocks()` - Filter by expression (needs expression parser)
 
 ### Phase 4: Node Operations (✅ COMPLETED)
