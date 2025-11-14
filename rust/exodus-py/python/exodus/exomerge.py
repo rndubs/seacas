@@ -356,6 +356,59 @@ class SideSetData:
         return []
 
 
+class ElementBlocksDict(dict):
+    """
+    Custom dict for element_blocks that supports legacy list format.
+
+    Provides backward compatibility with exomerge3.py API where element blocks
+    were stored as [name, info, connectivity, fields] lists.
+    """
+
+    def __setitem__(self, key: int, value):
+        """
+        Set element block, converting from legacy format if needed.
+
+        Supports both:
+        - Modern: ElementBlockData object
+        - Legacy: [name, info, connectivity, fields] list
+        """
+        if isinstance(value, list) and len(value) >= 2:
+            # Legacy format: [name, info, connectivity, fields]
+            name = value[0] if len(value) > 0 else ""
+            info = value[1] if len(value) > 1 else []
+            connectivity = value[2] if len(value) > 2 else []
+            # fields = value[3] if len(value) > 3 else {}
+
+            # Convert info list to Block object
+            if isinstance(info, list) and len(info) >= 4:
+                topology, num_elems, nodes_per_elem, num_attrs = info[:4]
+                block = Block(
+                    id=key,
+                    entity_type=EntityType.ElemBlock,
+                    topology=topology,
+                    num_entries=num_elems,
+                    num_nodes_per_entry=nodes_per_elem,
+                    num_attributes=num_attrs
+                )
+
+                # Flatten connectivity if needed
+                connectivity_flat = []
+                if connectivity:
+                    if isinstance(connectivity[0], (list, tuple)):
+                        connectivity_flat = [node_id for elem in connectivity for node_id in elem]
+                    else:
+                        connectivity_flat = list(connectivity)
+
+                # Convert to ElementBlockData
+                value = ElementBlockData(
+                    block=block,
+                    name=name,
+                    connectivity_flat=connectivity_flat,
+                    fields={}
+                )
+
+        # Call parent setitem
+        super().__setitem__(key, value)
 
 
 def import_model(filename: str, mode: str = "inmemory", **kwargs) -> 'ExodusModel':
@@ -493,8 +546,8 @@ class ExodusModel:
         self.coords_y: List[float] = []
         self.coords_z: List[float] = []
 
-        # Block storage (exodus objects)
-        self.element_blocks: Dict[int, ElementBlockData] = {}
+        # Block storage (exodus objects with legacy format support)
+        self.element_blocks: Dict[int, ElementBlockData] = ElementBlocksDict()
 
         # Set storage (exodus objects)
         self.node_sets: Dict[int, NodeSetData] = {}
@@ -1970,7 +2023,7 @@ class ExodusModel:
         for block_id in element_block_ids:
             if block_id in self.element_blocks:
                 for field_name in element_field_names:
-                    if field_name in self.element_blocks[block_id].get('fields', {}):
+                    if field_name in self.element_blocks[block_id].fields:
                         del self.element_blocks[block_id].fields[field_name]
 
     def get_element_field_names(self, element_block_ids: Union[str, List[int]] = "all") -> List[str]:
@@ -1995,7 +2048,7 @@ class ExodusModel:
         field_names = set()
         for block_id in element_block_ids:
             if block_id in self.element_blocks:
-                field_names.update(self.element_blocks[block_id].get('fields', {}).keys())
+                field_names.update(self.element_blocks[block_id].fields.keys())
 
         return sorted(field_names)
 
@@ -2020,7 +2073,7 @@ class ExodusModel:
 
         for block_id in element_block_ids:
             if block_id in self.element_blocks:
-                fields = self.element_blocks[block_id].get('fields', {})
+                fields = self.element_blocks[block_id].fields
                 if element_field_name in fields:
                     fields[new_element_field_name] = fields[element_field_name]
                     del fields[element_field_name]
@@ -3154,7 +3207,7 @@ class ExodusModel:
             new_conn_flat.extend(self.element_blocks[block_id].connectivity_flat)
 
         # Create new info based on first block
-        first_block = self.element_blocks[element_block_ids[0]]['block']
+        first_block = self.element_blocks[element_block_ids[0]].block
         nodes_per_elem = first_block.num_nodes_per_entry
         new_elem_count = len(new_conn_flat) // nodes_per_elem
 
@@ -3169,7 +3222,7 @@ class ExodusModel:
         # Get all element field names across all blocks
         all_field_names = set()
         for block_id in element_block_ids:
-            all_field_names.update(self.element_blocks[block_id].get('fields', {}).keys())
+            all_field_names.update(self.element_blocks[block_id].fields.keys())
 
         # Combine all field data
         new_fields = {}
@@ -3177,7 +3230,7 @@ class ExodusModel:
             num_timesteps = len(self.timesteps) if self.timesteps else 1
             new_values = [[] for _ in range(num_timesteps)]
             for block_id in element_block_ids:
-                field_data = self.element_blocks[block_id].get('fields', {}).get(field_name, [])
+                field_data = self.element_blocks[block_id].fields.get(field_name, [])
                 if field_data:
                     for timestep_idx, values in enumerate(field_data):
                         if timestep_idx < len(new_values):
@@ -3416,7 +3469,7 @@ class ExodusModel:
         """
         if element_block_id not in self.element_blocks:
             return False
-        return element_field_name in self.element_blocks[element_block_id].get('fields', {})
+        return element_field_name in self.element_blocks[element_block_id].fields
 
     def global_variable_exists(self, global_variable_name: str) -> bool:
         """
@@ -3477,7 +3530,7 @@ class ExodusModel:
                 if block_id not in self.element_blocks:
                     continue
 
-                fields = self.element_blocks[block_id].get('fields', {})
+                fields = self.element_blocks[block_id].fields
                 if element_field_name not in fields:
                     continue
 
@@ -3550,7 +3603,7 @@ class ExodusModel:
             conn_flat = self.element_blocks[block_id].connectivity_flat
             nodes_per_elem = self.element_blocks[block_id].block.num_nodes_per_entry
             num_elems = len(conn_flat) // nodes_per_elem
-            fields = self.element_blocks[block_id].get('fields', {})
+            fields = self.element_blocks[block_id].fields
 
             for timestep_idx in range(num_timesteps):
                 node_values = self.node_fields[node_field_name][timestep_idx]
@@ -3788,7 +3841,7 @@ class ExodusModel:
         if element_block_id not in self.element_blocks:
             raise ValueError(f"Element block {element_block_id} does not exist")
 
-        fields = self.element_blocks[element_block_id].get('fields', {})
+        fields = self.element_blocks[element_block_id].fields
         if element_field_name not in fields:
             raise ValueError(f"Element field '{element_field_name}' does not exist in block {element_block_id}")
 
