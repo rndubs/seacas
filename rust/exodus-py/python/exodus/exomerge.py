@@ -221,6 +221,20 @@ class NodeSetData:
                 return default if default is not None else []
         return default
 
+    def __getitem__(self, key: str):
+        """Support dict-style subscript access for backward compatibility."""
+        if key == 'name':
+            return self.name
+        elif key == 'fields':
+            return self.fields
+        elif key == 'members':
+            # Extract members from node_set
+            try:
+                return list(self.node_set.nodes) if hasattr(self.node_set, 'nodes') else []
+            except:
+                return []
+        raise KeyError(f"Key '{key}' not found in NodeSetData")
+
 
 @dataclass
 class SideSetData:
@@ -257,6 +271,24 @@ class SideSetData:
             except:
                 return default if default is not None else []
         return default
+
+    def __getitem__(self, key: str):
+        """Support dict-style subscript access for backward compatibility."""
+        if key == 'name':
+            return self.name
+        elif key == 'fields':
+            return self.fields
+        elif key == 'members':
+            # Extract members as (element, side) tuples
+            try:
+                if hasattr(self.side_set, 'elements') and hasattr(self.side_set, 'sides'):
+                    elements = list(self.side_set.elements)
+                    sides = list(self.side_set.sides)
+                    return list(zip(elements, sides))
+                return []
+            except:
+                return []
+        raise KeyError(f"Key '{key}' not found in SideSetData")
 
 
 class ElementBlocksDict(dict):
