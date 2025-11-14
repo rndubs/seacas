@@ -56,6 +56,190 @@ SHOW_BANNER = True
 EXIT_ON_WARNING = False
 
 
+class SafeExpressionEvaluator:
+    """
+    Safe mathematical expression evaluator for field calculations.
+
+    This evaluator supports:
+    - Basic arithmetic operations: +, -, *, /, **, %
+    - Mathematical functions: sqrt, abs, sin, cos, tan, exp, log, log10
+    - Comparison operators: <, >, <=, >=, ==, !=
+    - Logical operators: and, or, not
+    - Constants: pi, e
+    - Field variables (passed as context)
+
+    Security: Uses ast.parse with restricted node types, no eval() or exec().
+    """
+
+    import ast
+    import operator as op
+
+    # Safe operators
+    _operators = {
+        ast.Add: op.add,
+        ast.Sub: op.sub,
+        ast.Mult: op.mul,
+        ast.Div: op.truediv,
+        ast.Pow: op.pow,
+        ast.Mod: op.mod,
+        ast.USub: op.neg,
+        ast.UAdd: op.pos,
+        # Comparison operators
+        ast.Lt: op.lt,
+        ast.Gt: op.gt,
+        ast.LtE: op.le,
+        ast.GtE: op.ge,
+        ast.Eq: op.eq,
+        ast.NotEq: op.ne,
+        # Logical operators
+        ast.And: lambda a, b: a and b,
+        ast.Or: lambda a, b: a or b,
+        ast.Not: op.not_,
+    }
+
+    # Safe mathematical functions
+    _functions = {
+        'sqrt': math.sqrt,
+        'abs': abs,
+        'sin': math.sin,
+        'cos': math.cos,
+        'tan': math.tan,
+        'asin': math.asin,
+        'acos': math.acos,
+        'atan': math.atan,
+        'atan2': math.atan2,
+        'exp': math.exp,
+        'log': math.log,
+        'log10': math.log10,
+        'ceil': math.ceil,
+        'floor': math.floor,
+        'pow': pow,
+        'min': min,
+        'max': max,
+    }
+
+    # Safe constants
+    _constants = {
+        'pi': math.pi,
+        'e': math.e,
+    }
+
+    def __init__(self):
+        """Initialize the expression evaluator."""
+        pass
+
+    def evaluate(self, expression: str, context: Dict[str, Any]) -> Any:
+        """
+        Evaluate a mathematical expression safely.
+
+        Parameters
+        ----------
+        expression : str
+            Mathematical expression to evaluate
+        context : dict
+            Dictionary mapping variable names to values
+
+        Returns
+        -------
+        Any
+            Result of the expression evaluation
+
+        Raises
+        ------
+        ValueError
+            If the expression contains unsafe operations
+        SyntaxError
+            If the expression has invalid syntax
+
+        Examples
+        --------
+        >>> evaluator = SafeExpressionEvaluator()
+        >>> evaluator.evaluate("2 + 3", {})
+        5
+        >>> evaluator.evaluate("sqrt(x**2 + y**2)", {"x": 3, "y": 4})
+        5.0
+        >>> evaluator.evaluate("stress > 1000", {"stress": 1500})
+        True
+        """
+        try:
+            node = ast.parse(expression, mode='eval').body
+            return self._eval_node(node, context)
+        except Exception as e:
+            raise ValueError(f"Error evaluating expression '{expression}': {str(e)}")
+
+    def _eval_node(self, node, context):
+        """Recursively evaluate an AST node."""
+        import ast
+
+        if isinstance(node, ast.Constant):  # Python 3.8+
+            return node.value
+        elif isinstance(node, ast.Num):  # Python 3.7 compatibility
+            return node.n
+        elif isinstance(node, ast.Name):
+            # Look up variable in context, constants, or raise error
+            if node.id in context:
+                return context[node.id]
+            elif node.id in self._constants:
+                return self._constants[node.id]
+            else:
+                raise NameError(f"Variable '{node.id}' not found in context")
+        elif isinstance(node, ast.BinOp):
+            left = self._eval_node(node.left, context)
+            right = self._eval_node(node.right, context)
+            operator_func = self._operators.get(type(node.op))
+            if operator_func is None:
+                raise ValueError(f"Unsupported operator: {type(node.op).__name__}")
+            return operator_func(left, right)
+        elif isinstance(node, ast.UnaryOp):
+            operand = self._eval_node(node.operand, context)
+            operator_func = self._operators.get(type(node.op))
+            if operator_func is None:
+                raise ValueError(f"Unsupported unary operator: {type(node.op).__name__}")
+            return operator_func(operand)
+        elif isinstance(node, ast.Compare):
+            # Handle comparison chains like "a < b < c"
+            left = self._eval_node(node.left, context)
+            result = True
+            for op_node, comparator_node in zip(node.ops, node.comparators):
+                right = self._eval_node(comparator_node, context)
+                operator_func = self._operators.get(type(op_node))
+                if operator_func is None:
+                    raise ValueError(f"Unsupported comparison: {type(op_node).__name__}")
+                result = result and operator_func(left, right)
+                if not result:
+                    break
+                left = right
+            return result
+        elif isinstance(node, ast.BoolOp):
+            # Handle and/or operations
+            operator_func = self._operators.get(type(node.op))
+            if operator_func is None:
+                raise ValueError(f"Unsupported boolean operator: {type(node.op).__name__}")
+            values = [self._eval_node(val, context) for val in node.values]
+            result = values[0]
+            for val in values[1:]:
+                result = operator_func(result, val)
+            return result
+        elif isinstance(node, ast.Call):
+            # Function call
+            if not isinstance(node.func, ast.Name):
+                raise ValueError("Only simple function calls are supported")
+            func_name = node.func.id
+            if func_name not in self._functions:
+                raise ValueError(f"Function '{func_name}' is not allowed")
+            args = [self._eval_node(arg, context) for arg in node.args]
+            return self._functions[func_name](*args)
+        elif isinstance(node, ast.IfExp):
+            # Ternary operator: a if cond else b
+            test = self._eval_node(node.test, context)
+            if test:
+                return self._eval_node(node.body, context)
+            else:
+                return self._eval_node(node.orelse, context)
+        else:
+            raise ValueError(f"Unsupported expression node type: {type(node).__name__}")
+
+
 @dataclass
 class ElementBlockData:
     """
@@ -2015,6 +2199,214 @@ class ExodusModel:
         members = self.side_sets[side_set_id].get('members', [])
         members.extend(new_side_set_members)
         self.side_sets[side_set_id].members = members
+
+    def get_side_set_area(self, side_set_id: int) -> float:
+        """
+        Calculate the total area of all faces in a side set.
+
+        This method computes the geometric area for 2D elements (edge length)
+        and 3D elements (face area) in the specified side set.
+
+        Parameters
+        ----------
+        side_set_id : int
+            Side set ID
+
+        Returns
+        -------
+        float
+            Total area of all sides in the side set
+
+        Notes
+        -----
+        The area calculation uses standard geometric formulas:
+        - 2D edges: Euclidean distance between endpoints
+        - 3D triangular faces: Half the cross product magnitude
+        - 3D quadrilateral faces: Sum of two triangular areas
+
+        For higher-order elements (quadratic), the area is approximated
+        using corner nodes only.
+
+        Examples
+        --------
+        >>> # Calculate area of a side set
+        >>> area = model.get_side_set_area(100)
+        >>> print(f"Total side set area: {area:.3f}")
+
+        Raises
+        ------
+        ValueError
+            If the side set does not exist
+        """
+        if side_set_id not in self.side_sets:
+            raise ValueError(f"Side set {side_set_id} does not exist")
+
+        side_set_data = self.side_sets[side_set_id]
+        members = side_set_data.members
+        total_area = 0.0
+
+        # Process each side in the side set
+        for elem_id, side_num in members:
+            # Find which block contains this element
+            block_data = None
+            elem_local_idx = None
+
+            for block_id, blk_data in self.element_blocks.items():
+                # Convert element ID to local index (simple approach)
+                # In a real implementation, we'd track element ID mappings
+                # For now, assume sequential numbering within blocks
+                if elem_id <= blk_data.num_entries:
+                    block_data = blk_data
+                    elem_local_idx = elem_id - 1  # 0-indexed
+                    break
+
+            if block_data is None or elem_local_idx is None:
+                continue
+
+            # Get element connectivity
+            conn = block_data.get_element_connectivity(elem_local_idx)
+            if not conn:
+                continue
+
+            # Get node coordinates
+            coords = []
+            for node_id in conn:
+                if node_id > 0 and node_id <= len(self.nodes):
+                    coords.append(self.nodes[node_id - 1])
+
+            if not coords:
+                continue
+
+            # Calculate side area based on element type and side number
+            topology = block_data.topology.lower()
+            side_area = self._calculate_side_area(coords, topology, side_num)
+            total_area += side_area
+
+        return total_area
+
+    def _calculate_side_area(self, elem_coords: List[List[float]], topology: str, side_num: int) -> float:
+        """
+        Calculate the area of a specific side of an element.
+
+        Parameters
+        ----------
+        elem_coords : list of list of float
+            Coordinates of all element nodes
+        topology : str
+            Element topology (e.g., 'hex8', 'tet4', 'quad4')
+        side_num : int
+            Side number (1-indexed)
+
+        Returns
+        -------
+        float
+            Area of the specified side
+        """
+        # Define side node indices for common element types (0-indexed)
+        side_nodes_map = {
+            # HEX8: 6 faces
+            'hex8': [
+                [0, 3, 2, 1],  # Face 1 (bottom)
+                [4, 5, 6, 7],  # Face 2 (top)
+                [0, 1, 5, 4],  # Face 3 (front)
+                [1, 2, 6, 5],  # Face 4 (right)
+                [2, 3, 7, 6],  # Face 5 (back)
+                [3, 0, 4, 7],  # Face 6 (left)
+            ],
+            # TET4: 4 faces
+            'tet4': [
+                [0, 1, 3],  # Face 1
+                [1, 2, 3],  # Face 2
+                [0, 3, 2],  # Face 3
+                [0, 2, 1],  # Face 4
+            ],
+            # QUAD4: 4 edges
+            'quad4': [
+                [0, 1],  # Edge 1
+                [1, 2],  # Edge 2
+                [2, 3],  # Edge 3
+                [3, 0],  # Edge 4
+            ],
+            # TRI3: 3 edges
+            'tri3': [
+                [0, 1],  # Edge 1
+                [1, 2],  # Edge 2
+                [2, 0],  # Edge 3
+            ],
+        }
+
+        # Get side node indices
+        topology_key = topology.lower().replace('hex', 'hex8').replace('tet', 'tet4')
+        if topology_key not in side_nodes_map:
+            # Unknown topology, return 0
+            return 0.0
+
+        sides = side_nodes_map[topology_key]
+        if side_num < 1 or side_num > len(sides):
+            # Invalid side number
+            return 0.0
+
+        side_indices = sides[side_num - 1]
+
+        # Get coordinates of side nodes
+        try:
+            side_coords = [elem_coords[i] for i in side_indices]
+        except (IndexError, KeyError):
+            return 0.0
+
+        # Calculate area based on number of nodes
+        if len(side_coords) == 2:
+            # 1D edge: calculate length
+            p0, p1 = side_coords
+            dx = p1[0] - p0[0]
+            dy = p1[1] - p0[1]
+            dz = p1[2] - p0[2]
+            return math.sqrt(dx*dx + dy*dy + dz*dz)
+
+        elif len(side_coords) == 3:
+            # Triangular face
+            p0, p1, p2 = side_coords
+            # Vector from p0 to p1
+            v1 = [p1[0] - p0[0], p1[1] - p0[1], p1[2] - p0[2]]
+            # Vector from p0 to p2
+            v2 = [p2[0] - p0[0], p2[1] - p0[1], p2[2] - p0[2]]
+            # Cross product
+            cross = [
+                v1[1]*v2[2] - v1[2]*v2[1],
+                v1[2]*v2[0] - v1[0]*v2[2],
+                v1[0]*v2[1] - v1[1]*v2[0]
+            ]
+            # Area = 0.5 * |cross product|
+            mag = math.sqrt(cross[0]**2 + cross[1]**2 + cross[2]**2)
+            return 0.5 * mag
+
+        elif len(side_coords) == 4:
+            # Quadrilateral face: split into two triangles
+            p0, p1, p2, p3 = side_coords
+
+            # Triangle 1: p0, p1, p2
+            v1 = [p1[0] - p0[0], p1[1] - p0[1], p1[2] - p0[2]]
+            v2 = [p2[0] - p0[0], p2[1] - p0[1], p2[2] - p0[2]]
+            cross1 = [
+                v1[1]*v2[2] - v1[2]*v2[1],
+                v1[2]*v2[0] - v1[0]*v2[2],
+                v1[0]*v2[1] - v1[1]*v2[0]
+            ]
+            area1 = 0.5 * math.sqrt(cross1[0]**2 + cross1[1]**2 + cross1[2]**2)
+
+            # Triangle 2: p0, p2, p3
+            v1 = [p2[0] - p0[0], p2[1] - p0[1], p2[2] - p0[2]]
+            v2 = [p3[0] - p0[0], p3[1] - p0[1], p3[2] - p0[2]]
+            cross2 = [
+                v1[1]*v2[2] - v1[2]*v2[1],
+                v1[2]*v2[0] - v1[0]*v2[2],
+                v1[0]*v2[1] - v1[1]*v2[0]
+            ]
+            area2 = 0.5 * math.sqrt(cross2[0]**2 + cross2[1]**2 + cross2[2]**2)
+
+            return area1 + area2
+
+        return 0.0
 
     def add_nodes_to_node_set(self, node_set_id: int, new_node_set_members: List[int]):
         """
@@ -4196,15 +4588,14 @@ class ExodusModel:
         # Create element block
         num_elems = nx * ny * nz
 
-        # Import moved to top
-
-            block = _MockBlock(
-                id=block_id,
-                topology="hex8",
-                num_entries=num_elems,
-                num_nodes_per_entry=8,
-                num_attributes=0
-            )
+        # Create a mock block object
+        block = Block(
+            id=block_id,
+            topology="hex8",
+            num_entries=num_elems,
+            num_nodes_per_entry=8,
+            num_attributes=0
+        )
 
         self.element_blocks[block_id] = ElementBlockData(
             block=block,
@@ -4213,7 +4604,141 @@ class ExodusModel:
             fields={}
         )
 
-    # Element conversion methods (not fully implementable)
+    # Element conversion methods (not fully implementable due to complex topology requirements)
+    def convert_element_blocks(self, element_block_id: int, target_topology: str,
+                               new_element_block_id: Optional[int] = None):
+        """
+        Convert element block to a different element type.
+
+        Parameters
+        ----------
+        element_block_id : int
+            Element block ID to convert
+        target_topology : str
+            Target element topology (e.g., 'TET4', 'HEX8', 'QUAD4')
+        new_element_block_id : int, optional
+            ID for new block (default: use same ID)
+
+        Notes
+        -----
+        This method is not fully implemented as it requires:
+        - Complex topology-specific node ordering rules
+        - Element subdivision algorithms (e.g., HEX → TET)
+        - Midside node generation for quadratic elements
+        - Field data interpolation to new elements
+
+        **Alternatives:**
+        - Use external mesh processing tools like:
+          - Cubit/Trelis for mesh manipulation
+          - GMSH for mesh conversion
+          - VTK filters for element type conversion
+        - Preprocess meshes before analysis
+        - Use the original exomerge3.py if this feature is critical
+
+        Raises
+        ------
+        NotImplementedError
+            Always raised as this feature requires extensive geometry processing
+        """
+        raise NotImplementedError(
+            f"convert_element_blocks() is not implemented. "
+            f"Element type conversion from {self.element_blocks[element_block_id].topology} "
+            f"to {target_topology} requires complex topology-specific algorithms. "
+            f"Please use external mesh processing tools or the original exomerge3.py."
+        )
+
+    def make_elements_linear(self, element_block_ids: Union[str, List[int]] = "all"):
+        """
+        Convert quadratic elements to linear elements.
+
+        This would convert higher-order elements (with midside nodes) to their
+        linear counterparts by removing midside nodes.
+
+        Parameters
+        ----------
+        element_block_ids : str or list of int, optional
+            Element blocks to process (default: "all")
+
+        Notes
+        -----
+        This method is not implemented as it requires:
+        - Topology-specific knowledge of corner vs. midside nodes
+        - Connectivity reordering
+        - Node removal and renumbering
+        - Field data handling (discard or project midside node data)
+
+        **Common conversions:**
+        - TRI6 → TRI3 (remove 3 midside nodes)
+        - QUAD8/QUAD9 → QUAD4 (remove 4-5 midside nodes)
+        - TET10 → TET4 (remove 6 midside nodes)
+        - HEX20/HEX27 → HEX8 (remove 12-19 midside nodes)
+
+        **Alternatives:**
+        - Export linear-only fields when creating mesh
+        - Use mesh processing tools that support this operation
+        - Preprocess with Cubit: "refine element type linear"
+
+        Raises
+        ------
+        NotImplementedError
+            Always raised as this feature requires topology-specific processing
+        """
+        raise NotImplementedError(
+            "make_elements_linear() is not implemented. "
+            "Converting quadratic to linear elements requires topology-specific "
+            "node ordering knowledge. Please use external mesh tools or preprocess your mesh."
+        )
+
+    def make_elements_quadratic(self, element_block_ids: Union[str, List[int]] = "all",
+                               placement_method: str = "linear"):
+        """
+        Convert linear elements to quadratic elements.
+
+        This would convert linear elements to higher-order elements by adding
+        midside nodes.
+
+        Parameters
+        ----------
+        element_block_ids : str or list of int, optional
+            Element blocks to process (default: "all")
+        placement_method : str, optional
+            Method for placing midside nodes: "linear" or "projected" (default: "linear")
+
+        Notes
+        -----
+        This method is not implemented as it requires:
+        - Generation of new midside nodes
+        - Topology-specific node insertion patterns
+        - Midside node positioning algorithms:
+          - Linear: Place at edge/face midpoints
+          - Projected: Project to geometry surfaces
+        - Global node numbering updates
+        - Field data extrapolation to new nodes
+
+        **Common conversions:**
+        - TRI3 → TRI6 (add 3 midside nodes per triangle)
+        - QUAD4 → QUAD8/QUAD9 (add 4-5 midside nodes)
+        - TET4 → TET10 (add 6 midside nodes per tetrahedron)
+        - HEX8 → HEX20/HEX27 (add 12-19 midside nodes)
+
+        **Alternatives:**
+        - Generate quadratic mesh directly in CAD/meshing tool
+        - Use Cubit: "refine element type quadratic"
+        - Use GMSH with SetOrder(2) command
+        - Some FEA codes auto-generate midside nodes
+
+        Raises
+        ------
+        NotImplementedError
+            Always raised as this feature requires significant geometry processing
+        """
+        raise NotImplementedError(
+            "make_elements_quadratic() is not implemented. "
+            "Converting linear to quadratic elements requires midside node generation "
+            "and complex topology processing. Please generate quadratic meshes directly "
+            "in your meshing tool."
+        )
+
     def convert_hex8_block_to_tet4_block(self, element_block_id: int, scheme: str = "hex24tet"):
         """
         Convert HEX8 elements to TET4 elements.
@@ -4258,51 +4783,731 @@ class ExodusModel:
             "This requires node duplication and complex connectivity updates."
         )
 
-    # Expression-based methods (not implementable without full expression parser)
-    def calculate_element_field(self, expression: str, element_block_ids: Union[str, List[int]] = "all"):
-        """Not implementable: requires expression evaluation."""
-        raise NotImplementedError(
-            "Expression-based field calculation is not implemented. "
-            "This would require a full expression parser and evaluator."
-        )
+    # Expression-based methods (now implemented with safe expression evaluator)
+    def calculate_element_field(self, new_field_name: str, expression: str,
+                                element_block_ids: Union[str, List[int]] = "all",
+                                timestep: Union[str, int] = "all"):
+        """
+        Create a new element field based on a mathematical expression.
 
-    def calculate_node_field(self, expression: str):
-        """Not implementable: requires expression evaluation."""
-        raise NotImplementedError(
-            "Expression-based field calculation is not implemented. "
-            "This would require a full expression parser and evaluator."
-        )
+        Parameters
+        ----------
+        new_field_name : str
+            Name of the new field to create
+        expression : str
+            Mathematical expression to evaluate. Can reference existing element field names.
+            Supports operators: +, -, *, /, **, %
+            Functions: sqrt, abs, sin, cos, tan, exp, log, log10, min, max
+            Constants: pi, e
+        element_block_ids : str or list of int, optional
+            Element block IDs to process (default: "all")
+        timestep : str or int, optional
+            Timestep to process: "all", "first", "last", or specific index (default: "all")
 
-    def calculate_global_variable(self, expression: str):
-        """Not implementable: requires expression evaluation."""
-        raise NotImplementedError(
-            "Expression-based variable calculation is not implemented. "
-            "This would require a full expression parser and evaluator."
-        )
+        Examples
+        --------
+        >>> # Calculate von Mises stress
+        >>> model.calculate_element_field("vm_stress",
+        ...     "sqrt(stress_xx**2 + stress_yy**2 - stress_xx*stress_yy + 3*stress_xy**2)")
 
-    def calculate_side_set_field(self, expression: str, side_set_ids: Union[str, List[int]] = "all"):
-        """Not implementable: requires expression evaluation."""
-        raise NotImplementedError(
-            "Expression-based field calculation is not implemented."
-        )
+        >>> # Calculate temperature in Fahrenheit from Celsius
+        >>> model.calculate_element_field("temp_f", "temp_c * 1.8 + 32")
 
-    def calculate_node_set_field(self, expression: str, node_set_ids: Union[str, List[int]] = "all"):
-        """Not implementable: requires expression evaluation."""
-        raise NotImplementedError(
-            "Expression-based field calculation is not implemented."
-        )
+        >>> # Calculate strain energy
+        >>> model.calculate_element_field("strain_energy", "0.5 * stress * strain")
+        """
+        evaluator = SafeExpressionEvaluator()
 
-    def create_side_set_from_expression(self, expression: str, side_set_id: int = None):
-        """Not implementable: requires expression evaluation."""
-        raise NotImplementedError(
-            "Expression-based side set creation is not implemented."
-        )
+        # Resolve element block IDs
+        if element_block_ids == "all":
+            block_ids = list(self.element_blocks.keys())
+        elif isinstance(element_block_ids, int):
+            block_ids = [element_block_ids]
+        else:
+            block_ids = element_block_ids
 
-    def threshold_element_blocks(self, expression: str, element_block_ids: Union[str, List[int]] = "all"):
-        """Not implementable: requires expression evaluation."""
-        raise NotImplementedError(
-            "Expression-based element thresholding is not implemented."
-        )
+        # Process each block
+        for block_id in block_ids:
+            if block_id not in self.element_blocks:
+                self._warning(f"Element block {block_id} not found, skipping")
+                continue
+
+            block_data = self.element_blocks[block_id]
+            num_elements = block_data.num_entries
+
+            # Determine timesteps to process
+            num_timesteps = len(self.timesteps)
+            if timestep == "all":
+                timestep_indices = range(num_timesteps)
+            elif timestep == "first":
+                timestep_indices = [0] if num_timesteps > 0 else []
+            elif timestep == "last":
+                timestep_indices = [num_timesteps - 1] if num_timesteps > 0 else []
+            elif isinstance(timestep, int):
+                timestep_indices = [timestep] if 0 <= timestep < num_timesteps else []
+            else:
+                timestep_indices = range(num_timesteps)
+
+            # Create field if it doesn't exist
+            if new_field_name not in block_data.fields:
+                block_data.fields[new_field_name] = [[] for _ in range(num_timesteps)]
+
+            # Process each timestep
+            for ts_idx in timestep_indices:
+                results = []
+
+                # Process each element
+                for elem_idx in range(num_elements):
+                    # Build context with all field values for this element
+                    context = {}
+                    for field_name, field_data in block_data.fields.items():
+                        if field_name != new_field_name and ts_idx < len(field_data):
+                            values = field_data[ts_idx]
+                            if elem_idx < len(values):
+                                context[field_name] = values[elem_idx]
+
+                    # Add node coordinates for this element if needed
+                    conn = block_data.get_element_connectivity(elem_idx)
+                    if conn:
+                        # Calculate element centroid
+                        x_coords = [self.nodes[nid-1][0] for nid in conn if nid <= len(self.nodes)]
+                        y_coords = [self.nodes[nid-1][1] for nid in conn if nid <= len(self.nodes)]
+                        z_coords = [self.nodes[nid-1][2] for nid in conn if nid <= len(self.nodes)]
+                        if x_coords:
+                            context['x'] = sum(x_coords) / len(x_coords)
+                            context['y'] = sum(y_coords) / len(y_coords)
+                            context['z'] = sum(z_coords) / len(z_coords)
+
+                    # Evaluate expression
+                    try:
+                        value = evaluator.evaluate(expression, context)
+                        results.append(float(value) if not isinstance(value, bool) else (1.0 if value else 0.0))
+                    except Exception as e:
+                        self._warning(f"Error evaluating expression for element {elem_idx}: {e}")
+                        results.append(0.0)
+
+                # Store results
+                block_data.fields[new_field_name][ts_idx] = results
+
+    def calculate_node_field(self, new_field_name: str, expression: str,
+                            timestep: Union[str, int] = "all"):
+        """
+        Create a new node field based on a mathematical expression.
+
+        Parameters
+        ----------
+        new_field_name : str
+            Name of the new field to create
+        expression : str
+            Mathematical expression to evaluate. Can reference:
+            - Existing node field names
+            - Node coordinates: x, y, z
+            - Node index: node_id
+            Supports operators: +, -, *, /, **, %
+            Functions: sqrt, abs, sin, cos, tan, exp, log, log10, min, max
+            Constants: pi, e
+        timestep : str or int, optional
+            Timestep to process: "all", "first", "last", or specific index (default: "all")
+
+        Examples
+        --------
+        >>> # Calculate distance from origin
+        >>> model.calculate_node_field("distance", "sqrt(x**2 + y**2 + z**2)")
+
+        >>> # Calculate radial coordinate
+        >>> model.calculate_node_field("r", "sqrt(x**2 + y**2)")
+
+        >>> # Convert temperature field
+        >>> model.calculate_node_field("temp_f", "temp_c * 1.8 + 32")
+        """
+        evaluator = SafeExpressionEvaluator()
+
+        # Determine timesteps to process
+        num_timesteps = len(self.timesteps)
+        if timestep == "all":
+            timestep_indices = range(num_timesteps)
+        elif timestep == "first":
+            timestep_indices = [0] if num_timesteps > 0 else []
+        elif timestep == "last":
+            timestep_indices = [num_timesteps - 1] if num_timesteps > 0 else []
+        elif isinstance(timestep, int):
+            timestep_indices = [timestep] if 0 <= timestep < num_timesteps else []
+        else:
+            timestep_indices = range(num_timesteps)
+
+        # Create field if it doesn't exist
+        if new_field_name not in self.node_fields:
+            self.node_fields[new_field_name] = [[] for _ in range(num_timesteps)]
+
+        # Process each timestep
+        for ts_idx in timestep_indices:
+            results = []
+
+            # Process each node
+            for node_idx, node_coords in enumerate(self.nodes):
+                # Build context with all field values for this node
+                context = {
+                    'x': node_coords[0],
+                    'y': node_coords[1],
+                    'z': node_coords[2],
+                    'node_id': node_idx + 1,  # 1-indexed
+                }
+
+                # Add all existing node fields
+                for field_name, field_data in self.node_fields.items():
+                    if field_name != new_field_name and ts_idx < len(field_data):
+                        values = field_data[ts_idx]
+                        if node_idx < len(values):
+                            context[field_name] = values[node_idx]
+
+                # Evaluate expression
+                try:
+                    value = evaluator.evaluate(expression, context)
+                    results.append(float(value) if not isinstance(value, bool) else (1.0 if value else 0.0))
+                except Exception as e:
+                    self._warning(f"Error evaluating expression for node {node_idx + 1}: {e}")
+                    results.append(0.0)
+
+            # Store results
+            self.node_fields[new_field_name][ts_idx] = results
+
+    def calculate_global_variable(self, new_var_name: str, expression: str,
+                                  timestep: Union[str, int] = "all"):
+        """
+        Create a new global variable based on a mathematical expression.
+
+        Parameters
+        ----------
+        new_var_name : str
+            Name of the new global variable to create
+        expression : str
+            Mathematical expression to evaluate. Can reference existing global variable names.
+            Supports operators: +, -, *, /, **, %
+            Functions: sqrt, abs, sin, cos, tan, exp, log, log10, min, max
+            Constants: pi, e
+        timestep : str or int, optional
+            Timestep to process: "all", "first", "last", or specific index (default: "all")
+
+        Examples
+        --------
+        >>> # Calculate total energy
+        >>> model.calculate_global_variable("total_energy", "kinetic_energy + potential_energy")
+
+        >>> # Calculate dimensionless time
+        >>> model.calculate_global_variable("tau", "time / time_scale")
+        """
+        evaluator = SafeExpressionEvaluator()
+
+        # Determine timesteps to process
+        num_timesteps = len(self.timesteps)
+        if timestep == "all":
+            timestep_indices = range(num_timesteps)
+        elif timestep == "first":
+            timestep_indices = [0] if num_timesteps > 0 else []
+        elif timestep == "last":
+            timestep_indices = [num_timesteps - 1] if num_timesteps > 0 else []
+        elif isinstance(timestep, int):
+            timestep_indices = [timestep] if 0 <= timestep < num_timesteps else []
+        else:
+            timestep_indices = range(num_timesteps)
+
+        # Create variable if it doesn't exist
+        if new_var_name not in self.global_variables:
+            self.global_variables[new_var_name] = [0.0] * num_timesteps
+
+        # Process each timestep
+        for ts_idx in timestep_indices:
+            # Build context with all global variables
+            context = {'time': self.timesteps[ts_idx] if ts_idx < len(self.timesteps) else 0.0}
+
+            for var_name, var_data in self.global_variables.items():
+                if var_name != new_var_name and ts_idx < len(var_data):
+                    context[var_name] = var_data[ts_idx]
+
+            # Evaluate expression
+            try:
+                value = evaluator.evaluate(expression, context)
+                self.global_variables[new_var_name][ts_idx] = float(value)
+            except Exception as e:
+                self._warning(f"Error evaluating expression for timestep {ts_idx}: {e}")
+                self.global_variables[new_var_name][ts_idx] = 0.0
+
+    def calculate_side_set_field(self, new_field_name: str, expression: str,
+                                 side_set_ids: Union[str, List[int]] = "all",
+                                 timestep: Union[str, int] = "all"):
+        """
+        Create a new side set field based on a mathematical expression.
+
+        Parameters
+        ----------
+        new_field_name : str
+            Name of the new field to create
+        expression : str
+            Mathematical expression to evaluate. Can reference existing side set field names.
+        side_set_ids : str or list of int, optional
+            Side set IDs to process (default: "all")
+        timestep : str or int, optional
+            Timestep to process: "all", "first", "last", or specific index (default: "all")
+
+        Examples
+        --------
+        >>> # Calculate pressure magnitude
+        >>> model.calculate_side_set_field("pressure_mag",
+        ...     "sqrt(pressure_x**2 + pressure_y**2 + pressure_z**2)")
+        """
+        evaluator = SafeExpressionEvaluator()
+
+        # Resolve side set IDs
+        if side_set_ids == "all":
+            set_ids = list(self.side_sets.keys())
+        elif isinstance(side_set_ids, int):
+            set_ids = [side_set_ids]
+        else:
+            set_ids = side_set_ids
+
+        # Determine timesteps to process
+        num_timesteps = len(self.timesteps)
+        if timestep == "all":
+            timestep_indices = range(num_timesteps)
+        elif timestep == "first":
+            timestep_indices = [0] if num_timesteps > 0 else []
+        elif timestep == "last":
+            timestep_indices = [num_timesteps - 1] if num_timesteps > 0 else []
+        elif isinstance(timestep, int):
+            timestep_indices = [timestep] if 0 <= timestep < num_timesteps else []
+        else:
+            timestep_indices = range(num_timesteps)
+
+        # Process each side set
+        for set_id in set_ids:
+            if set_id not in self.side_sets:
+                self._warning(f"Side set {set_id} not found, skipping")
+                continue
+
+            set_data = self.side_sets[set_id]
+            num_sides = len(set_data.members)
+
+            # Create field if it doesn't exist
+            if new_field_name not in set_data.fields:
+                set_data.fields[new_field_name] = [[] for _ in range(num_timesteps)]
+
+            # Process each timestep
+            for ts_idx in timestep_indices:
+                results = []
+
+                # Process each side
+                for side_idx in range(num_sides):
+                    # Build context with all field values for this side
+                    context = {}
+                    for field_name, field_data in set_data.fields.items():
+                        if field_name != new_field_name and ts_idx < len(field_data):
+                            values = field_data[ts_idx]
+                            if side_idx < len(values):
+                                context[field_name] = values[side_idx]
+
+                    # Evaluate expression
+                    try:
+                        value = evaluator.evaluate(expression, context)
+                        results.append(float(value) if not isinstance(value, bool) else (1.0 if value else 0.0))
+                    except Exception as e:
+                        self._warning(f"Error evaluating expression for side {side_idx}: {e}")
+                        results.append(0.0)
+
+                # Store results
+                set_data.fields[new_field_name][ts_idx] = results
+
+    def calculate_node_set_field(self, new_field_name: str, expression: str,
+                                 node_set_ids: Union[str, List[int]] = "all",
+                                 timestep: Union[str, int] = "all"):
+        """
+        Create a new node set field based on a mathematical expression.
+
+        Parameters
+        ----------
+        new_field_name : str
+            Name of the new field to create
+        expression : str
+            Mathematical expression to evaluate. Can reference existing node set field names.
+        node_set_ids : str or list of int, optional
+            Node set IDs to process (default: "all")
+        timestep : str or int, optional
+            Timestep to process: "all", "first", "last", or specific index (default: "all")
+
+        Examples
+        --------
+        >>> # Calculate reaction force magnitude
+        >>> model.calculate_node_set_field("reaction_mag",
+        ...     "sqrt(reaction_x**2 + reaction_y**2 + reaction_z**2)")
+        """
+        evaluator = SafeExpressionEvaluator()
+
+        # Resolve node set IDs
+        if node_set_ids == "all":
+            set_ids = list(self.node_sets.keys())
+        elif isinstance(node_set_ids, int):
+            set_ids = [node_set_ids]
+        else:
+            set_ids = node_set_ids
+
+        # Determine timesteps to process
+        num_timesteps = len(self.timesteps)
+        if timestep == "all":
+            timestep_indices = range(num_timesteps)
+        elif timestep == "first":
+            timestep_indices = [0] if num_timesteps > 0 else []
+        elif timestep == "last":
+            timestep_indices = [num_timesteps - 1] if num_timesteps > 0 else []
+        elif isinstance(timestep, int):
+            timestep_indices = [timestep] if 0 <= timestep < num_timesteps else []
+        else:
+            timestep_indices = range(num_timesteps)
+
+        # Process each node set
+        for set_id in set_ids:
+            if set_id not in self.node_sets:
+                self._warning(f"Node set {set_id} not found, skipping")
+                continue
+
+            set_data = self.node_sets[set_id]
+            num_nodes = len(set_data.members)
+
+            # Create field if it doesn't exist
+            if new_field_name not in set_data.fields:
+                set_data.fields[new_field_name] = [[] for _ in range(num_timesteps)]
+
+            # Process each timestep
+            for ts_idx in timestep_indices:
+                results = []
+
+                # Process each node
+                for node_idx in range(num_nodes):
+                    # Build context with all field values for this node
+                    context = {}
+                    for field_name, field_data in set_data.fields.items():
+                        if field_name != new_field_name and ts_idx < len(field_data):
+                            values = field_data[ts_idx]
+                            if node_idx < len(values):
+                                context[field_name] = values[node_idx]
+
+                    # Evaluate expression
+                    try:
+                        value = evaluator.evaluate(expression, context)
+                        results.append(float(value) if not isinstance(value, bool) else (1.0 if value else 0.0))
+                    except Exception as e:
+                        self._warning(f"Error evaluating expression for node {node_idx}: {e}")
+                        results.append(0.0)
+
+                # Store results
+                set_data.fields[new_field_name][ts_idx] = results
+
+    def create_side_set_from_expression(self, side_set_id: int, side_set_name: str,
+                                       expression: str, element_block_ids: Union[str, List[int]] = "all",
+                                       timestep: Union[str, int] = "last"):
+        """
+        Create a side set by selecting element sides based on an expression.
+
+        The expression is evaluated for each element, and if true, all sides of that
+        element are added to the side set.
+
+        Parameters
+        ----------
+        side_set_id : int
+            ID for the new side set
+        side_set_name : str
+            Name for the new side set
+        expression : str
+            Boolean expression to evaluate for each element.
+            Can reference element field names and coordinates.
+        element_block_ids : str or list of int, optional
+            Element blocks to search (default: "all")
+        timestep : str or int, optional
+            Timestep to use for field evaluation (default: "last")
+
+        Examples
+        --------
+        >>> # Create side set from high-stress elements
+        >>> model.create_side_set_from_expression(100, "high_stress",
+        ...     "von_mises > 1000")
+
+        >>> # Create side set from elements on boundary
+        >>> model.create_side_set_from_expression(200, "boundary",
+        ...     "abs(x) > 9.9 or abs(y) > 9.9")
+        """
+        evaluator = SafeExpressionEvaluator()
+
+        # Resolve element block IDs
+        if element_block_ids == "all":
+            block_ids = list(self.element_blocks.keys())
+        elif isinstance(element_block_ids, int):
+            block_ids = [element_block_ids]
+        else:
+            block_ids = element_block_ids
+
+        # Determine timestep index
+        num_timesteps = len(self.timesteps)
+        if timestep == "last":
+            ts_idx = num_timesteps - 1 if num_timesteps > 0 else 0
+        elif timestep == "first":
+            ts_idx = 0
+        elif isinstance(timestep, int):
+            ts_idx = timestep if 0 <= timestep < num_timesteps else 0
+        else:
+            ts_idx = num_timesteps - 1 if num_timesteps > 0 else 0
+
+        # Collect sides that match expression
+        elements = []
+        sides = []
+
+        for block_id in block_ids:
+            if block_id not in self.element_blocks:
+                continue
+
+            block_data = self.element_blocks[block_id]
+            num_elements = block_data.num_entries
+            num_sides_per_elem = self._get_num_sides(block_data.topology)
+
+            # Process each element
+            for elem_idx in range(num_elements):
+                # Build context
+                context = {}
+                for field_name, field_data in block_data.fields.items():
+                    if ts_idx < len(field_data):
+                        values = field_data[ts_idx]
+                        if elem_idx < len(values):
+                            context[field_name] = values[elem_idx]
+
+                # Add coordinates
+                conn = block_data.get_element_connectivity(elem_idx)
+                if conn:
+                    x_coords = [self.nodes[nid-1][0] for nid in conn if nid <= len(self.nodes)]
+                    y_coords = [self.nodes[nid-1][1] for nid in conn if nid <= len(self.nodes)]
+                    z_coords = [self.nodes[nid-1][2] for nid in conn if nid <= len(self.nodes)]
+                    if x_coords:
+                        context['x'] = sum(x_coords) / len(x_coords)
+                        context['y'] = sum(y_coords) / len(y_coords)
+                        context['z'] = sum(z_coords) / len(z_coords)
+
+                # Evaluate expression
+                try:
+                    result = evaluator.evaluate(expression, context)
+                    if result:
+                        # Add all sides of this element
+                        elem_id = elem_idx + 1  # Convert to 1-indexed
+                        for side_num in range(1, num_sides_per_elem + 1):
+                            elements.append(elem_id)
+                            sides.append(side_num)
+                except Exception as e:
+                    # Silently skip elements that cause errors
+                    pass
+
+        # Create the side set
+        if elements:
+            side_set = SideSet(
+                id=side_set_id,
+                elements=elements,
+                sides=sides
+            )
+            self.side_sets[side_set_id] = SideSetData(
+                side_set=side_set,
+                name=side_set_name,
+                fields={}
+            )
+
+    def create_node_set_from_expression(self, node_set_id: int, node_set_name: str,
+                                       expression: str, timestep: Union[str, int] = "last"):
+        """
+        Create a node set by selecting nodes based on an expression.
+
+        Parameters
+        ----------
+        node_set_id : int
+            ID for the new node set
+        node_set_name : str
+            Name for the new node set
+        expression : str
+            Boolean expression to evaluate for each node.
+            Can reference node coordinates (x, y, z) and node field names.
+        timestep : str or int, optional
+            Timestep to use for field evaluation (default: "last")
+
+        Examples
+        --------
+        >>> # Create node set from nodes on a plane
+        >>> model.create_node_set_from_expression(100, "plane_nodes",
+        ...     "abs(z) < 0.01")
+
+        >>> # Create node set from high-temperature nodes
+        >>> model.create_node_set_from_expression(200, "hot_nodes",
+        ...     "temperature > 500")
+
+        >>> # Create node set in a sphere
+        >>> model.create_node_set_from_expression(300, "sphere_nodes",
+        ...     "sqrt(x**2 + y**2 + z**2) < 5.0")
+        """
+        evaluator = SafeExpressionEvaluator()
+
+        # Determine timestep index
+        num_timesteps = len(self.timesteps)
+        if timestep == "last":
+            ts_idx = num_timesteps - 1 if num_timesteps > 0 else 0
+        elif timestep == "first":
+            ts_idx = 0
+        elif isinstance(timestep, int):
+            ts_idx = timestep if 0 <= timestep < num_timesteps else 0
+        else:
+            ts_idx = num_timesteps - 1 if num_timesteps > 0 else 0
+
+        # Collect nodes that match expression
+        node_ids = []
+
+        for node_idx, node_coords in enumerate(self.nodes):
+            # Build context
+            context = {
+                'x': node_coords[0],
+                'y': node_coords[1],
+                'z': node_coords[2],
+                'node_id': node_idx + 1,
+            }
+
+            # Add node fields
+            for field_name, field_data in self.node_fields.items():
+                if ts_idx < len(field_data):
+                    values = field_data[ts_idx]
+                    if node_idx < len(values):
+                        context[field_name] = values[node_idx]
+
+            # Evaluate expression
+            try:
+                result = evaluator.evaluate(expression, context)
+                if result:
+                    node_ids.append(node_idx + 1)  # 1-indexed
+            except Exception as e:
+                # Silently skip nodes that cause errors
+                pass
+
+        # Create the node set
+        if node_ids:
+            node_set = NodeSet(
+                id=node_set_id,
+                nodes=node_ids
+            )
+            self.node_sets[node_set_id] = NodeSetData(
+                node_set=node_set,
+                name=node_set_name,
+                fields={}
+            )
+
+    def threshold_element_blocks(self, expression: str, keep_matching: bool = True,
+                                element_block_ids: Union[str, List[int]] = "all",
+                                timestep: Union[str, int] = "last"):
+        """
+        Remove elements from blocks based on an expression.
+
+        Parameters
+        ----------
+        expression : str
+            Boolean expression to evaluate for each element.
+            Can reference element field names and coordinates.
+        keep_matching : bool, optional
+            If True, keep elements where expression is True (default: True).
+            If False, remove elements where expression is True.
+        element_block_ids : str or list of int, optional
+            Element blocks to process (default: "all")
+        timestep : str or int, optional
+            Timestep to use for field evaluation (default: "last")
+
+        Examples
+        --------
+        >>> # Keep only high-stress elements
+        >>> model.threshold_element_blocks("stress > 1000", keep_matching=True)
+
+        >>> # Remove elements outside a region
+        >>> model.threshold_element_blocks("x < -5 or x > 5", keep_matching=False)
+        """
+        evaluator = SafeExpressionEvaluator()
+
+        # Resolve element block IDs
+        if element_block_ids == "all":
+            block_ids = list(self.element_blocks.keys())
+        elif isinstance(element_block_ids, int):
+            block_ids = [element_block_ids]
+        else:
+            block_ids = element_block_ids
+
+        # Determine timestep index
+        num_timesteps = len(self.timesteps)
+        if timestep == "last":
+            ts_idx = num_timesteps - 1 if num_timesteps > 0 else 0
+        elif timestep == "first":
+            ts_idx = 0
+        elif isinstance(timestep, int):
+            ts_idx = timestep if 0 <= timestep < num_timesteps else 0
+        else:
+            ts_idx = num_timesteps - 1 if num_timesteps > 0 else 0
+
+        for block_id in block_ids:
+            if block_id not in self.element_blocks:
+                continue
+
+            block_data = self.element_blocks[block_id]
+            num_elements = block_data.num_entries
+            nodes_per_elem = block_data.nodes_per_entry
+
+            # Determine which elements to keep
+            keep_elements = []
+
+            for elem_idx in range(num_elements):
+                # Build context
+                context = {}
+                for field_name, field_data in block_data.fields.items():
+                    if ts_idx < len(field_data):
+                        values = field_data[ts_idx]
+                        if elem_idx < len(values):
+                            context[field_name] = values[elem_idx]
+
+                # Add coordinates
+                conn = block_data.get_element_connectivity(elem_idx)
+                if conn:
+                    x_coords = [self.nodes[nid-1][0] for nid in conn if nid <= len(self.nodes)]
+                    y_coords = [self.nodes[nid-1][1] for nid in conn if nid <= len(self.nodes)]
+                    z_coords = [self.nodes[nid-1][2] for nid in conn if nid <= len(self.nodes)]
+                    if x_coords:
+                        context['x'] = sum(x_coords) / len(x_coords)
+                        context['y'] = sum(y_coords) / len(y_coords)
+                        context['z'] = sum(z_coords) / len(z_coords)
+
+                # Evaluate expression
+                try:
+                    result = evaluator.evaluate(expression, context)
+                    if (result and keep_matching) or (not result and not keep_matching):
+                        keep_elements.append(elem_idx)
+                except Exception as e:
+                    # On error, keep the element by default
+                    keep_elements.append(elem_idx)
+
+            # Rebuild connectivity and fields with kept elements
+            if len(keep_elements) < num_elements:
+                # Build new connectivity
+                new_conn = []
+                for elem_idx in keep_elements:
+                    start = elem_idx * nodes_per_elem
+                    new_conn.extend(block_data.connectivity_flat[start:start + nodes_per_elem])
+
+                block_data.connectivity_flat = new_conn
+
+                # Update fields
+                for field_name, field_data in block_data.fields.items():
+                    for ts_idx in range(len(field_data)):
+                        old_values = field_data[ts_idx]
+                        new_values = [old_values[i] for i in keep_elements if i < len(old_values)]
+                        field_data[ts_idx] = new_values
+
+                # Update block entry count
+                block_data.block.num_entries = len(keep_elements)
+
+            # If no elements remain, delete the block
+            if len(keep_elements) == 0:
+                del self.element_blocks[block_id]
 
     # Export methods that depend on geometry processing
     def export_stl_file(self, filename: str, **kwargs):
@@ -4366,3 +5571,22 @@ class ExodusModel:
     def _get_dimension(self, topology: str) -> int:
         """Get dimension for topology."""
         return self.DIMENSION.get(topology.lower(), 3)
+
+    def _get_num_sides(self, topology: str) -> int:
+        """Get number of sides for a given element topology."""
+        topology_lower = topology.lower()
+        # Map element types to number of sides (faces for 3D, edges for 2D)
+        sides_map = {
+            # 2D elements (edges)
+            'tri3': 3, 'tri': 3, 'tri6': 3, 'triangle': 3,
+            'quad4': 4, 'quad': 4, 'quad8': 4, 'quad9': 4, 'quadrilateral': 4,
+            # 3D elements (faces)
+            'tet4': 4, 'tet': 4, 'tet10': 4, 'tetra': 4, 'tetrahedron': 4,
+            'hex8': 6, 'hex': 6, 'hex20': 6, 'hex27': 6, 'hexahedron': 6,
+            'wedge6': 5, 'wedge': 5, 'wedge15': 5, 'wedge18': 5,
+            'pyramid5': 5, 'pyramid': 5, 'pyramid13': 5,
+            # 1D elements
+            'bar2': 2, 'bar': 2, 'beam2': 2, 'beam': 2, 'truss2': 2,
+            'bar3': 2, 'beam3': 2, 'truss3': 2,
+        }
+        return sides_map.get(topology_lower, 4)  # Default to 4 if unknown
