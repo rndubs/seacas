@@ -7,10 +7,11 @@ maximizing performance by using exodus data structures directly.
 Author: exodus-rs development team
 Based on: exomerge3.py by Tim Kostka (tdkostk@sandia.gov)
 
-Version 0.2.0 - Breaking API changes for performance:
+Version 0.3.0 - Modern, clean API:
 - Flat array storage for connectivity
 - Direct exodus object storage
 - Lazy loading with streaming mode
+- No backward compatibility layer
 
 Simple example:
 >>> import exodus.exomerge as exomerge
@@ -24,8 +25,25 @@ import sys
 import datetime
 from dataclasses import dataclass, field
 from typing import Optional, List, Dict, Any, Union, Tuple
+import math
+import random
 
-__version__ = "0.2.0"
+# Absolute imports from exodus module
+from exodus import (
+    ExodusReader,
+    ExodusWriter,
+    CreateOptions,
+    InitParams,
+    CreateMode,
+    Block,
+    NodeSet,
+    SideSet,
+    QaRecord,
+    EntityType,
+)
+
+
+__version__ = "0.3.0"
 VERSION = __version__
 
 # Contact person for issues
@@ -36,38 +54,6 @@ SHOW_BANNER = True
 
 # If true, will crash if warnings are generated
 EXIT_ON_WARNING = False
-
-# Deprecated functions (for backward compatibility detection)
-# Maps deprecated function names to their replacements
-DEPRECATED_FUNCTIONS = {
-    "write": "export"
-}
-
-
-# Simple mock classes for when exodus extension is not available
-@dataclass
-class _MockBlock:
-    """Mock Block class for when exodus extension is unavailable."""
-    id: int
-    topology: str
-    num_entries: int
-    num_nodes_per_entry: int
-    num_attributes: int = 0
-
-@dataclass
-class _MockNodeSet:
-    """Mock NodeSet class for when exodus extension is unavailable."""
-    id: int
-    num_entries: int
-    members: List[int] = field(default_factory=list)
-
-@dataclass
-class _MockSideSet:
-    """Mock SideSet class for when exodus extension is unavailable."""
-    id: int
-    num_entries: int
-    elements: List[int] = field(default_factory=list)
-    sides: List[int] = field(default_factory=list)
 
 
 @dataclass
@@ -88,7 +74,7 @@ class ElementBlockData:
     fields : Dict[str, List[Any]]
         Element field data per timestep
     """
-    block: Any  # exodus.Block
+    block: Block
     name: str = ""
     connectivity_flat: List[int] = field(default_factory=list)
     fields: Dict[str, List[Any]] = field(default_factory=dict)
@@ -125,81 +111,6 @@ class ElementBlockData:
         start = elem_index * self.nodes_per_entry
         return self.connectivity_flat[start:start + self.nodes_per_entry]
 
-    def __getitem__(self, index):
-        """
-        Support old list-style and dict-style access for backward compatibility.
-
-        Old list format: [name, info, connectivity, fields]
-        where info = [topology, num_elems, nodes_per_elem, num_attrs]
-
-        Old dict format: {'block': block, 'name': name, 'connectivity_flat': conn, 'fields': fields}
-        """
-        # Support dict-style string keys
-        if isinstance(index, str):
-            if index == 'block':
-                return self.block
-            elif index == 'name':
-                return self.name
-            elif index == 'connectivity_flat':
-                return self.connectivity_flat
-            elif index == 'fields':
-                return self.fields
-            else:
-                raise KeyError(f"Key '{index}' not found in ElementBlockData")
-
-        # Support list-style integer indices
-        if index == 0:
-            return self.name
-        elif index == 1:
-            # info: [topology, num_elems, nodes_per_elem, num_attrs]
-            return [self.block.topology, self.block.num_entries,
-                    self.block.num_nodes_per_entry, self.block.num_attributes]
-        elif index == 2:
-            # connectivity as list of lists
-            if not self.connectivity_flat:
-                return []
-            num_elems = self.block.num_entries
-            nodes_per_elem = self.block.num_nodes_per_entry
-            return [self.connectivity_flat[i*nodes_per_elem:(i+1)*nodes_per_elem]
-                    for i in range(num_elems)]
-        elif index == 3:
-            return self.fields
-        else:
-            raise IndexError(f"Index {index} out of range for ElementBlockData")
-
-    def __setitem__(self, index, value):
-        """Support old list-style and dict-style assignment for backward compatibility."""
-        # Support string keys (dict-style)
-        if isinstance(index, str):
-            if index == 'name':
-                self.name = value
-            elif index == 'connectivity_flat':
-                self.connectivity_flat = value
-            elif index == 'fields':
-                self.fields = value
-            else:
-                raise KeyError(f"Key '{index}' not found in ElementBlockData")
-        # Support integer indices (list-style)
-        elif index == 0:
-            self.name = value
-        elif index == 3:
-            self.fields = value
-        else:
-            raise IndexError(f"Cannot set index {index} on ElementBlockData")
-
-    def get(self, key: str, default=None):
-        """Support dict-style .get() for backward compatibility."""
-        if key == 'block':
-            return self.block
-        elif key == 'name':
-            return self.name
-        elif key == 'connectivity_flat':
-            return self.connectivity_flat
-        elif key == 'fields':
-            return self.fields
-        return default
-
-
 @dataclass
 class NodeSetData:
     """
@@ -214,98 +125,18 @@ class NodeSetData:
     fields : Dict[str, List[Any]]
         Node set field data per timestep
     """
-    node_set: Any  # exodus.NodeSet
+    node_set: NodeSet
     name: str = ""
     fields: Dict[str, List[Any]] = field(default_factory=dict)
 
-    def get(self, key: str, default=None):
-        """Support dict-style .get() for backward compatibility."""
-        if key == 'name':
-            return self.name
-        elif key == 'fields':
-            return self.fields
-        elif key == 'members':
-            # Extract members from node_set (check both .nodes and .members)
-            try:
-                if hasattr(self.node_set, 'nodes'):
-                    return list(self.node_set.nodes)
-                elif hasattr(self.node_set, 'members'):
-                    return list(self.node_set.members)
-                return []
-            except:
-                return default if default is not None else []
-        return default
-
-    def __getitem__(self, key):
-        """Support dict-style and list-style subscript access for backward compatibility."""
-        # Support old list format: [name, members, fields]
-        if isinstance(key, int):
-            if key == 0:
-                return self.name
-            elif key == 1:
-                # Extract members from node_set (check both .nodes and .members)
-                try:
-                    if hasattr(self.node_set, 'nodes'):
-                        return list(self.node_set.nodes)
-                    elif hasattr(self.node_set, 'members'):
-                        return list(self.node_set.members)
-                    return []
-                except:
-                    return []
-            elif key == 2:
-                return self.fields
-            else:
-                raise IndexError(f"Index {key} out of range for NodeSetData")
-
-        # Support dict-style string keys
-        if key == 'name':
-            return self.name
-        elif key == 'fields':
-            return self.fields
-        elif key == 'members':
-            # Extract members from node_set (check both .nodes and .members)
-            try:
-                if hasattr(self.node_set, 'nodes'):
-                    return list(self.node_set.nodes)
-                elif hasattr(self.node_set, 'members'):
-                    return list(self.node_set.members)
-                return []
-            except:
-                return []
-        raise KeyError(f"Key '{key}' not found in NodeSetData")
-
-    def __setitem__(self, key, value):
-        """Support dict-style and list-style item assignment for backward compatibility."""
-        # Support string keys (dict-style)
-        if isinstance(key, str):
-            if key == 'name':
-                self.name = value
-            elif key == 'fields':
-                self.fields = value
-            elif key == 'members':
-                # Update members in the node_set
-                if hasattr(self.node_set, 'nodes'):
-                    self.node_set.nodes = value
-                elif hasattr(self.node_set, 'members'):
-                    self.node_set.members = value
-            else:
-                raise KeyError(f"Key '{key}' not found in NodeSetData")
-        # Support integer indices (list-style)
-        elif isinstance(key, int):
-            if key == 0:
-                self.name = value
-            elif key == 2:
-                self.fields = value
-            elif key == 1:
-                # Update members
-                if hasattr(self.node_set, 'nodes'):
-                    self.node_set.nodes = value
-                elif hasattr(self.node_set, 'members'):
-                    self.node_set.members = value
-            else:
-                raise IndexError(f"Cannot set index {key} on NodeSetData")
-        else:
-            raise TypeError(f"Invalid key type {type(key)} for NodeSetData")
+    @property
+    def members(self) -> List[int]:
+        """Get list of member nodes."""
+        if hasattr(self.node_set, 'nodes'):
+            return list(self.node_set.nodes)
+        elif hasattr(self.node_set, 'members'):
+            return list(self.node_set.members)
+        return []
 
 
 @dataclass
@@ -322,154 +153,20 @@ class SideSetData:
     fields : Dict[str, List[Any]]
         Side set field data per timestep
     """
-    side_set: Any  # exodus.SideSet
+    side_set: SideSet
     name: str = ""
     fields: Dict[str, List[Any]] = field(default_factory=dict)
 
-    def get(self, key: str, default=None):
-        """Support dict-style .get() for backward compatibility."""
-        if key == 'name':
-            return self.name
-        elif key == 'fields':
-            return self.fields
-        elif key == 'members':
-            # Extract members as (element, side) tuples
-            try:
-                if hasattr(self.side_set, 'elements') and hasattr(self.side_set, 'sides'):
-                    elements = list(self.side_set.elements)
-                    sides = list(self.side_set.sides)
-                    return list(zip(elements, sides))
-                return []
-            except:
-                return default if default is not None else []
-        return default
-
-    def __getitem__(self, key):
-        """Support dict-style and list-style subscript access for backward compatibility."""
-        # Support old list format: [name, members, fields]
-        if isinstance(key, int):
-            if key == 0:
-                return self.name
-            elif key == 1:
-                # Extract members as (element, side) tuples
-                try:
-                    if hasattr(self.side_set, 'elements') and hasattr(self.side_set, 'sides'):
-                        elements = list(self.side_set.elements)
-                        sides = list(self.side_set.sides)
-                        return list(zip(elements, sides))
-                    return []
-                except:
-                    return []
-            elif key == 2:
-                return self.fields
-            else:
-                raise IndexError(f"Index {key} out of range for SideSetData")
-
-        # Support dict-style string keys
-        if key == 'name':
-            return self.name
-        elif key == 'fields':
-            return self.fields
-        elif key == 'members':
-            # Extract members as (element, side) tuples
-            try:
-                if hasattr(self.side_set, 'elements') and hasattr(self.side_set, 'sides'):
-                    elements = list(self.side_set.elements)
-                    sides = list(self.side_set.sides)
-                    return list(zip(elements, sides))
-                return []
-            except:
-                return []
-        raise KeyError(f"Key '{key}' not found in SideSetData")
-
-    def __setitem__(self, key, value):
-        """Support dict-style and list-style item assignment for backward compatibility."""
-        # Support string keys (dict-style)
-        if isinstance(key, str):
-            if key == 'name':
-                self.name = value
-            elif key == 'fields':
-                self.fields = value
-            elif key == 'members':
-                # Update members in the side_set - value should be list of (elem, side) tuples
-                if isinstance(value, list) and value:
-                    elements = [m[0] for m in value]
-                    sides = [m[1] for m in value]
-                    if hasattr(self.side_set, 'elements'):
-                        self.side_set.elements = elements
-                        self.side_set.sides = sides
-            else:
-                raise KeyError(f"Key '{key}' not found in SideSetData")
-        # Support integer indices (list-style)
-        elif isinstance(key, int):
-            if key == 0:
-                self.name = value
-            elif key == 2:
-                self.fields = value
-            elif key == 1:
-                # Update members
-                if isinstance(value, list) and value:
-                    elements = [m[0] for m in value]
-                    sides = [m[1] for m in value]
-                    if hasattr(self.side_set, 'elements'):
-                        self.side_set.elements = elements
-                        self.side_set.sides = sides
-            else:
-                raise IndexError(f"Cannot set index {key} on SideSetData")
-        else:
-            raise TypeError(f"Invalid key type {type(key)} for SideSetData")
+    @property
+    def members(self) -> List[Tuple[int, int]]:
+        """Get list of (element, side) tuples."""
+        if hasattr(self.side_set, 'elements') and hasattr(self.side_set, 'sides'):
+            elements = list(self.side_set.elements)
+            sides = list(self.side_set.sides)
+            return list(zip(elements, sides))
+        return []
 
 
-class ElementBlocksDict(dict):
-    """
-    Custom dict for element_blocks that handles backward compatibility.
-
-    Converts old-format lists to ElementBlockData objects on assignment.
-    Old format: [name, info, connectivity, fields]
-    New format: ElementBlockData object
-    """
-
-    def __setitem__(self, key, value):
-        if isinstance(value, list) and len(value) >= 4:
-            # Old format: [name, [topology, num_elems, nodes_per_elem, num_attrs], connectivity, fields]
-            name, info, connectivity, fields = value[0], value[1], value[2], value[3]
-            topology, num_elems, nodes_per_elem, num_attrs = info
-
-            # Create block object
-            try:
-                from . import Block, EntityType
-                block = Block(
-                    id=key,
-                    entity_type=EntityType.ElemBlock,
-                    topology=topology,
-                    num_entries=num_elems,
-                    num_nodes_per_entry=nodes_per_elem,
-                    num_attributes=num_attrs
-                )
-            except (ImportError, AttributeError):
-                block = _MockBlock(
-                    id=key,
-                    topology=topology,
-                    num_entries=num_elems,
-                    num_nodes_per_entry=nodes_per_elem,
-                    num_attributes=num_attrs
-                )
-
-            # Flatten connectivity
-            if connectivity and isinstance(connectivity[0], (list, tuple)):
-                connectivity_flat = [node_id for elem in connectivity for node_id in elem]
-            else:
-                connectivity_flat = connectivity if connectivity else []
-
-            # Convert to ElementBlockData
-            value = ElementBlockData(
-                block=block,
-                name=name,
-                connectivity_flat=connectivity_flat,
-                fields=fields
-            )
-
-        super().__setitem__(key, value)
 
 
 def import_model(filename: str, mode: str = "inmemory", **kwargs) -> 'ExodusModel':
@@ -510,10 +207,11 @@ class ExodusModel:
     This class provides a high-performance interface for reading, modifying, and
     writing Exodus II files using exodus-py Rust bindings directly.
 
-    Version 0.2.0 introduces breaking changes for performance:
-    - Flat array storage (not list-of-lists)
+    Version 0.3.0 - Modern, clean API:
+    - Flat array storage for connectivity
     - Direct exodus object storage
-    - Optional streaming mode
+    - Lazy loading with streaming mode
+    - No backward compatibility layer
 
     Attributes
     ----------
@@ -598,7 +296,7 @@ class ExodusModel:
             - "streaming": Keep file open, lazy load data
         """
         self._mode = mode
-        self._reader: Optional[Any] = None  # exodus.ExodusReader
+        self._reader: Optional[ExodusReader] = None
         self._filename: Optional[str] = None
 
         # Coordinate storage (flat arrays)
@@ -607,7 +305,7 @@ class ExodusModel:
         self.coords_z: List[float] = []
 
         # Block storage (exodus objects)
-        self.element_blocks = ElementBlocksDict()
+        self.element_blocks: Dict[int, ElementBlockData] = {}
 
         # Set storage (exodus objects)
         self.node_sets: Dict[int, NodeSetData] = {}
@@ -626,34 +324,8 @@ class ExodusModel:
     def __del__(self):
         """Clean up file handle if in streaming mode."""
         if self._reader is not None:
-            try:
-                self._reader.close()
-            except:
-                pass
+            self._reader.close()
 
-    @property
-    def nodes(self) -> List[List[float]]:
-        """
-        Get nodes as list-of-lists (for backward compatibility).
-
-        Note: This is slower than using coords_x, coords_y, coords_z directly.
-        Consider using get_coords_flat() for better performance.
-        """
-        return self.get_nodes()
-
-    @nodes.setter
-    def nodes(self, node_list: List[List[float]]):
-        """
-        Set nodes from list-of-lists (for backward compatibility).
-
-        Converts to flat arrays internally for performance.
-
-        Parameters
-        ----------
-        node_list : list of list of float
-            Node coordinates [[x,y,z], ...]
-        """
-        self.create_nodes(node_list)
 
     @property
     def num_nodes(self) -> int:
@@ -789,8 +461,6 @@ class ExodusModel:
         >>> model = ExodusModel()
         >>> model.import_model('mesh.e')
         """
-        from . import ExodusReader, EntityType
-
         self._filename = filename
         self._reader = ExodusReader.open(filename)
 
@@ -813,16 +483,10 @@ class ExodusModel:
                 block = self._reader.get_block(block_id)
 
                 # Get block name
-                try:
-                    name = self._reader.get_name("elem_block", block_id)
-                except:
-                    name = ""
+                name = self._reader.get_name("elem_block", block_id) or ""
 
                 # Get flat connectivity (FAST - direct from exodus)
-                try:
-                    connectivity_flat = list(self._reader.get_connectivity(block_id))
-                except:
-                    connectivity_flat = []
+                connectivity_flat = list(self._reader.get_connectivity(block_id))
 
                 # Store as ElementBlockData
                 self.element_blocks[block_id] = ElementBlockData(
@@ -833,24 +497,15 @@ class ExodusModel:
                 )
 
         # Read QA records
-        try:
-            qa_records = self._reader.get_qa_records()
-            self.qa_records = [(r.code_name, r.code_version, r.date, r.time) 
-                              for r in qa_records]
-        except:
-            pass
+        qa_records = self._reader.get_qa_records()
+        self.qa_records = [(r.code_name, r.code_version, r.date, r.time)
+                          for r in qa_records]
 
         # Read info records
-        try:
-            self.info_records = list(self._reader.get_info_records())
-        except:
-            pass
+        self.info_records = list(self._reader.get_info_records())
 
         # Read timesteps
-        try:
-            self.timesteps = list(self._reader.times())
-        except:
-            pass
+        self.timesteps = list(self._reader.times())
 
         # Close reader if in inmemory mode
         if self._mode == "inmemory":
@@ -872,58 +527,49 @@ class ExodusModel:
         --------
         >>> model.export_model('output.e')
         """
-        from . import ExodusWriter, CreateOptions, InitParams, CreateMode, Block, EntityType
-
         # Create file
         opts = CreateOptions(mode=CreateMode.Clobber)
         writer = ExodusWriter.create(filename, opts)
 
-        try:
-            # Write initialization parameters
-            params = InitParams(
-                title=self.title,
-                num_dim=self.num_dim,
-                num_nodes=self.num_nodes,
-                num_elems=sum(b.block.num_entries for b in self.element_blocks.values()),
-                num_elem_blocks=len(self.element_blocks),
-                num_node_sets=len(self.node_sets),
-                num_side_sets=len(self.side_sets),
-            )
-            writer.put_init_params(params)
+        # Write initialization parameters
+        params = InitParams(
+            title=self.title,
+            num_dim=self.num_dim,
+            num_nodes=self.num_nodes,
+            num_elems=sum(b.block.num_entries for b in self.element_blocks.values()),
+            num_elem_blocks=len(self.element_blocks),
+            num_node_sets=len(self.node_sets),
+            num_side_sets=len(self.side_sets),
+        )
+        writer.put_init_params(params)
 
-            # Write coordinates (FAST - flat arrays)
-            if self.coords_x:
-                writer.put_coords(self.coords_x, self.coords_y, self.coords_z)
+        # Write coordinates (FAST - flat arrays)
+        if self.coords_x:
+            writer.put_coords(self.coords_x, self.coords_y, self.coords_z)
 
-            # Write element blocks
-            for block_id, block_data in self.element_blocks.items():
-                # Write block definition (exodus Block object directly)
-                writer.put_block(block_data.block)
+        # Write element blocks
+        for block_id, block_data in self.element_blocks.items():
+            # Write block definition (exodus Block object directly)
+            writer.put_block(block_data.block)
 
-                # Write flat connectivity (FAST - no conversion)
-                if block_data.connectivity_flat:
-                    writer.put_connectivity(block_id, block_data.connectivity_flat)
+            # Write flat connectivity (FAST - no conversion)
+            if block_data.connectivity_flat:
+                writer.put_connectivity(block_id, block_data.connectivity_flat)
 
-            # Write QA records
-            for qa in self.qa_records:
-                from . import QaRecord
-                record = QaRecord(qa[0], qa[1], qa[2], qa[3])
-                writer.put_qa_record(record)
+        # Write QA records
+        for qa in self.qa_records:
+            record = QaRecord(qa[0], qa[1], qa[2], qa[3])
+            writer.put_qa_record(record)
 
-            # Write info records
-            for info in self.info_records:
-                writer.put_info_record(info)
+        # Write info records
+        for info in self.info_records:
+            writer.put_info_record(info)
 
-            # Write timesteps
-            for i, timestep in enumerate(self.timesteps):
-                writer.put_time(i, float(timestep))
+        # Write timesteps
+        for i, timestep in enumerate(self.timesteps):
+            writer.put_time(i, float(timestep))
 
-            writer.close()
-
-        except Exception as e:
-            print(f"ERROR: Error exporting model: {e}")
-            print(f"  {e}")
-            raise
+        writer.close()
 
     def get_nodes(self) -> List[List[float]]:
         """
@@ -983,7 +629,7 @@ class ExodusModel:
         """
         if block_id not in self.element_blocks:
             return []
-        return self.element_blocks[block_id]['connectivity_flat']
+        return self.element_blocks[block_id].connectivity_flat
 
     def get_connectivity(self, block_id: Union[int, str]) -> List[List[int]]:
         """
@@ -1011,7 +657,7 @@ class ExodusModel:
             return []
 
         block_data = self.element_blocks[block_id]
-        flat = block_data['connectivity_flat']
+        flat = block_data.connectivity_flat
         npe = block_data.block.num_nodes_per_entry
 
         # Convert flat to list-of-lists
@@ -1076,26 +722,14 @@ class ExodusModel:
         """
         topology, num_elems, nodes_per_elem, num_attrs = info
 
-        # Try to use exodus Block if available, otherwise use mock
-        try:
-            from . import Block, EntityType
-            block = Block(
-                id=block_id,
-                entity_type=EntityType.ElemBlock,
-                topology=topology,
-                num_entries=num_elems,
-                num_nodes_per_entry=nodes_per_elem,
-                num_attributes=num_attrs
-            )
-        except (ImportError, AttributeError):
-            # Use mock block if exodus extension not available
-            block = _MockBlock(
-                id=block_id,
-                topology=topology,
-                num_entries=num_elems,
-                num_nodes_per_entry=nodes_per_elem,
-                num_attributes=num_attrs
-            )
+        block = Block(
+            id=block_id,
+            entity_type=EntityType.ElemBlock,
+            topology=topology,
+            num_entries=num_elems,
+            num_nodes_per_entry=nodes_per_elem,
+            num_attributes=num_attrs
+        )
 
         # Flatten connectivity if provided
         connectivity_flat = []
@@ -1144,13 +778,7 @@ class ExodusModel:
             List of node indices (1-based)
         """
         members = node_set_members if node_set_members is not None else []
-
-        # Try to use exodus NodeSet if available, otherwise use mock
-        try:
-            from . import NodeSet
-            node_set = NodeSet(id=node_set_id, nodes=members)
-        except (ImportError, AttributeError, TypeError):
-            node_set = _MockNodeSet(id=node_set_id, num_entries=len(members), members=members)
+        node_set = NodeSet(id=node_set_id, nodes=members)
 
         self.node_sets[node_set_id] = NodeSetData(
             node_set=node_set,
@@ -1173,12 +801,7 @@ class ExodusModel:
         elements = [m[0] for m in members] if members else []
         sides = [m[1] for m in members] if members else []
 
-        # Try to use exodus SideSet if available, otherwise use mock
-        try:
-            from . import SideSet
-            side_set = SideSet(id=side_set_id, elements=elements, sides=sides)
-        except (ImportError, AttributeError, TypeError):
-            side_set = _MockSideSet(id=side_set_id, num_entries=len(members), elements=elements, sides=sides)
+        side_set = SideSet(id=side_set_id, elements=elements, sides=sides)
 
         self.side_sets[side_set_id] = SideSetData(
             side_set=side_set,
@@ -1242,7 +865,7 @@ class ExodusModel:
         """Get node set members."""
         if node_set_id not in self.node_sets:
             return []
-        return self.node_sets[node_set_id]['members']
+        return self.node_sets[node_set_id].members
 
     def delete_element_block(self, element_block_ids: Union[int, List[int]], delete_orphaned_nodes: bool = True):
         """
@@ -1326,7 +949,7 @@ class ExodusModel:
 
         # Update connectivity in all element blocks (connectivity is 1-indexed)
         for block_id, block_data in self.element_blocks.items():
-            conn_flat = block_data['connectivity_flat']
+            conn_flat = block_data.connectivity_flat
             nodes_per_elem = block_data.block.num_nodes_per_entry
             num_elems = len(conn_flat) // nodes_per_elem
 
@@ -1352,7 +975,7 @@ class ExodusModel:
                 if not skip_element:
                     new_conn_flat.extend(new_elem_conn)
 
-            block_data['connectivity_flat'] = new_conn_flat
+            block_data.connectivity_flat = new_conn_flat
 
     def delete_unused_nodes(self) -> int:
         """
@@ -1372,7 +995,7 @@ class ExodusModel:
         """Find all nodes not referenced by any element."""
         referenced_nodes = set()
         for block_data in self.element_blocks.values():
-            for node_idx_1based in block_data['connectivity_flat']:
+            for node_idx_1based in block_data.connectivity_flat:
                 referenced_nodes.add(node_idx_1based - 1)  # Convert to 0-based
 
         all_nodes = set(range(len(self.coords_x)))
@@ -1419,7 +1042,6 @@ class ExodusModel:
         --------
         >>> model.rotate_geometry([0, 0, 1], 90)  # Rotate 90° around z-axis
         """
-        import math
 
         # Convert angle to radians
         angle = math.radians(angle_in_degrees)
@@ -1570,7 +1192,7 @@ class ExodusModel:
             print("\nElement Blocks:")
             for block_id, block_data in sorted(self.element_blocks.items()):
                 block = block_data.block
-                name = block_data.get('name', '')
+                name = block_data.name
                 num_elems = block.num_entries
                 topo = block.topology
                 print(f"  Block {block_id}: {num_elems} {topo} elements" +
@@ -1654,7 +1276,7 @@ class ExodusModel:
         dict
             Dictionary mapping element block IDs to names
         """
-        return {block_id: block_data.get('name', '')
+        return {block_id: block_data.name
                 for block_id, block_data in self.element_blocks.items()}
 
     def get_element_block_connectivity(self, element_block_id: Union[str, int] = "auto") -> List[List[int]]:
@@ -1707,7 +1329,7 @@ class ExodusModel:
                 continue
 
             # Get flat connectivity
-            conn_flat = self.element_blocks[block_id]['connectivity_flat']
+            conn_flat = self.element_blocks[block_id].connectivity_flat
             node_set.update(conn_flat)
 
         return sorted(node_set)
@@ -1910,7 +1532,6 @@ class ExodusModel:
         adjust_displacement_field : str or bool, optional
             Whether to adjust displacement field (default: "auto")
         """
-        import math
 
         if adjust_displacement_field == "auto":
             adjust_displacement_field = False  # Displacement field not yet implemented
@@ -2393,7 +2014,7 @@ class ExodusModel:
 
         members = self.side_sets[side_set_id].get('members', [])
         members.extend(new_side_set_members)
-        self.side_sets[side_set_id]['members'] = members
+        self.side_sets[side_set_id].members = members
 
     def add_nodes_to_node_set(self, node_set_id: int, new_node_set_members: List[int]):
         """
@@ -2411,7 +2032,7 @@ class ExodusModel:
 
         members = self.node_sets[node_set_id].get('members', [])
         members.extend(new_node_set_members)
-        self.node_sets[node_set_id]['members'] = members
+        self.node_sets[node_set_id].members = members
 
     def get_nodes_in_node_set(self, node_set_id: int) -> List[int]:
         """
@@ -2477,7 +2098,6 @@ class ExodusModel:
         float
             Minimum distance between nodes
         """
-        import math
 
         if len(self.coords_x) < 2:
             return 0.0
@@ -2513,7 +2133,6 @@ class ExodusModel:
         float
             Characteristic length scale (bounding box diagonal)
         """
-        import math
 
         if not self.coords_x:
             return 0.0
@@ -2572,7 +2191,7 @@ class ExodusModel:
             if block_id not in self.element_blocks:
                 continue
             # Get flat connectivity and add all nodes
-            conn_flat = self.element_blocks[block_id]['connectivity_flat']
+            conn_flat = self.element_blocks[block_id].connectivity_flat
             all_nodes.update(conn_flat)
 
         if not all_nodes:
@@ -2624,7 +2243,6 @@ class ExodusModel:
         tuple of (float, float)
             (minimum edge length, average edge length)
         """
-        import math
         import sys
 
         # Format element block IDs
@@ -2671,7 +2289,7 @@ class ExodusModel:
                 continue
 
             # Get connectivity
-            conn_flat = block_data['connectivity_flat']
+            conn_flat = block_data.connectivity_flat
             nodes_per_elem = block_data.block.num_nodes_per_entry
             num_elems = len(conn_flat) // nodes_per_elem
 
@@ -2737,7 +2355,7 @@ class ExodusModel:
         source_data = self.element_blocks[source_id]
         block = source_data['block']
         name = source_data.get('name', '')
-        conn_flat = source_data['connectivity_flat']
+        conn_flat = source_data.connectivity_flat
         fields = source_data.get('fields', {})
 
         # Create new nodes if requested
@@ -2774,7 +2392,7 @@ class ExodusModel:
         self.create_element_block(target_id, info)
 
         # Set connectivity
-        self.element_blocks[target_id]['connectivity_flat'] = new_conn_flat
+        self.element_blocks[target_id].connectivity_flat = new_conn_flat
 
         # Copy the name if it exists
         if name:
@@ -2840,7 +2458,7 @@ class ExodusModel:
         # Create new connectivity by combining all blocks
         new_conn_flat = []
         for block_id in element_block_ids:
-            new_conn_flat.extend(self.element_blocks[block_id]['connectivity_flat'])
+            new_conn_flat.extend(self.element_blocks[block_id].connectivity_flat)
 
         # Create new info based on first block
         first_block = self.element_blocks[element_block_ids[0]]['block']
@@ -2875,7 +2493,7 @@ class ExodusModel:
 
         # Create the new combined block
         self.create_element_block(temp_id, new_info)
-        self.element_blocks[temp_id]['connectivity_flat'] = new_conn_flat
+        self.element_blocks[temp_id].connectivity_flat = new_conn_flat
         self.element_blocks[temp_id].fields = new_fields
 
         # Delete old blocks (nodes won't be orphaned by this procedure)
@@ -2976,15 +2594,15 @@ class ExodusModel:
 
         # Update connectivity (1-based)
         for block_id, block_data in self.element_blocks.items():
-            conn_flat = block_data['connectivity_flat']
+            conn_flat = block_data.connectivity_flat
             new_conn_flat = [node_map[idx - 1] + 1 for idx in conn_flat]
-            block_data['connectivity_flat'] = new_conn_flat
+            block_data.connectivity_flat = new_conn_flat
 
         # Update node sets (1-based)
         for ns_id, ns_data in self.node_sets.items():
             members = ns_data.get('members', [])
             new_members = list(set(node_map[idx - 1] + 1 for idx in members))  # Remove duplicates
-            ns_data['members'] = sorted(new_members)
+            ns_data.members = sorted(new_members)
 
         return merged_count
 
@@ -3172,7 +2790,7 @@ class ExodusModel:
                 if element_field_name not in fields:
                     continue
 
-                conn_flat = self.element_blocks[block_id]['connectivity_flat']
+                conn_flat = self.element_blocks[block_id].connectivity_flat
                 nodes_per_elem = self.element_blocks[block_id].block.num_nodes_per_entry
                 num_elems = len(conn_flat) // nodes_per_elem
                 elem_values = fields[element_field_name][timestep_idx]
@@ -3238,7 +2856,7 @@ class ExodusModel:
             # Create element field for this block
             self.create_element_field(element_field_name, block_id, 0.0)
 
-            conn_flat = self.element_blocks[block_id]['connectivity_flat']
+            conn_flat = self.element_blocks[block_id].connectivity_flat
             nodes_per_elem = self.element_blocks[block_id].block.num_nodes_per_entry
             num_elems = len(conn_flat) // nodes_per_elem
             fields = self.element_blocks[block_id].get('fields', {})
@@ -3822,7 +3440,7 @@ class ExodusModel:
 
                 # Check if this element is in this block
                 if 0 < elem_id <= num_elems:
-                    conn_flat = block_data['connectivity_flat']
+                    conn_flat = block_data.connectivity_flat
                     start = (elem_id - 1) * nodes_per_elem
                     elem_conn = conn_flat[start:start + nodes_per_elem]
                     node_indices.update(elem_conn)
@@ -4019,7 +3637,6 @@ class ExodusModel:
         field_name : str, optional
             Name for the volume field (default: "volume")
         """
-        import math
 
         # Format element block IDs
         if element_block_ids == "all":
@@ -4579,16 +4196,8 @@ class ExodusModel:
         # Create element block
         num_elems = nx * ny * nz
 
-        try:
-            from . import Block
-            block = Block(
-                id=block_id,
-                topology="hex8",
-                num_entries=num_elems,
-                num_nodes_per_entry=8,
-                num_attributes=0
-            )
-        except (ImportError, AttributeError):
+        # Import moved to top
+
             block = _MockBlock(
                 id=block_id,
                 topology="hex8",
