@@ -129,6 +129,93 @@ class ExodusModel:
         "pyramid5": 5,
     }
 
+    # Element volume/area/length formulas
+    # Format: [coefficient, (node_indices_1), (node_indices_2), ...]
+    VOLUME_FORMULA = {
+        "line2": [1.0, (0, 1)],
+        "line3": [1.0, (0, 1)],
+        "tri3": [0.5, (0, 1), (0, 2)],
+        "tri6": [0.5, (0, 1), (0, 2)],
+        "quad4": [0.5, (0, 2), (1, 3)],
+        "quad8": [0.5, (0, 2), (1, 3)],
+        "quad9": [0.5, (0, 2), (1, 3)],
+        "tet4": [1.0 / 6.0, (0, 1), (0, 2), (0, 3)],
+        "tet10": [1.0 / 6.0, (0, 1), (0, 2), (0, 3)],
+        "wedge6": [0.5, ((0, 3), (1, 4)), ((0, 3), (2, 5)), ((0, 1, 2), (3, 4, 5))],
+        "wedge15": [0.5, ((0, 3), (1, 4)), ((0, 3), (2, 5)), ((0, 1, 2), (3, 4, 5))],
+        "hex8": [1.0, ((0, 3, 4, 7), (1, 2, 5, 6)), ((0, 1, 4, 5), (2, 3, 6, 7)), ((0, 1, 2, 3), (4, 5, 6, 7))],
+        "hex20": [1.0, ((0, 3, 4, 7), (1, 2, 5, 6)), ((0, 1, 4, 5), (2, 3, 6, 7)), ((0, 1, 2, 3), (4, 5, 6, 7))],
+        "hex27": [1.0, ((0, 3, 4, 7), (1, 2, 5, 6)), ((0, 1, 4, 5), (2, 3, 6, 7)), ((0, 1, 2, 3), (4, 5, 6, 7))],
+    }
+
+    # Element face mapping for extracting element edges
+    FACE_MAPPING = {
+        "hex8": [
+            ("quad4", (0, 1, 5, 4)),
+            ("quad4", (1, 2, 6, 5)),
+            ("quad4", (2, 3, 7, 6)),
+            ("quad4", (3, 0, 4, 7)),
+            ("quad4", (0, 3, 2, 1)),
+            ("quad4", (4, 5, 6, 7)),
+        ],
+        "hex20": [
+            ("quad8", (0, 1, 5, 4, 8, 13, 16, 12)),
+            ("quad8", (1, 2, 6, 5, 9, 14, 17, 13)),
+            ("quad8", (2, 3, 7, 6, 10, 15, 18, 14)),
+            ("quad8", (3, 0, 4, 7, 11, 12, 19, 15)),
+            ("quad8", (0, 3, 2, 1, 11, 10, 9, 8)),
+            ("quad8", (4, 5, 6, 7, 16, 17, 18, 19)),
+        ],
+        "tet4": [
+            ("tri3", (0, 1, 3)),
+            ("tri3", (1, 2, 3)),
+            ("tri3", (0, 3, 2)),
+            ("tri3", (0, 2, 1)),
+        ],
+        "tet10": [
+            ("tri6", (0, 1, 3, 4, 8, 7)),
+            ("tri6", (1, 2, 3, 5, 9, 8)),
+            ("tri6", (0, 3, 2, 7, 9, 6)),
+            ("tri6", (0, 2, 1, 6, 5, 4)),
+        ],
+        "wedge6": [
+            ("tri3", (0, 1, 2)),
+            ("tri3", (3, 5, 4)),
+            ("quad4", (0, 1, 4, 3)),
+            ("quad4", (1, 2, 5, 4)),
+            ("quad4", (0, 3, 5, 2)),
+        ],
+        "wedge15": [
+            ("tri6", (0, 1, 2, 6, 7, 8)),
+            ("tri6", (3, 5, 4, 11, 10, 9)),
+            ("quad8", (0, 1, 4, 3, 6, 13, 9, 12)),
+            ("quad8", (1, 2, 5, 4, 7, 14, 10, 13)),
+            ("quad8", (0, 3, 5, 2, 12, 11, 14, 8)),
+        ],
+        "quad4": [
+            ("line2", (0, 1)),
+            ("line2", (1, 2)),
+            ("line2", (2, 3)),
+            ("line2", (3, 0)),
+        ],
+        "quad8": [
+            ("line3", (0, 1, 4)),
+            ("line3", (1, 2, 5)),
+            ("line3", (2, 3, 6)),
+            ("line3", (3, 0, 7)),
+        ],
+        "tri3": [
+            ("line2", (0, 1)),
+            ("line2", (1, 2)),
+            ("line2", (2, 0)),
+        ],
+        "tri6": [
+            ("line3", (0, 1, 3)),
+            ("line3", (1, 2, 4)),
+            ("line3", (2, 0, 5)),
+        ],
+    }
+
     def __init__(self):
         """Initialize an empty ExodusModel."""
         # Core data structures
@@ -416,6 +503,216 @@ class ExodusModel:
         # TODO: Rotate the displacement field when implemented
         # if adjust_displacement_field:
         #     ...
+
+    def _get_standard_element_type(self, element_type: str) -> str:
+        """
+        Convert element type to standardized lowercase form.
+
+        Parameters
+        ----------
+        element_type : str
+            Element type string (may be uppercase or mixed case)
+
+        Returns
+        -------
+        str
+            Standardized lowercase element type
+        """
+        return element_type.strip().lower()
+
+    def _distance_between(self, point1: List[float], point2: List[float]) -> float:
+        """
+        Calculate Euclidean distance between two points.
+
+        Parameters
+        ----------
+        point1 : list of float
+            First point [x, y, z]
+        point2 : list of float
+            Second point [x, y, z]
+
+        Returns
+        -------
+        float
+            Distance between the points
+        """
+        import math
+        return math.sqrt(sum((a - b) ** 2 for a, b in zip(point1, point2)))
+
+    def _new_element_field_name(self, quantity: int = 1) -> Union[str, List[str]]:
+        """
+        Generate unique temporary element field name(s).
+
+        Parameters
+        ----------
+        quantity : int, optional
+            Number of unique names to generate (default: 1)
+
+        Returns
+        -------
+        str or list of str
+            Single name if quantity==1, otherwise list of names
+        """
+        id_ = 1
+        names = []
+        all_field_names = set(self.get_element_field_names())
+        for _ in range(quantity):
+            name = f"temp{id_}"
+            while name in all_field_names:
+                id_ += 1
+                name = f"temp{id_}"
+            names.append(name)
+            all_field_names.add(name)
+            id_ += 1
+
+        return names[0] if quantity == 1 else names
+
+    def _get_element_block_fields(self, element_block_id: int) -> Dict[str, List[Any]]:
+        """
+        Get the fields dictionary for an element block.
+
+        Parameters
+        ----------
+        element_block_id : int
+            Element block ID
+
+        Returns
+        -------
+        dict
+            Dictionary of element fields for this block
+        """
+        if element_block_id not in self.element_blocks:
+            self._error(f"Element block {element_block_id} does not exist")
+
+        # element_blocks[block_id] = [name, info, connectivity, fields]
+        return self.element_blocks[element_block_id][3]
+
+    def _get_element_type(self, element_block_id: int) -> str:
+        """
+        Get the element type for an element block.
+
+        Parameters
+        ----------
+        element_block_id : int
+            Element block ID
+
+        Returns
+        -------
+        str
+            Element type string
+        """
+        if element_block_id not in self.element_blocks:
+            self._error(f"Element block {element_block_id} does not exist")
+
+        # element_blocks[block_id][1][0] is element_type
+        return self.element_blocks[element_block_id][1][0]
+
+    def _get_element_edge_indices(self, element_type: str) -> List[Tuple[int, int]]:
+        """
+        Get list of edge node index pairs for an element type.
+
+        Parameters
+        ----------
+        element_type : str
+            Element type string
+
+        Returns
+        -------
+        list of tuple
+            List of (node1_idx, node2_idx) pairs representing edges
+        """
+        element_type = self._get_standard_element_type(element_type)
+
+        # If not a standard type, return empty list
+        if element_type not in self.DIMENSION:
+            return []
+
+        # If dimension is 0, no edges
+        if self.DIMENSION[element_type] == 0:
+            return []
+
+        # Create a mock element
+        elements = {
+            element_type: [list(range(self.NODES_PER_ELEMENT[element_type]))]
+        }
+
+        iterations = self.DIMENSION[element_type] - 1
+
+        # Iterate to reduce dimension until we get to edges
+        for _ in range(iterations):
+            new_elements = {}
+            for elem_type, connectivities in elements.items():
+                if elem_type not in self.FACE_MAPPING:
+                    continue
+                face_mapping = self.FACE_MAPPING[elem_type]
+                for face_type, indices in face_mapping:
+                    if face_type not in new_elements:
+                        new_elements[face_type] = []
+                    for local_nodes in connectivities:
+                        new_elements[face_type].append([local_nodes[x] for x in indices])
+            elements = new_elements
+
+        # Now extract edges using volume formula
+        edges = []
+        for elem_type, values in elements.items():
+            if elem_type not in self.VOLUME_FORMULA:
+                continue
+            if self.DIMENSION.get(elem_type, 0) != 1:
+                continue
+            formula = self.VOLUME_FORMULA[elem_type][-1]
+            for local_nodes in values:
+                edges.append(tuple(sorted([local_nodes[x] for x in formula])))
+
+        # Return unique edges
+        return list(set(edges))
+
+    def _delete_elements(self, element_block_id: int, element_indices: List[int]):
+        """
+        Delete specified elements from an element block.
+
+        Parameters
+        ----------
+        element_block_id : int
+            Element block ID
+        element_indices : list of int
+            List of element indices (0-based, local to the block) to delete
+
+        Notes
+        -----
+        This also updates all element fields to remove data for deleted elements.
+        """
+        if element_block_id not in self.element_blocks:
+            self._error(f"Element block {element_block_id} does not exist")
+
+        if not element_indices:
+            return
+
+        # Get block data
+        name, info, connectivity, fields = self.element_blocks[element_block_id]
+        element_count = info[1]
+        nodes_per_element = info[2]
+
+        # Create set of indices to delete
+        indices_to_delete = set(element_indices)
+
+        # Create list of remaining indices
+        remaining_indices = [i for i in range(element_count) if i not in indices_to_delete]
+
+        # Update connectivity - convert flat list to indexed structure
+        new_connectivity = []
+        for i in remaining_indices:
+            new_connectivity.append(connectivity[i])
+
+        # Update element fields
+        for field_name, timestep_data in fields.items():
+            for t, values in enumerate(timestep_data):
+                fields[field_name][t] = [values[i] for i in remaining_indices]
+
+        # Update element count
+        info[1] = len(remaining_indices)
+
+        # Store updated data
+        self.element_blocks[element_block_id] = [name, info, new_connectivity, fields]
 
     # ========================================================================
     # File I/O Operations
@@ -1861,36 +2158,480 @@ class ExodusModel:
         raise NotImplementedError("threshold_element_blocks() is not yet implemented.")
 
     def count_degenerate_elements(self, element_block_ids: Union[str, List[int]] = "all") -> int:
-        """Count degenerate elements in element blocks."""
-        raise NotImplementedError("count_degenerate_elements() is not yet implemented.")
+        """
+        Return the number of degenerate elements in the given element blocks.
+
+        A degenerate element is an element which contains one or more nodes
+        which are a duplicate of another node within the same element.
+
+        Parameters
+        ----------
+        element_block_ids : str or list of int, optional
+            Element blocks to check (default: "all")
+
+        Returns
+        -------
+        int
+            Number of degenerate elements found
+        """
+        # Format element block IDs
+        if element_block_ids == "all":
+            element_block_ids = list(self.element_blocks.keys())
+        elif isinstance(element_block_ids, int):
+            element_block_ids = [element_block_ids]
+
+        degenerate_element_count = 0
+
+        for element_block_id in element_block_ids:
+            if element_block_id not in self.element_blocks:
+                continue
+
+            _, info, connectivity, _ = self.element_blocks[element_block_id]
+            nodes_per_element = info[2]
+            element_count = info[1]
+
+            for element_index in range(element_count):
+                element_nodes = connectivity[element_index]
+                # If the element has duplicate nodes, it's degenerate
+                if len(set(element_nodes)) != nodes_per_element:
+                    degenerate_element_count += 1
+
+        return degenerate_element_count
 
     def count_disconnected_blocks(self, element_block_ids: Union[str, List[int]] = "all") -> int:
-        """Count disconnected sub-blocks within element blocks."""
-        raise NotImplementedError("count_disconnected_blocks() is not yet implemented.")
+        """
+        Return the number of disconnected blocks.
+
+        A disconnected block is a group of elements which are connected to
+        each other through one or more nodes.
+
+        Parameters
+        ----------
+        element_block_ids : str or list of int, optional
+            Element blocks to check (default: "all")
+
+        Returns
+        -------
+        int
+            Number of disconnected sub-blocks found
+        """
+        # Format element block IDs
+        if element_block_ids == "all":
+            element_block_ids = list(self.element_blocks.keys())
+        elif isinstance(element_block_ids, int):
+            element_block_ids = [element_block_ids]
+
+        # Get all nodes in the element blocks
+        nodes = self.get_nodes_in_element_block(element_block_ids)
+
+        # For each node, find the lowest index node that it's connected to (union-find)
+        master = list(range(len(self.nodes)))
+
+        for element_block_id in element_block_ids:
+            if element_block_id not in self.element_blocks:
+                continue
+
+            connectivity = self.get_connectivity(element_block_id)
+            nodes_per_element = self.get_nodes_per_element(element_block_id)
+            element_count = self.get_element_count(element_block_id)
+
+            for i in range(element_count):
+                element_nodes = connectivity[i]
+
+                # Find lowest index master out of these nodes
+                low = min(element_nodes)
+                for node_idx in element_nodes:
+                    this_low = node_idx
+                    while this_low != master[this_low]:
+                        this_low = master[this_low]
+                    low = min(low, this_low)
+
+                # Now set the current master to the lowest index found
+                for node_idx in element_nodes:
+                    this_low = node_idx
+                    while this_low != master[this_low]:
+                        old_master = master[this_low]
+                        master[this_low] = low
+                        this_low = old_master
+                    master[this_low] = low
+
+        # Make sure master node list is one-deep
+        for i in nodes:
+            master[i] = master[master[i]]
+
+        # Count the number of master nodes (disconnected blocks)
+        block_count = sum(1 for x in nodes if master[x] == x)
+
+        return block_count
 
     def delete_duplicate_elements(self, element_block_ids: Union[str, List[int]] = "all"):
-        """Delete duplicate elements."""
-        raise NotImplementedError("delete_duplicate_elements() is not yet implemented.")
+        """
+        Delete duplicate elements.
+
+        For this calculation, a duplicate element is an element which shares
+        all of its nodes with another element.
+
+        Parameters
+        ----------
+        element_block_ids : str or list of int, optional
+            Element blocks to process (default: "all")
+        """
+        # Format element block IDs
+        if element_block_ids == "all":
+            element_block_ids = list(self.element_blocks.keys())
+        elif isinstance(element_block_ids, int):
+            element_block_ids = [element_block_ids]
+
+        # Process each element block
+        for block_id in element_block_ids:
+            if block_id not in self.element_blocks:
+                continue
+
+            nodes_per_element = self.get_nodes_per_element(block_id)
+            element_count = self.get_element_count(block_id)
+            connectivity = self.get_connectivity(block_id)
+
+            # Find duplicate elements
+            elements = set()
+            duplicates = []
+
+            for elem_idx in range(element_count):
+                # Get nodes for this element and create a sorted tuple
+                element_nodes = tuple(sorted(connectivity[elem_idx]))
+
+                if element_nodes in elements:
+                    duplicates.append(elem_idx)
+                else:
+                    elements.add(element_nodes)
+
+            # Delete duplicate elements
+            if duplicates:
+                self._delete_elements(block_id, duplicates)
 
     def calculate_element_centroids(self, element_block_ids: Union[str, List[int]] = "all",
                                    field_prefix: str = "centroid"):
-        """Calculate element centroids and store as fields."""
-        raise NotImplementedError("calculate_element_centroids() is not yet implemented.")
+        """
+        Calculate and store the centroid of each element.
+
+        This will approximate the element centroid as the nodal average of each
+        element and will store that value in an element field. Since a
+        timestep must be defined in order for element fields to exist, one will
+        be created if none exist.
+
+        By default, the centroid will be stored in the fields 'centroid_x',
+        'centroid_y', and 'centroid_z'. Alternatively, a prefix can be given
+        or a list of three strings can be given.
+
+        Parameters
+        ----------
+        element_block_ids : str or list of int, optional
+            Element blocks to process (default: "all")
+        field_prefix : str or list of str, optional
+            Field name prefix or list of three field names (default: "centroid")
+        """
+        # Format element block IDs
+        if element_block_ids == "all":
+            element_block_ids = list(self.element_blocks.keys())
+        elif isinstance(element_block_ids, int):
+            element_block_ids = [element_block_ids]
+
+        # Ensure at least one timestep exists
+        if not self.timesteps:
+            self.create_timestep(0.0)
+
+        # Determine field names
+        if isinstance(field_prefix, str):
+            centroid_field_names = [f"{field_prefix}_{x}" for x in ["x", "y", "z"]]
+        else:
+            centroid_field_names = field_prefix
+
+        for element_block_id in element_block_ids:
+            if element_block_id not in self.element_blocks:
+                continue
+
+            # Calculate centroids
+            centroid = [[], [], []]
+            element_count = self.get_element_count(element_block_id)
+            nodes_per_element = self.get_nodes_per_element(element_block_id)
+            connectivity = self.get_connectivity(element_block_id)
+
+            for element_index in range(element_count):
+                this_centroid = [0.0, 0.0, 0.0]
+                element_nodes = connectivity[element_index]
+
+                for node_idx in element_nodes:
+                    for i in range(3):
+                        this_centroid[i] += self.nodes[node_idx][i]
+
+                for i in range(3):
+                    centroid[i].append(this_centroid[i] / nodes_per_element)
+
+            # Store centroid fields
+            fields = self._get_element_block_fields(element_block_id)
+            for index, name in enumerate(centroid_field_names):
+                values = []
+                for _ in range(len(self.timesteps)):
+                    values.append(list(centroid[index]))
+                fields[name] = values
 
     def calculate_element_volumes(self, element_block_ids: Union[str, List[int]] = "all",
                                  field_name: str = "volume"):
-        """Calculate element volumes and store as field."""
-        raise NotImplementedError("calculate_element_volumes() is not yet implemented.")
+        """
+        Calculate and store the volume of each element.
+
+        This will approximate the element volume. Since a timestep must be
+        defined in order for element fields to exist, one will be created if
+        none exist.
+
+        For two dimensional elements, this calculates the area. For one
+        dimensional elements, this calculates the length.
+
+        Parameters
+        ----------
+        element_block_ids : str or list of int, optional
+            Element blocks to process (default: "all")
+        field_name : str, optional
+            Name for the volume field (default: "volume")
+        """
+        import math
+
+        # Format element block IDs
+        if element_block_ids == "all":
+            element_block_ids = list(self.element_blocks.keys())
+        elif isinstance(element_block_ids, int):
+            element_block_ids = [element_block_ids]
+
+        # Ensure at least one timestep exists
+        if not self.timesteps:
+            self.create_timestep(0.0)
+
+        for element_block_id in element_block_ids:
+            if element_block_id not in self.element_blocks:
+                continue
+
+            # Get the element type
+            element_type = self._get_standard_element_type(
+                self._get_element_type(element_block_id)
+            )
+
+            if element_type not in self.VOLUME_FORMULA:
+                self._warning(
+                    "Unrecognized element type",
+                    f"The formula for calculating the volume of "
+                    f'element type "{element_type}" is not implemented or not '
+                    f"known. This block will be skipped."
+                )
+                continue
+
+            # Get the formula
+            formula = self.VOLUME_FORMULA[element_type]
+            coefficient = formula[0]
+
+            # Build the calculation based on element dimension
+            element_count = self.get_element_count(element_block_id)
+            connectivity = self.get_connectivity(element_block_id)
+            volumes = []
+
+            for element_index in range(element_count):
+                element_nodes = connectivity[element_index]
+
+                # Build coordinate array for this element
+                coords = []
+                for node_idx in element_nodes:
+                    coords.extend(self.nodes[node_idx])
+
+                # Calculate volume based on formula type
+                if len(formula) == 2:
+                    # 1D: distance between two points
+                    rule = formula[1]
+                    vec = [0.0, 0.0, 0.0]
+                    for d in range(3):
+                        node_list_0 = rule[0] if isinstance(rule[0], tuple) else (rule[0],)
+                        node_list_1 = rule[1] if isinstance(rule[1], tuple) else (rule[1],)
+
+                        coord0 = sum(coords[n * 3 + d] for n in node_list_0) / len(node_list_0)
+                        coord1 = sum(coords[n * 3 + d] for n in node_list_1) / len(node_list_1)
+                        vec[d] = coord1 - coord0
+
+                    volume = coefficient * math.sqrt(sum(v * v for v in vec))
+
+                elif len(formula) == 3:
+                    # 2D: cross product magnitude
+                    vecs = []
+                    for rule in formula[1:]:
+                        vec = [0.0, 0.0, 0.0]
+                        for d in range(3):
+                            node_list_0 = rule[0] if isinstance(rule[0], tuple) else (rule[0],)
+                            node_list_1 = rule[1] if isinstance(rule[1], tuple) else (rule[1],)
+
+                            coord0 = sum(coords[n * 3 + d] for n in node_list_0) / len(node_list_0)
+                            coord1 = sum(coords[n * 3 + d] for n in node_list_1) / len(node_list_1)
+                            vec[d] = coord1 - coord0
+                        vecs.append(vec)
+
+                    # Cross product
+                    cross = [
+                        vecs[0][1] * vecs[1][2] - vecs[0][2] * vecs[1][1],
+                        vecs[0][2] * vecs[1][0] - vecs[0][0] * vecs[1][2],
+                        vecs[0][0] * vecs[1][1] - vecs[0][1] * vecs[1][0],
+                    ]
+                    volume = coefficient * math.sqrt(sum(c * c for c in cross))
+
+                elif len(formula) == 4:
+                    # 3D: triple product
+                    vecs = []
+                    for rule in formula[1:]:
+                        vec = [0.0, 0.0, 0.0]
+                        for d in range(3):
+                            node_list_0 = rule[0] if isinstance(rule[0], tuple) else (rule[0],)
+                            node_list_1 = rule[1] if isinstance(rule[1], tuple) else (rule[1],)
+
+                            coord0 = sum(coords[n * 3 + d] for n in node_list_0) / len(node_list_0)
+                            coord1 = sum(coords[n * 3 + d] for n in node_list_1) / len(node_list_1)
+                            vec[d] = coord1 - coord0
+                        vecs.append(vec)
+
+                    # Triple product: (vec1 × vec2) · vec3
+                    cross = [
+                        vecs[0][1] * vecs[1][2] - vecs[0][2] * vecs[1][1],
+                        vecs[0][2] * vecs[1][0] - vecs[0][0] * vecs[1][2],
+                        vecs[0][0] * vecs[1][1] - vecs[0][1] * vecs[1][0],
+                    ]
+                    volume = coefficient * (cross[0] * vecs[2][0] + cross[1] * vecs[2][1] + cross[2] * vecs[2][2])
+                else:
+                    volume = 0.0
+
+                volumes.append(abs(volume))
+
+            # Store volume field
+            fields = self._get_element_block_fields(element_block_id)
+            values = []
+            for _ in range(len(self.timesteps)):
+                values.append(list(volumes))
+            fields[field_name] = values
 
     def get_element_block_volume(self, element_block_ids: Union[str, List[int]] = "all",
                                 timestep: Union[str, float] = "last") -> float:
-        """Get total volume of element blocks."""
-        raise NotImplementedError("get_element_block_volume() is not yet implemented.")
+        """
+        Return the total volume of the given element blocks.
+
+        Parameters
+        ----------
+        element_block_ids : str or list of int, optional
+            Element blocks to calculate volume for (default: "all")
+        timestep : str or float, optional
+            Timestep to use (default: "last") - currently unused
+
+        Returns
+        -------
+        float
+            Total volume of the element blocks
+        """
+        # Format element block IDs
+        if element_block_ids == "all":
+            element_block_ids = list(self.element_blocks.keys())
+        elif isinstance(element_block_ids, int):
+            element_block_ids = [element_block_ids]
+
+        # Create a timestep if none exist
+        created_timestep = False
+        if not self.timesteps:
+            created_timestep = True
+            self.create_timestep(0.0)
+
+        # Calculate temporary field with element volumes
+        element_volume_field_name = self._new_element_field_name()
+        self.calculate_element_volumes(element_volume_field_name, element_block_ids)
+
+        # Add up the volumes
+        volume = 0.0
+        for block_id in element_block_ids:
+            if block_id not in self.element_blocks:
+                continue
+            fields = self._get_element_block_fields(block_id)
+            if element_volume_field_name in fields:
+                volume += sum(fields[element_volume_field_name][0])
+
+        # Delete the temporary timestep
+        if created_timestep:
+            self.delete_timestep(0.0)
+
+        # Delete the temporary field
+        self.delete_element_field(element_volume_field_name, element_block_ids)
+
+        return volume
 
     def get_element_block_centroid(self, element_block_ids: Union[str, List[int]] = "all",
                                   timestep: Union[str, float] = "last") -> List[float]:
-        """Get centroid of element blocks."""
-        raise NotImplementedError("get_element_block_centroid() is not yet implemented.")
+        """
+        Return the centroid of the given element blocks.
+
+        Parameters
+        ----------
+        element_block_ids : str or list of int, optional
+            Element blocks to calculate centroid for (default: "all")
+        timestep : str or float, optional
+            Timestep to use (default: "last") - currently unused
+
+        Returns
+        -------
+        list of float
+            Centroid [x, y, z] of the element blocks
+        """
+        # Format element block IDs
+        if element_block_ids == "all":
+            element_block_ids = list(self.element_blocks.keys())
+        elif isinstance(element_block_ids, int):
+            element_block_ids = [element_block_ids]
+
+        # Create a timestep if none exist
+        created_timestep = False
+        if not self.timesteps:
+            created_timestep = True
+            self.create_timestep(0.0)
+
+        # Calculate temporary fields with element volumes and centroids
+        element_volume_field_name = self._new_element_field_name()
+        element_centroid_field_names = self._new_element_field_name(3)
+
+        self.calculate_element_volumes(element_volume_field_name, element_block_ids)
+        self.calculate_element_centroids(element_block_ids, element_centroid_field_names)
+
+        # Calculate volume-weighted centroid
+        centroid = [0.0, 0.0, 0.0]
+        total_volume = 0.0
+
+        for block_id in element_block_ids:
+            if block_id not in self.element_blocks:
+                continue
+
+            fields = self._get_element_block_fields(block_id)
+            if element_volume_field_name not in fields:
+                continue
+
+            volumes = fields[element_volume_field_name][0]
+            centroids = [fields[name][0] for name in element_centroid_field_names]
+
+            for elem_idx in range(len(volumes)):
+                vol = volumes[elem_idx]
+                total_volume += vol
+                for dim in range(3):
+                    centroid[dim] += centroids[dim][elem_idx] * vol
+
+        # Divide by total volume
+        if total_volume > 0:
+            centroid = [c / total_volume for c in centroid]
+
+        # Delete the temporary timestep
+        if created_timestep:
+            self.delete_timestep(0.0)
+
+        # Delete the temporary fields
+        self.delete_element_field(element_volume_field_name, element_block_ids)
+        for name in element_centroid_field_names:
+            self.delete_element_field(name, element_block_ids)
+
+        return centroid
 
     def get_element_block_extents(self, element_block_ids: Union[str, List[int]] = "all") -> List[Tuple[float, float]]:
         """
@@ -1951,8 +2692,66 @@ class ExodusModel:
         return extents
 
     def get_element_edge_length_info(self, element_block_ids: Union[str, List[int]] = "all") -> Tuple[float, float]:
-        """Get minimum and average element edge lengths."""
-        raise NotImplementedError("get_element_edge_length_info() is not yet implemented.")
+        """
+        Return the minimum and average element edge lengths.
+
+        Only edges within elements in the specified element blocks are counted.
+
+        Parameters
+        ----------
+        element_block_ids : str or list of int, optional
+            Element blocks to process (default: "all")
+
+        Returns
+        -------
+        tuple of (float, float)
+            (minimum edge length, average edge length)
+        """
+        import sys
+
+        # Format element block IDs
+        if element_block_ids == "all":
+            element_block_ids = list(self.element_blocks.keys())
+        elif isinstance(element_block_ids, int):
+            element_block_ids = [element_block_ids]
+
+        minimum = sys.float_info.max
+        total = 0.0
+        edge_count = 0
+
+        for element_block_id in element_block_ids:
+            if element_block_id not in self.element_blocks:
+                continue
+
+            # Get the edge endpoint info
+            element_type = self._get_element_type(element_block_id)
+            endpoints = self._get_element_edge_indices(element_type)
+
+            if not endpoints:
+                continue
+
+            # Process all elements
+            element_count = self.get_element_count(element_block_id)
+            connectivity = self.get_connectivity(element_block_id)
+            edge_count += element_count * len(endpoints)
+
+            for element_index in range(element_count):
+                element_nodes = connectivity[element_index]
+
+                for edge in endpoints:
+                    node1_idx = element_nodes[edge[0]]
+                    node2_idx = element_nodes[edge[1]]
+                    this_distance = self._distance_between(
+                        self.nodes[node1_idx], self.nodes[node2_idx]
+                    )
+                    total += this_distance
+                    if this_distance < minimum:
+                        minimum = this_distance
+
+        if edge_count == 0:
+            return (float("nan"), float("nan"))
+
+        return (minimum, total / edge_count)
 
     # ========================================================================
     # Field Operations - Element Fields
