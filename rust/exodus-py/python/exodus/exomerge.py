@@ -168,8 +168,19 @@ class ElementBlockData:
             raise IndexError(f"Index {index} out of range for ElementBlockData")
 
     def __setitem__(self, index, value):
-        """Support old list-style assignment for backward compatibility."""
-        if index == 0:
+        """Support old list-style and dict-style assignment for backward compatibility."""
+        # Support string keys (dict-style)
+        if isinstance(index, str):
+            if index == 'name':
+                self.name = value
+            elif index == 'connectivity_flat':
+                self.connectivity_flat = value
+            elif index == 'fields':
+                self.fields = value
+            else:
+                raise KeyError(f"Key '{index}' not found in ElementBlockData")
+        # Support integer indices (list-style)
+        elif index == 0:
             self.name = value
         elif index == 3:
             self.fields = value
@@ -214,26 +225,87 @@ class NodeSetData:
         elif key == 'fields':
             return self.fields
         elif key == 'members':
-            # Extract members from node_set
+            # Extract members from node_set (check both .nodes and .members)
             try:
-                return list(self.node_set.nodes) if hasattr(self.node_set, 'nodes') else []
+                if hasattr(self.node_set, 'nodes'):
+                    return list(self.node_set.nodes)
+                elif hasattr(self.node_set, 'members'):
+                    return list(self.node_set.members)
+                return []
             except:
                 return default if default is not None else []
         return default
 
-    def __getitem__(self, key: str):
-        """Support dict-style subscript access for backward compatibility."""
+    def __getitem__(self, key):
+        """Support dict-style and list-style subscript access for backward compatibility."""
+        # Support old list format: [name, members, fields]
+        if isinstance(key, int):
+            if key == 0:
+                return self.name
+            elif key == 1:
+                # Extract members from node_set (check both .nodes and .members)
+                try:
+                    if hasattr(self.node_set, 'nodes'):
+                        return list(self.node_set.nodes)
+                    elif hasattr(self.node_set, 'members'):
+                        return list(self.node_set.members)
+                    return []
+                except:
+                    return []
+            elif key == 2:
+                return self.fields
+            else:
+                raise IndexError(f"Index {key} out of range for NodeSetData")
+
+        # Support dict-style string keys
         if key == 'name':
             return self.name
         elif key == 'fields':
             return self.fields
         elif key == 'members':
-            # Extract members from node_set
+            # Extract members from node_set (check both .nodes and .members)
             try:
-                return list(self.node_set.nodes) if hasattr(self.node_set, 'nodes') else []
+                if hasattr(self.node_set, 'nodes'):
+                    return list(self.node_set.nodes)
+                elif hasattr(self.node_set, 'members'):
+                    return list(self.node_set.members)
+                return []
             except:
                 return []
         raise KeyError(f"Key '{key}' not found in NodeSetData")
+
+    def __setitem__(self, key, value):
+        """Support dict-style and list-style item assignment for backward compatibility."""
+        # Support string keys (dict-style)
+        if isinstance(key, str):
+            if key == 'name':
+                self.name = value
+            elif key == 'fields':
+                self.fields = value
+            elif key == 'members':
+                # Update members in the node_set
+                if hasattr(self.node_set, 'nodes'):
+                    self.node_set.nodes = value
+                elif hasattr(self.node_set, 'members'):
+                    self.node_set.members = value
+            else:
+                raise KeyError(f"Key '{key}' not found in NodeSetData")
+        # Support integer indices (list-style)
+        elif isinstance(key, int):
+            if key == 0:
+                self.name = value
+            elif key == 2:
+                self.fields = value
+            elif key == 1:
+                # Update members
+                if hasattr(self.node_set, 'nodes'):
+                    self.node_set.nodes = value
+                elif hasattr(self.node_set, 'members'):
+                    self.node_set.members = value
+            else:
+                raise IndexError(f"Cannot set index {key} on NodeSetData")
+        else:
+            raise TypeError(f"Invalid key type {type(key)} for NodeSetData")
 
 
 @dataclass
@@ -272,8 +344,28 @@ class SideSetData:
                 return default if default is not None else []
         return default
 
-    def __getitem__(self, key: str):
-        """Support dict-style subscript access for backward compatibility."""
+    def __getitem__(self, key):
+        """Support dict-style and list-style subscript access for backward compatibility."""
+        # Support old list format: [name, members, fields]
+        if isinstance(key, int):
+            if key == 0:
+                return self.name
+            elif key == 1:
+                # Extract members as (element, side) tuples
+                try:
+                    if hasattr(self.side_set, 'elements') and hasattr(self.side_set, 'sides'):
+                        elements = list(self.side_set.elements)
+                        sides = list(self.side_set.sides)
+                        return list(zip(elements, sides))
+                    return []
+                except:
+                    return []
+            elif key == 2:
+                return self.fields
+            else:
+                raise IndexError(f"Index {key} out of range for SideSetData")
+
+        # Support dict-style string keys
         if key == 'name':
             return self.name
         elif key == 'fields':
@@ -289,6 +381,43 @@ class SideSetData:
             except:
                 return []
         raise KeyError(f"Key '{key}' not found in SideSetData")
+
+    def __setitem__(self, key, value):
+        """Support dict-style and list-style item assignment for backward compatibility."""
+        # Support string keys (dict-style)
+        if isinstance(key, str):
+            if key == 'name':
+                self.name = value
+            elif key == 'fields':
+                self.fields = value
+            elif key == 'members':
+                # Update members in the side_set - value should be list of (elem, side) tuples
+                if isinstance(value, list) and value:
+                    elements = [m[0] for m in value]
+                    sides = [m[1] for m in value]
+                    if hasattr(self.side_set, 'elements'):
+                        self.side_set.elements = elements
+                        self.side_set.sides = sides
+            else:
+                raise KeyError(f"Key '{key}' not found in SideSetData")
+        # Support integer indices (list-style)
+        elif isinstance(key, int):
+            if key == 0:
+                self.name = value
+            elif key == 2:
+                self.fields = value
+            elif key == 1:
+                # Update members
+                if isinstance(value, list) and value:
+                    elements = [m[0] for m in value]
+                    sides = [m[1] for m in value]
+                    if hasattr(self.side_set, 'elements'):
+                        self.side_set.elements = elements
+                        self.side_set.sides = sides
+            else:
+                raise IndexError(f"Cannot set index {key} on SideSetData")
+        else:
+            raise TypeError(f"Invalid key type {type(key)} for SideSetData")
 
 
 class ElementBlocksDict(dict):
@@ -917,6 +1046,7 @@ class ExodusModel:
         Create nodes from list of [x, y, z] coordinates.
 
         Converts to flat arrays internally for performance.
+        Appends new nodes to existing nodes.
 
         Parameters
         ----------
@@ -926,9 +1056,10 @@ class ExodusModel:
         if not nodes:
             return
 
-        self.coords_x = [n[0] for n in nodes]
-        self.coords_y = [n[1] if len(n) > 1 else 0.0 for n in nodes]
-        self.coords_z = [n[2] if len(n) > 2 else 0.0 for n in nodes]
+        # Append to existing arrays
+        self.coords_x.extend([n[0] for n in nodes])
+        self.coords_y.extend([n[1] if len(n) > 1 else 0.0 for n in nodes])
+        self.coords_z.extend([n[2] if len(n) > 2 else 0.0 for n in nodes])
 
     def create_element_block(self, block_id: int, info: List, connectivity: Optional[List] = None):
         """
@@ -1095,13 +1226,13 @@ class ExodusModel:
         """Check if timestep exists."""
         return 0 <= timestep < len(self.timesteps)
 
-    def node_set_field_exists(self, node_set_id: int, field_name: str) -> bool:
+    def node_set_field_exists(self, field_name: str, node_set_id: int) -> bool:
         """Check if node set field exists."""
         if node_set_id not in self.node_sets:
             return False
         return field_name in self.node_sets[node_set_id].fields
 
-    def side_set_field_exists(self, side_set_id: int, field_name: str) -> bool:
+    def side_set_field_exists(self, field_name: str, side_set_id: int) -> bool:
         """Check if side set field exists."""
         if side_set_id not in self.side_sets:
             return False
@@ -1580,6 +1711,293 @@ class ExodusModel:
             node_set.update(conn_flat)
 
         return sorted(node_set)
+
+    # Geometric transformation methods
+    def translate_element_blocks(self, element_block_ids: Union[str, List[int]], offset: List[float],
+                                check_for_merged_nodes: bool = True):
+        """
+        Translate the specified element blocks by the given offset.
+
+        Parameters
+        ----------
+        element_block_ids : str, int, or list of int
+            Element block IDs to translate or "all"
+        offset : list of float
+            Translation offset [dx, dy, dz]
+        check_for_merged_nodes : bool, optional
+            Whether to check for shared nodes (default: True)
+
+        Examples
+        --------
+        >>> model.translate_element_blocks(1, [1.0, 2.0, 3.0])
+        >>> model.translate_element_blocks([1, 2], [5.0, 0.0, 0.0])
+        """
+        # Handle "all" case
+        if element_block_ids == "all":
+            element_block_ids = list(self.element_blocks.keys())
+        # Convert single ID to list
+        elif isinstance(element_block_ids, int):
+            element_block_ids = [element_block_ids]
+
+        if check_for_merged_nodes:
+            self._ensure_no_shared_nodes(element_block_ids)
+
+        affected_nodes = self.get_nodes_in_element_block(element_block_ids)
+        self._translate_nodes(offset, affected_nodes)
+
+    def scale_element_blocks(self, element_block_ids: Union[str, List[int]], scale_factor: float,
+                            check_for_merged_nodes: bool = True,
+                            adjust_displacement_field: Union[str, bool] = "auto"):
+        """
+        Scale all nodes in the given element blocks by the given amount.
+
+        By default, if a displacement field exists, this will also scale the
+        displacement field.
+
+        Parameters
+        ----------
+        element_block_ids : str, int, or list of int
+            Element block IDs to scale or "all"
+        scale_factor : float
+            Scale factor
+        check_for_merged_nodes : bool, optional
+            Whether to check for shared nodes (default: True)
+        adjust_displacement_field : str or bool, optional
+            Whether to adjust displacement field (default: "auto")
+
+        Examples
+        --------
+        >>> model.scale_element_blocks(1, 0.0254)  # Convert inches to meters
+        >>> model.scale_element_blocks([1, 2], 2.0)  # Double size
+        """
+        # Handle "all" case
+        if element_block_ids == "all":
+            element_block_ids = list(self.element_blocks.keys())
+        # Convert single ID to list
+        elif isinstance(element_block_ids, int):
+            element_block_ids = [element_block_ids]
+
+        if adjust_displacement_field == "auto":
+            adjust_displacement_field = False  # Displacement field not yet implemented
+
+        if check_for_merged_nodes:
+            self._ensure_no_shared_nodes(element_block_ids)
+
+        affected_nodes = self.get_nodes_in_element_block(element_block_ids)
+        self._scale_nodes(scale_factor, affected_nodes, adjust_displacement_field)
+
+    def rotate_element_blocks(self, element_block_ids: Union[str, List[int]], axis: List[float],
+                             angle_in_degrees: float, check_for_merged_nodes: bool = True,
+                             adjust_displacement_field: Union[str, bool] = "auto"):
+        """
+        Rotate all nodes in the given element blocks by the given amount.
+
+        By default, if a displacement field exists, this will also rotate the
+        displacement field.
+
+        The rotation axis includes the origin and points in the direction of
+        the 'axis' parameter.
+
+        Parameters
+        ----------
+        element_block_ids : str, int, or list of int
+            Element block IDs to rotate or "all"
+        axis : list of float
+            Rotation axis direction [x, y, z]
+        angle_in_degrees : float
+            Rotation angle in degrees
+        check_for_merged_nodes : bool, optional
+            Whether to check for shared nodes (default: True)
+        adjust_displacement_field : str or bool, optional
+            Whether to adjust displacement field (default: "auto")
+
+        Examples
+        --------
+        >>> model.rotate_element_blocks(1, [1, 0, 0], 90)  # Rotate 90° around X-axis
+        >>> model.rotate_element_blocks([1, 2], [0, 0, 1], 45)  # Rotate 45° around Z-axis
+        """
+        # Handle "all" case
+        if element_block_ids == "all":
+            element_block_ids = list(self.element_blocks.keys())
+        # Convert single ID to list
+        elif isinstance(element_block_ids, int):
+            element_block_ids = [element_block_ids]
+
+        if adjust_displacement_field == "auto":
+            adjust_displacement_field = False  # Displacement field not yet implemented
+
+        if check_for_merged_nodes:
+            self._ensure_no_shared_nodes(element_block_ids)
+
+        affected_nodes = self.get_nodes_in_element_block(element_block_ids)
+        self._rotate_nodes(axis, angle_in_degrees, affected_nodes, adjust_displacement_field)
+
+    def _translate_nodes(self, offset: List[float], node_indices: Union[str, List[int]] = "all"):
+        """
+        Translate nodes by the given offset.
+
+        Parameters
+        ----------
+        offset : list of float
+            Translation offset [dx, dy, dz]
+        node_indices : str or list of int, optional
+            Node indices to translate (1-based) or "all" (default: "all")
+        """
+        dx, dy, dz = [float(x) for x in offset]
+        if node_indices == "all":
+            self.coords_x = [x + dx for x in self.coords_x]
+            self.coords_y = [y + dy for y in self.coords_y]
+            self.coords_z = [z + dz for z in self.coords_z]
+        else:
+            for index in node_indices:
+                # Convert 1-based to 0-based
+                zero_based_idx = index - 1
+                if 0 <= zero_based_idx < len(self.coords_x):
+                    self.coords_x[zero_based_idx] += dx
+                    self.coords_y[zero_based_idx] += dy
+                    self.coords_z[zero_based_idx] += dz
+
+    def _scale_nodes(self, scale_factor: float, node_indices: Union[str, List[int]] = "all",
+                    adjust_displacement_field: Union[str, bool] = "auto"):
+        """
+        Scale nodes by the given scale factor.
+
+        Parameters
+        ----------
+        scale_factor : float
+            Scale factor
+        node_indices : str or list of int, optional
+            Node indices to scale (1-based) or "all" (default: "all")
+        adjust_displacement_field : str or bool, optional
+            Whether to adjust displacement field (default: "auto")
+        """
+        scale_factor = float(scale_factor)
+        if adjust_displacement_field == "auto":
+            adjust_displacement_field = False  # Displacement field not yet implemented
+
+        # Scale the nodal coordinates
+        if node_indices == "all":
+            self.coords_x = [x * scale_factor for x in self.coords_x]
+            self.coords_y = [y * scale_factor for y in self.coords_y]
+            self.coords_z = [z * scale_factor for z in self.coords_z]
+        else:
+            for index in node_indices:
+                # Convert 1-based to 0-based
+                zero_based_idx = index - 1
+                if 0 <= zero_based_idx < len(self.coords_x):
+                    self.coords_x[zero_based_idx] *= scale_factor
+                    self.coords_y[zero_based_idx] *= scale_factor
+                    self.coords_z[zero_based_idx] *= scale_factor
+
+        # TODO: Scale the displacement field when implemented
+        # if adjust_displacement_field:
+        #     ...
+
+    def _rotate_nodes(self, axis: List[float], angle_in_degrees: float,
+                    node_indices: Union[str, List[int]] = "all",
+                    adjust_displacement_field: Union[str, bool] = "auto"):
+        """
+        Rotate nodes about an axis by the given angle.
+
+        Parameters
+        ----------
+        axis : list of float
+            Rotation axis direction [x, y, z]
+        angle_in_degrees : float
+            Rotation angle in degrees
+        node_indices : str or list of int, optional
+            Node indices to rotate (1-based) or "all" (default: "all")
+        adjust_displacement_field : str or bool, optional
+            Whether to adjust displacement field (default: "auto")
+        """
+        import math
+
+        if adjust_displacement_field == "auto":
+            adjust_displacement_field = False  # Displacement field not yet implemented
+
+        # Normalize axis
+        scale = math.sqrt(sum(x * x for x in axis))
+        ux, uy, uz = [float(x) / scale for x in axis]
+
+        # Convert angle to radians
+        theta = float(angle_in_degrees) * math.pi / 180
+        cost = math.cos(theta)
+        sint = math.sin(theta)
+
+        # If angle is a multiple of 90 degrees, make sin and cos exact to avoid roundoff
+        if angle_in_degrees % 90 == 0:
+            sint = math.floor(sint + 0.5)
+            cost = math.floor(cost + 0.5)
+
+        # Build rotation matrix (Rodrigues' rotation formula)
+        rxx = cost + ux * ux * (1 - cost)
+        rxy = ux * uy * (1 - cost) - uz * sint
+        rxz = ux * uz * (1 - cost) + uy * sint
+        ryx = uy * ux * (1 - cost) + uz * sint
+        ryy = cost + uy * uy * (1 - cost)
+        ryz = uy * uz * (1 - cost) - ux * sint
+        rzx = uz * ux * (1 - cost) - uy * sint
+        rzy = uz * uy * (1 - cost) + ux * sint
+        rzz = cost + uz * uz * (1 - cost)
+
+        # Rotate nodes
+        if node_indices == "all":
+            new_x = []
+            new_y = []
+            new_z = []
+            for i in range(len(self.coords_x)):
+                x, y, z = self.coords_x[i], self.coords_y[i], self.coords_z[i]
+                new_x.append(rxx * x + rxy * y + rxz * z)
+                new_y.append(ryx * x + ryy * y + ryz * z)
+                new_z.append(rzx * x + rzy * y + rzz * z)
+            self.coords_x = new_x
+            self.coords_y = new_y
+            self.coords_z = new_z
+        else:
+            for index in node_indices:
+                # Convert 1-based to 0-based
+                zero_based_idx = index - 1
+                if 0 <= zero_based_idx < len(self.coords_x):
+                    x = self.coords_x[zero_based_idx]
+                    y = self.coords_y[zero_based_idx]
+                    z = self.coords_z[zero_based_idx]
+                    self.coords_x[zero_based_idx] = rxx * x + rxy * y + rxz * z
+                    self.coords_y[zero_based_idx] = ryx * x + ryy * y + ryz * z
+                    self.coords_z[zero_based_idx] = rzx * x + rzy * y + rzz * z
+
+        # TODO: Rotate the displacement field when implemented
+        # if adjust_displacement_field:
+        #     ...
+
+    def _ensure_no_shared_nodes(self, element_block_ids: List[int]):
+        """
+        Ensure that the given element blocks do not share nodes.
+
+        Parameters
+        ----------
+        element_block_ids : list of int
+            Element block IDs to check
+
+        Raises
+        ------
+        ValueError
+            If any nodes are shared between blocks
+        """
+        # Get nodes for each block
+        block_nodes = {}
+        for block_id in element_block_ids:
+            if block_id in self.element_blocks:
+                block_nodes[block_id] = set(self.get_nodes_in_element_block(block_id))
+
+        # Check for shared nodes
+        for i, (bid1, nodes1) in enumerate(block_nodes.items()):
+            for bid2, nodes2 in list(block_nodes.items())[i+1:]:
+                shared = nodes1 & nodes2
+                if shared:
+                    raise ValueError(
+                        f"Element blocks {bid1} and {bid2} share {len(shared)} nodes. "
+                        f"Use duplicate_element_block() first to separate them."
+                    )
 
     # Field management methods
     def get_node_field_names(self) -> List[str]:
@@ -3100,17 +3518,17 @@ class ExodusModel:
             raise ValueError(f"Node set {node_set_id} does not exist")
         return sorted(self.node_sets[node_set_id].get('fields', {}).keys())
 
-    def get_node_set_field_values(self, node_set_id: int, field_name: str,
+    def get_node_set_field_values(self, field_name: str, node_set_id: int,
                                   timestep: Union[str, float] = "last") -> List[float]:
         """
         Get node set field values.
 
         Parameters
         ----------
-        node_set_id : int
-            Node set ID
         field_name : str
             Field name
+        node_set_id : int
+            Node set ID
         timestep : str or float, optional
             Timestep ("last" or timestep value)
 
@@ -3142,17 +3560,17 @@ class ExodusModel:
 
         return field_data[timestep_idx] if field_data else []
 
-    def create_node_set_field(self, node_set_id: int, field_name: str,
+    def create_node_set_field(self, field_name: str, node_set_id: int,
                              value: Union[str, float, List] = "auto"):
         """
         Create a field for a node set.
 
         Parameters
         ----------
-        node_set_id : int
-            Node set ID
         field_name : str
             Field name
+        node_set_id : int
+            Node set ID
         value : str, float, or list, optional
             Initial value ("auto" for zeros, float for constant, list for per-timestep values)
         """
@@ -3175,17 +3593,17 @@ class ExodusModel:
             self.node_sets[node_set_id].fields = {}
         self.node_sets[node_set_id].fields[field_name] = field_data
 
-    def create_side_set_field(self, side_set_id: int, field_name: str,
+    def create_side_set_field(self, field_name: str, side_set_id: int,
                              value: Union[str, float, List] = "auto"):
         """
         Create a field for a side set.
 
         Parameters
         ----------
-        side_set_id : int
-            Side set ID
         field_name : str
             Field name
+        side_set_id : int
+            Side set ID
         value : str, float, or list, optional
             Initial value ("auto" for zeros, float for constant, list for per-timestep values)
         """
@@ -3259,6 +3677,116 @@ class ExodusModel:
                 for field_name in field_names:
                     if field_name in self.side_sets[ss_id].get('fields', {}):
                         del self.side_sets[ss_id].fields[field_name]
+
+    def rename_node_set_field(self, field_name: str, new_field_name: str,
+                             node_set_ids: Union[str, List[int]] = "all"):
+        """
+        Rename a node set field.
+
+        Parameters
+        ----------
+        field_name : str
+            Current field name
+        new_field_name : str
+            New field name
+        node_set_ids : str or list of int, optional
+            Node set IDs to rename field in (default: "all")
+        """
+        if node_set_ids == "all":
+            node_set_ids = list(self.node_sets.keys())
+        elif isinstance(node_set_ids, int):
+            node_set_ids = [node_set_ids]
+
+        for ns_id in node_set_ids:
+            if ns_id in self.node_sets:
+                fields = self.node_sets[ns_id].get('fields', {})
+                if field_name in fields:
+                    fields[new_field_name] = fields.pop(field_name)
+
+    def rename_side_set_field(self, field_name: str, new_field_name: str,
+                             side_set_ids: Union[str, List[int]] = "all"):
+        """
+        Rename a side set field.
+
+        Parameters
+        ----------
+        field_name : str
+            Current field name
+        new_field_name : str
+            New field name
+        side_set_ids : str or list of int, optional
+            Side set IDs to rename field in (default: "all")
+        """
+        if side_set_ids == "all":
+            side_set_ids = list(self.side_sets.keys())
+        elif isinstance(side_set_ids, int):
+            side_set_ids = [side_set_ids]
+
+        for ss_id in side_set_ids:
+            if ss_id in self.side_sets:
+                fields = self.side_sets[ss_id].get('fields', {})
+                if field_name in fields:
+                    fields[new_field_name] = fields.pop(field_name)
+
+    def get_side_set_field_names(self, side_set_id: int) -> List[str]:
+        """
+        Get all field names for a side set.
+
+        Parameters
+        ----------
+        side_set_id : int
+            Side set ID
+
+        Returns
+        -------
+        list of str
+            List of field names
+        """
+        if side_set_id not in self.side_sets:
+            raise ValueError(f"Side set {side_set_id} does not exist")
+        return sorted(self.side_sets[side_set_id].get('fields', {}).keys())
+
+    def get_side_set_field_values(self, field_name: str, side_set_id: int,
+                                  timestep: Union[str, float] = "last") -> List[float]:
+        """
+        Get side set field values.
+
+        Parameters
+        ----------
+        field_name : str
+            Field name
+        side_set_id : int
+            Side set ID
+        timestep : str or float, optional
+            Timestep ("last" or timestep value)
+
+        Returns
+        -------
+        list of float
+            Field values
+        """
+        if side_set_id not in self.side_sets:
+            raise ValueError(f"Side set {side_set_id} does not exist")
+
+        fields = self.side_sets[side_set_id].get('fields', {})
+        if field_name not in fields:
+            raise ValueError(f"Field '{field_name}' does not exist in side set {side_set_id}")
+
+        field_data = fields[field_name]
+
+        # Determine timestep index
+        if timestep == "last":
+            timestep_idx = len(field_data) - 1 if field_data else 0
+        else:
+            try:
+                timestep_idx = self.timesteps.index(timestep)
+            except ValueError:
+                timestep_idx = 0
+
+        if timestep_idx < 0 or timestep_idx >= len(field_data):
+            timestep_idx = 0
+
+        return field_data[timestep_idx] if field_data else []
 
     def get_nodes_in_side_set(self, side_set_id: int) -> List[int]:
         """
