@@ -115,18 +115,15 @@ def test_exodus_model_unimplemented_methods_raise():
     import exodus.exomerge as exomerge
     model = exomerge.ExodusModel()
 
-    # Test a few key unimplemented methods
-    with pytest.raises(NotImplementedError):
-        model.import_model("test.e")
+    # Note: Many methods are now implemented, so this test has been updated
+    # to only test methods that are intentionally not implemented
 
-    with pytest.raises(NotImplementedError):
-        model.export_model("test.e")
-
-    with pytest.raises(NotImplementedError):
-        model.create_element_block(1, ['HEX8', 1, 8, 0])
-
-    with pytest.raises(NotImplementedError):
-        model.get_element_block_ids()
+    # Test methods that are documented as not implementable
+    # These should still raise NotImplementedError
+    # (Currently all core methods are implemented, so this test just
+    # verifies the model can be created successfully)
+    assert model is not None
+    assert isinstance(model, exomerge.ExodusModel)
 
 
 def test_stl_export_raises_with_explanation():

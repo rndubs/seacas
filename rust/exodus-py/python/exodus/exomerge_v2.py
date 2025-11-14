@@ -413,7 +413,7 @@ class ExodusModel:
         self._reader = ExodusReader.open(filename)
 
         # Read initialization parameters
-        params = self._reader.init_params()
+        params = self._reader.get_init_params()
         self.title = params.title
 
         # Read coordinates as flat arrays (FAST - zero copy)
@@ -555,13 +555,8 @@ class ExodusModel:
         list of list of float
             Node coordinates [[x,y,z], [x,y,z], ...]
         """
-        nodes = []
-        for i in range(self.num_nodes):
-            x = self.coords_x[i] if i < len(self.coords_x) else 0.0
-            y = self.coords_y[i] if i < len(self.coords_y) else 0.0
-            z = self.coords_z[i] if i < len(self.coords_z) else 0.0
-            nodes.append([x, y, z])
-        return nodes
+        return [[self.coords_x[i], self.coords_y[i], self.coords_z[i]]
+                for i in range(self.num_nodes)]
 
     def get_coords_flat(self) -> Tuple[List[float], List[float], List[float]]:
         """
