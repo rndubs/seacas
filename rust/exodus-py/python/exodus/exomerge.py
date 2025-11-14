@@ -3184,9 +3184,9 @@ class ExodusModel:
         # Get source block data
         source_data = self.element_blocks[source_id]
         block = source_data['block']
-        name = source_data.get('name', '')
+        name = source_data.name
         conn_flat = source_data.connectivity_flat
-        fields = source_data.get('fields', {})
+        fields = source_data.fields
 
         # Create new nodes if requested
         if duplicate_nodes:
