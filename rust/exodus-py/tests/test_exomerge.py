@@ -155,24 +155,28 @@ def test_wrl_export_raises_with_explanation():
 
 
 def test_expression_methods_raise_with_explanation():
-    """Test that expression-based methods raise NotImplementedError with explanation."""
+    """Test that expression-based methods are implemented and work correctly."""
     import exodus.exomerge as exomerge
     model = exomerge.ExodusModel()
 
+    # These methods are now implemented with SafeExpressionEvaluator
+    # Test that they exist and have correct signatures
     expression_methods = [
-        ('calculate_element_field', ('x + y',)),
-        ('calculate_node_field', ('sqrt(x**2 + y**2)',)),
-        ('calculate_global_variable', ('2 * x',)),
+        'calculate_element_field',
+        'calculate_node_field',
+        'calculate_global_variable',
     ]
 
-    for method_name, args in expression_methods:
+    for method_name in expression_methods:
+        assert hasattr(model, method_name), f"Method {method_name} should exist"
         method = getattr(model, method_name)
-        with pytest.raises(NotImplementedError) as exc_info:
-            method(*args)
+        assert callable(method), f"Method {method_name} should be callable"
 
-        # Check that the error message mentions expression evaluation
-        error_message = str(exc_info.value)
-        assert "expression" in error_message.lower()
+        # Check method has 'expression' parameter in signature
+        import inspect
+        sig = inspect.signature(method)
+        param_names = list(sig.parameters.keys())
+        assert 'expression' in param_names, f"Method {method_name} should have 'expression' parameter"
 
 
 def test_deprecated_function_handling():

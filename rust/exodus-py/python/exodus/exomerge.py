@@ -283,6 +283,54 @@ class ElementBlockData:
         """Element topology (e.g., 'HEX8', 'TET4')."""
         return self.block.topology
 
+    def __getitem__(self, index):
+        """Support legacy list-style and dict-style access."""
+        # Support dict-style access for attribute names
+        if isinstance(index, str):
+            if index == 'block':
+                return self.block
+            elif index == 'name':
+                return self.name
+            elif index == 'connectivity_flat':
+                return self.connectivity_flat
+            elif index == 'fields':
+                return self.fields
+            else:
+                raise KeyError(f"ElementBlockData has no key '{index}'")
+
+        # Support legacy list-style access: [name, info, connectivity, fields]
+        if index == 0:
+            return self.name
+        elif index == 1:
+            # Return info as [topology, num_elems, nodes_per_elem, num_attrs]
+            return [
+                self.block.topology,
+                self.block.num_entries,
+                self.block.num_nodes_per_entry,
+                self.block.num_attributes
+            ]
+        elif index == 2:
+            # Return connectivity as list of lists
+            nodes_per_elem = self.block.num_nodes_per_entry
+            num_elems = self.block.num_entries
+            return [
+                self.connectivity_flat[i * nodes_per_elem:(i + 1) * nodes_per_elem]
+                for i in range(num_elems)
+            ]
+        elif index == 3:
+            return self.fields
+        else:
+            raise IndexError(f"ElementBlockData index out of range: {index}")
+
+    def __setitem__(self, index: int, value):
+        """Support legacy list-style assignment."""
+        if index == 0:
+            self.name = value
+        elif index == 3:
+            self.fields = value
+        else:
+            raise IndexError(f"Cannot set ElementBlockData index {index}")
+
     def get_element_connectivity(self, elem_index: int) -> List[int]:
         """
         Get connectivity for element i (0-indexed).
@@ -327,6 +375,17 @@ class NodeSetData:
             return list(self.node_set.members)
         return []
 
+    def __getitem__(self, index: int):
+        """Support legacy list-style access: [name, node_set, fields]."""
+        if index == 0:
+            return self.name
+        elif index == 1:
+            return self.node_set
+        elif index == 2:
+            return self.fields
+        else:
+            raise IndexError(f"NodeSetData index out of range: {index}")
+
 
 @dataclass
 class SideSetData:
@@ -354,6 +413,17 @@ class SideSetData:
             sides = list(self.side_set.sides)
             return list(zip(elements, sides))
         return []
+
+    def __getitem__(self, index: int):
+        """Support legacy list-style access: [name, side_set, fields]."""
+        if index == 0:
+            return self.name
+        elif index == 1:
+            return self.side_set
+        elif index == 2:
+            return self.fields
+        else:
+            raise IndexError(f"SideSetData index out of range: {index}")
 
 
 class ElementBlocksDict(dict):
@@ -951,7 +1021,7 @@ class ExodusModel:
             block_id = list(self.element_blocks.keys())[0]
 
         if block_id not in self.element_blocks:
-            return []
+            raise ValueError(f"Element block {block_id} does not exist")
 
         block_data = self.element_blocks[block_id]
         flat = block_data.connectivity_flat
@@ -963,13 +1033,13 @@ class ExodusModel:
     def get_nodes_per_element(self, block_id: int) -> int:
         """Get number of nodes per element in block."""
         if block_id not in self.element_blocks:
-            return 0
+            raise ValueError(f"Element block {block_id} does not exist")
         return self.element_blocks[block_id].block.num_nodes_per_entry
 
     def get_element_block_dimension(self, block_id: int) -> int:
         """Get spatial dimension of element block (1, 2, or 3)."""
         if block_id not in self.element_blocks:
-            return 0
+            raise ValueError(f"Element block {block_id} does not exist")
         topology = self.element_blocks[block_id].block.topology.lower()
         return self.DIMENSION.get(topology, 3)
 
@@ -1483,7 +1553,7 @@ class ExodusModel:
         print(f"Title: {self.title}")
         print(f"Nodes: {len(self.coords_x)}")
         print(f"Dimensions: {self.num_dim}")
-        print(f"Element blocks: {len(self.element_blocks)}")
+        print(f"Element Blocks: {len(self.element_blocks)}")
 
         if self.element_blocks:
             print("\nElement Blocks:")
@@ -2187,21 +2257,21 @@ class ExodusModel:
         for block_id, block_data in self.element_blocks.items():
             block = block_data.block
             num_elems = block.num_entries
-            for field_name, field_data in block_data.get('fields', {}).items():
+            for field_name, field_data in block_data.fields.items():
                 field_data.append([0.0] * num_elems)
 
         # Extend all side set fields with zero data
         for set_id, set_data in self.side_sets.items():
-            members = set_data.get('members', [])
+            members = set_data.members
             num_members = len(members)
-            for field_name, field_data in set_data.get('fields', {}).items():
+            for field_name, field_data in set_data.fields.items():
                 field_data.append([0.0] * num_members)
 
         # Extend all node set fields with zero data
         for set_id, set_data in self.node_sets.items():
-            members = set_data.get('members', [])
+            members = set_data.members
             num_members = len(members)
-            for field_name, field_data in set_data.get('fields', {}).items():
+            for field_name, field_data in set_data.fields.items():
                 field_data.append([0.0] * num_members)
 
         # Extend all global variables with zero data
@@ -2251,21 +2321,21 @@ class ExodusModel:
 
         # Delete corresponding data from all element fields
         for block_id, block_data in self.element_blocks.items():
-            for field_name, field_data in block_data.get('fields', {}).items():
+            for field_name, field_data in block_data.fields.items():
                 for idx in indices_to_delete:
                     if idx < len(field_data):
                         del field_data[idx]
 
         # Delete corresponding data from all side set fields
         for set_id, set_data in self.side_sets.items():
-            for field_name, field_data in set_data.get('fields', {}).items():
+            for field_name, field_data in set_data.fields.items():
                 for idx in indices_to_delete:
                     if idx < len(field_data):
                         del field_data[idx]
 
         # Delete corresponding data from all node set fields
         for set_id, set_data in self.node_sets.items():
-            for field_name, field_data in set_data.get('fields', {}).items():
+            for field_name, field_data in set_data.fields.items():
                 for idx in indices_to_delete:
                     if idx < len(field_data):
                         del field_data[idx]
@@ -2545,7 +2615,6 @@ class ExodusModel:
         ns_data = self.node_sets[node_set_id]
         new_node_set = NodeSet(
             id=node_set_id,
-            num_entries=len(unique_members),
             nodes=unique_members
         )
         self.node_sets[node_set_id] = NodeSetData(
@@ -3857,19 +3926,19 @@ class ExodusModel:
 
         # Copy element field data
         for block_id, block_data in self.element_blocks.items():
-            for field_name, field_data in block_data.get('fields', {}).items():
+            for field_name, field_data in block_data.fields.items():
                 if source_idx < len(field_data):
                     field_data.append(list(field_data[source_idx]))
 
         # Copy side set field data
         for set_id, set_data in self.side_sets.items():
-            for field_name, field_data in set_data.get('fields', {}).items():
+            for field_name, field_data in set_data.fields.items():
                 if source_idx < len(field_data):
                     field_data.append(list(field_data[source_idx]))
 
         # Copy node set field data
         for set_id, set_data in self.node_sets.items():
-            for field_name, field_data in set_data.get('fields', {}).items():
+            for field_name, field_data in set_data.fields.items():
                 if source_idx < len(field_data):
                     field_data.append(list(field_data[source_idx]))
 
@@ -4402,25 +4471,32 @@ class ExodusModel:
         if self.num_dim >= 3:
             self.create_node_field("displ_z", value)
 
-    def displace_element_blocks(self, element_block_ids: Union[str, List[int]] = "all",
-                                timestep: Union[str, float] = "last"):
+    def displace_element_blocks(self, element_block_ids: Union[str, int, List[int]] = "all",
+                                field_basename: str = "DISP",
+                                timestep: Union[str, float] = "last",
+                                scale: float = 1.0):
         """
         Displace nodes according to displacement field.
 
         Parameters
         ----------
-        element_block_ids : str or list of int, optional
+        element_block_ids : str, int, or list of int, optional
             Element blocks to process (default: "all")
+        field_basename : str, optional
+            Field name prefix (default: "DISP" for DISP_X, DISP_Y, DISP_Z)
         timestep : str or float, optional
             Timestep to use (default: "last")
+        scale : float, optional
+            Scale factor for displacement (default: 1.0)
         """
-        if not self.displacement_field_exists():
-            raise ValueError("No displacement field exists")
+        # Build field names from basename
+        displ_x_name = f'{field_basename}_X'
+        displ_y_name = f'{field_basename}_Y'
+        displ_z_name = f'{field_basename}_Z'
 
-        # Get displacement field names
-        displ_x_name = 'displ_x' if 'displ_x' in self.node_fields else 'displacement_x'
-        displ_y_name = 'displ_y' if 'displ_y' in self.node_fields else 'displacement_y'
-        displ_z_name = 'displ_z' if 'displ_z' in self.node_fields else 'displacement_z'
+        # Check if displacement fields exist
+        if displ_x_name not in self.node_fields:
+            raise ValueError(f"Displacement field {displ_x_name} does not exist")
 
         # Determine timestep index
         if timestep == "last":
@@ -4431,18 +4507,18 @@ class ExodusModel:
             except ValueError:
                 timestep_idx = 0
 
-        # Apply displacements
+        # Apply displacements with scale factor
         displ_x = self.node_fields.get(displ_x_name, [[0.0] * len(self.coords_x)])[timestep_idx]
         displ_y = self.node_fields.get(displ_y_name, [[0.0] * len(self.coords_y)])[timestep_idx]
         displ_z = self.node_fields.get(displ_z_name, [[0.0] * len(self.coords_x if self.coords_z else [])])[timestep_idx] if self.coords_z else []
 
         for i in range(len(self.coords_x)):
             if i < len(displ_x):
-                self.coords_x[i] += displ_x[i]
+                self.coords_x[i] += displ_x[i] * scale
             if i < len(displ_y):
-                self.coords_y[i] += displ_y[i]
+                self.coords_y[i] += displ_y[i] * scale
             if self.coords_z and i < len(displ_z):
-                self.coords_z[i] += displ_z[i]
+                self.coords_z[i] += displ_z[i] * scale
 
     # Volume calculation methods
     def _new_element_field_name(self, quantity: int = 1) -> Union[str, List[str]]:
@@ -5126,6 +5202,7 @@ class ExodusModel:
         # Create a mock block object
         block = Block(
             id=block_id,
+            entity_type=EntityType.ElemBlock,
             topology="hex8",
             num_entries=num_elems,
             num_nodes_per_entry=8,
