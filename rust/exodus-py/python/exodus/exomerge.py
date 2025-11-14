@@ -1197,6 +1197,642 @@ class ExodusModel:
 
         print("=" * 70)
 
+    # Additional element block methods
+    def rename_element_block(self, element_block_id: int, new_element_block_id: Union[int, str]):
+        """
+        Change an element block ID or name.
+
+        Parameters
+        ----------
+        element_block_id : int
+            Current element block ID
+        new_element_block_id : int or str
+            New element block ID (int) or new name (str)
+
+        Examples
+        --------
+        >>> model.rename_element_block(1, 100)  # Change ID from 1 to 100
+        >>> model.rename_element_block(1, 'block_1')  # Change name to 'block_1'
+        """
+        if element_block_id not in self.element_blocks:
+            raise ValueError(f"Element block {element_block_id} does not exist")
+
+        # If we're just changing the name (string provided)
+        if isinstance(new_element_block_id, str):
+            self.element_blocks[element_block_id]['name'] = new_element_block_id
+            return
+
+        # Otherwise, we're changing the ID (integer provided)
+        assert isinstance(new_element_block_id, int)
+
+        # Check that the new ID doesn't already exist
+        if new_element_block_id in self.element_blocks:
+            raise ValueError(f"Element block {new_element_block_id} already exists")
+
+        # Rename the block by creating new entry and deleting old
+        self.element_blocks[new_element_block_id] = self.element_blocks[element_block_id]
+        del self.element_blocks[element_block_id]
+
+    def get_all_element_block_names(self) -> Dict[int, str]:
+        """
+        Get names of all element blocks.
+
+        Returns
+        -------
+        dict
+            Dictionary mapping element block IDs to names
+        """
+        return {block_id: block_data.get('name', '')
+                for block_id, block_data in self.element_blocks.items()}
+
+    def get_element_block_connectivity(self, element_block_id: Union[str, int] = "auto") -> List[List[int]]:
+        """
+        Get element connectivity array (alias for get_connectivity).
+
+        Parameters
+        ----------
+        element_block_id : str or int, optional
+            Element block ID or "auto" (default: "auto")
+
+        Returns
+        -------
+        list of list of int
+            Connectivity array
+        """
+        return self.get_connectivity(element_block_id)
+
+    def get_nodes_in_element_block(self, element_block_ids: Union[str, int, List[int]]) -> List[int]:
+        """
+        Return a list of all node indices used in the given element blocks.
+
+        Parameters
+        ----------
+        element_block_ids : str, int, or list of int
+            Element block IDs or "all"
+
+        Returns
+        -------
+        list of int
+            Sorted list of unique node indices (1-based)
+
+        Examples
+        --------
+        >>> model.get_nodes_in_element_block(1)
+        >>> model.get_nodes_in_element_block([1, 3])
+        >>> model.get_nodes_in_element_block("all")
+        """
+        # Handle "all" case
+        if element_block_ids == "all":
+            element_block_ids = list(self.element_blocks.keys())
+        # Convert single ID to list
+        elif isinstance(element_block_ids, int):
+            element_block_ids = [element_block_ids]
+
+        # Collect all unique nodes
+        node_set = set()
+        for block_id in element_block_ids:
+            if block_id not in self.element_blocks:
+                continue
+
+            # Get flat connectivity
+            conn_flat = self.element_blocks[block_id]['connectivity_flat']
+            node_set.update(conn_flat)
+
+        return sorted(node_set)
+
+    # Field management methods
+    def get_node_field_names(self) -> List[str]:
+        """
+        Get all node field names.
+
+        Returns
+        -------
+        list of str
+            List of node field names
+        """
+        return sorted(self.node_fields.keys())
+
+    def get_node_field_values(self, node_field_name: str, timestep: Union[str, float] = "last") -> List[float]:
+        """
+        Get node field values.
+
+        Parameters
+        ----------
+        node_field_name : str
+            Node field name
+        timestep : str or float, optional
+            Timestep ("last" or timestep value)
+
+        Returns
+        -------
+        list of float
+            Node field values
+        """
+        if node_field_name not in self.node_fields:
+            raise ValueError(f"Node field '{node_field_name}' does not exist")
+
+        field_data = self.node_fields[node_field_name]
+
+        # Determine timestep index
+        if timestep == "last":
+            timestep_idx = len(field_data) - 1 if field_data else 0
+        else:
+            # Find timestep index
+            try:
+                timestep_idx = self.timesteps.index(timestep)
+            except ValueError:
+                timestep_idx = 0
+
+        if timestep_idx < 0 or timestep_idx >= len(field_data):
+            timestep_idx = 0
+
+        return field_data[timestep_idx] if field_data else []
+
+    def delete_node_field(self, node_field_names: Union[str, List[str]]):
+        """
+        Delete node field(s).
+
+        Parameters
+        ----------
+        node_field_names : str or list of str
+            Node field name(s) to delete
+        """
+        if isinstance(node_field_names, str):
+            node_field_names = [node_field_names]
+
+        for field_name in node_field_names:
+            if field_name in self.node_fields:
+                del self.node_fields[field_name]
+
+    def rename_node_field(self, node_field_name: str, new_node_field_name: str):
+        """
+        Rename a node field.
+
+        Parameters
+        ----------
+        node_field_name : str
+            Current node field name
+        new_node_field_name : str
+            New node field name
+        """
+        if node_field_name not in self.node_fields:
+            raise ValueError(f"Node field '{node_field_name}' does not exist")
+        if new_node_field_name in self.node_fields:
+            raise ValueError(f"Node field '{new_node_field_name}' already exists")
+
+        self.node_fields[new_node_field_name] = self.node_fields[node_field_name]
+        del self.node_fields[node_field_name]
+
+    def delete_element_field(self, element_field_names: Union[str, List[str]],
+                           element_block_ids: Union[str, List[int]] = "all"):
+        """
+        Delete element field(s).
+
+        Parameters
+        ----------
+        element_field_names : str or list of str
+            Element field name(s) to delete
+        element_block_ids : str or list of int, optional
+            Element blocks to delete from (default: "all")
+        """
+        if isinstance(element_field_names, str):
+            element_field_names = [element_field_names]
+
+        if element_block_ids == "all":
+            element_block_ids = list(self.element_blocks.keys())
+        elif isinstance(element_block_ids, int):
+            element_block_ids = [element_block_ids]
+
+        for block_id in element_block_ids:
+            if block_id in self.element_blocks:
+                for field_name in element_field_names:
+                    if field_name in self.element_blocks[block_id].get('fields', {}):
+                        del self.element_blocks[block_id]['fields'][field_name]
+
+    def get_element_field_names(self, element_block_ids: Union[str, List[int]] = "all") -> List[str]:
+        """
+        Get all element field names for given blocks.
+
+        Parameters
+        ----------
+        element_block_ids : str or list of int, optional
+            Element blocks to query (default: "all")
+
+        Returns
+        -------
+        list of str
+            List of unique element field names
+        """
+        if element_block_ids == "all":
+            element_block_ids = list(self.element_blocks.keys())
+        elif isinstance(element_block_ids, int):
+            element_block_ids = [element_block_ids]
+
+        field_names = set()
+        for block_id in element_block_ids:
+            if block_id in self.element_blocks:
+                field_names.update(self.element_blocks[block_id].get('fields', {}).keys())
+
+        return sorted(field_names)
+
+    def rename_element_field(self, element_field_name: str, new_element_field_name: str,
+                           element_block_ids: Union[str, List[int]] = "all"):
+        """
+        Rename an element field.
+
+        Parameters
+        ----------
+        element_field_name : str
+            Current element field name
+        new_element_field_name : str
+            New element field name
+        element_block_ids : str or list of int, optional
+            Element blocks to rename in (default: "all")
+        """
+        if element_block_ids == "all":
+            element_block_ids = list(self.element_blocks.keys())
+        elif isinstance(element_block_ids, int):
+            element_block_ids = [element_block_ids]
+
+        for block_id in element_block_ids:
+            if block_id in self.element_blocks:
+                fields = self.element_blocks[block_id].get('fields', {})
+                if element_field_name in fields:
+                    fields[new_element_field_name] = fields[element_field_name]
+                    del fields[element_field_name]
+
+    def delete_global_variable(self, global_variable_names: Union[str, List[str]]):
+        """
+        Delete global variable(s).
+
+        Parameters
+        ----------
+        global_variable_names : str or list of str
+            Global variable name(s) to delete
+        """
+        if isinstance(global_variable_names, str):
+            global_variable_names = [global_variable_names]
+
+        for var_name in global_variable_names:
+            if var_name in self.global_variables:
+                del self.global_variables[var_name]
+
+    def get_global_variable_names(self) -> List[str]:
+        """
+        Get all global variable names.
+
+        Returns
+        -------
+        list of str
+            List of global variable names
+        """
+        return sorted(self.global_variables.keys())
+
+    def rename_global_variable(self, global_variable_name: str, new_global_variable_name: str):
+        """
+        Rename a global variable.
+
+        Parameters
+        ----------
+        global_variable_name : str
+            Current global variable name
+        new_global_variable_name : str
+            New global variable name
+        """
+        if global_variable_name not in self.global_variables:
+            raise ValueError(f"Global variable '{global_variable_name}' does not exist")
+        if new_global_variable_name in self.global_variables:
+            raise ValueError(f"Global variable '{new_global_variable_name}' already exists")
+
+        self.global_variables[new_global_variable_name] = self.global_variables[global_variable_name]
+        del self.global_variables[global_variable_name]
+
+    def create_global_variable(self, global_variable_name: str, value: Union[str, float, List] = "auto"):
+        """
+        Create a global variable.
+
+        Parameters
+        ----------
+        global_variable_name : str
+            Name of the global variable
+        value : str, float, or list, optional
+            Initial value ("auto" for zeros, float for constant, list for per-timestep values)
+
+        Examples
+        --------
+        >>> model.create_global_variable("time_step_size", 0.01)
+        """
+        if global_variable_name in self.global_variables:
+            pass  # Overwrite existing
+
+        # Initialize variable values for all timesteps
+        num_timesteps = len(self.timesteps) if self.timesteps else 1
+
+        if value == "auto":
+            var_data = [0.0] * num_timesteps
+        elif isinstance(value, (int, float)):
+            var_data = [float(value)] * num_timesteps
+        elif isinstance(value, list):
+            var_data = value
+        else:
+            var_data = [0.0] * num_timesteps
+
+        self.global_variables[global_variable_name] = var_data
+
+    # Timestep methods
+    def create_timestep(self, timestep: float):
+        """
+        Create a new timestep.
+
+        Parameters
+        ----------
+        timestep : float
+            Timestep value to create
+
+        Notes
+        -----
+        This adds a new timestep to the model. All existing fields will be extended
+        with zero-filled data for the new timestep.
+        """
+        if timestep in self.timesteps:
+            return  # Already exists
+
+        # Add timestep
+        self.timesteps.append(timestep)
+        self.timesteps.sort()
+
+        # Extend all node fields with zero data
+        for field_name, field_data in self.node_fields.items():
+            num_nodes = len(self.coords_x)
+            field_data.append([0.0] * num_nodes)
+
+        # Extend all element fields with zero data
+        for block_id, block_data in self.element_blocks.items():
+            block = block_data['block']
+            num_elems = block.num_entries
+            for field_name, field_data in block_data.get('fields', {}).items():
+                field_data.append([0.0] * num_elems)
+
+        # Extend all side set fields with zero data
+        for set_id, set_data in self.side_sets.items():
+            members = set_data.get('members', [])
+            num_members = len(members)
+            for field_name, field_data in set_data.get('fields', {}).items():
+                field_data.append([0.0] * num_members)
+
+        # Extend all node set fields with zero data
+        for set_id, set_data in self.node_sets.items():
+            members = set_data.get('members', [])
+            num_members = len(members)
+            for field_name, field_data in set_data.get('fields', {}).items():
+                field_data.append([0.0] * num_members)
+
+        # Extend all global variables with zero data
+        for var_name, var_data in self.global_variables.items():
+            var_data.append(0.0)
+
+    def delete_timestep(self, timesteps: Union[float, List[float]]):
+        """
+        Delete one or more timesteps.
+
+        Parameters
+        ----------
+        timesteps : float or list of float
+            Timestep value(s) to delete
+
+        Notes
+        -----
+        This removes timesteps from the model and deletes corresponding field data
+        for all fields (node, element, set, and global variables).
+        """
+        if isinstance(timesteps, (int, float)):
+            timesteps = [float(timesteps)]
+        else:
+            timesteps = [float(t) for t in timesteps]
+
+        # Get indices of timesteps to delete
+        indices_to_delete = []
+        for ts in timesteps:
+            if ts in self.timesteps:
+                indices_to_delete.append(self.timesteps.index(ts))
+
+        if not indices_to_delete:
+            return
+
+        # Sort in reverse order to delete from end first
+        indices_to_delete.sort(reverse=True)
+
+        # Delete timesteps
+        for idx in indices_to_delete:
+            del self.timesteps[idx]
+
+        # Delete corresponding data from all node fields
+        for field_name, field_data in self.node_fields.items():
+            for idx in indices_to_delete:
+                if idx < len(field_data):
+                    del field_data[idx]
+
+        # Delete corresponding data from all element fields
+        for block_id, block_data in self.element_blocks.items():
+            for field_name, field_data in block_data.get('fields', {}).items():
+                for idx in indices_to_delete:
+                    if idx < len(field_data):
+                        del field_data[idx]
+
+        # Delete corresponding data from all side set fields
+        for set_id, set_data in self.side_sets.items():
+            for field_name, field_data in set_data.get('fields', {}).items():
+                for idx in indices_to_delete:
+                    if idx < len(field_data):
+                        del field_data[idx]
+
+        # Delete corresponding data from all node set fields
+        for set_id, set_data in self.node_sets.items():
+            for field_name, field_data in set_data.get('fields', {}).items():
+                for idx in indices_to_delete:
+                    if idx < len(field_data):
+                        del field_data[idx]
+
+        # Delete corresponding data from all global variables
+        for var_name, var_data in self.global_variables.items():
+            for idx in indices_to_delete:
+                if idx < len(var_data):
+                    del var_data[idx]
+
+    # Set operation methods
+    def get_side_set_members(self, side_set_id: int) -> List[Tuple[int, int]]:
+        """
+        Get side set members.
+
+        Parameters
+        ----------
+        side_set_id : int
+            Side set ID
+
+        Returns
+        -------
+        list of tuples
+            List of (element_id, face_id) tuples
+        """
+        if side_set_id not in self.side_sets:
+            raise ValueError(f"Side set {side_set_id} does not exist")
+        return self.side_sets[side_set_id].get('members', [])
+
+    def add_faces_to_side_set(self, side_set_id: int, new_side_set_members: List[Tuple[int, int]]):
+        """
+        Add faces to an existing side set.
+
+        Parameters
+        ----------
+        side_set_id : int
+            Side set ID
+        new_side_set_members : list of tuples
+            List of (element_id, face_id) tuples to add
+        """
+        if side_set_id not in self.side_sets:
+            raise ValueError(f"Side set {side_set_id} does not exist")
+
+        members = self.side_sets[side_set_id].get('members', [])
+        members.extend(new_side_set_members)
+        self.side_sets[side_set_id]['members'] = members
+
+    def add_nodes_to_node_set(self, node_set_id: int, new_node_set_members: List[int]):
+        """
+        Add nodes to an existing node set.
+
+        Parameters
+        ----------
+        node_set_id : int
+            Node set ID
+        new_node_set_members : list of int
+            List of node indices to add
+        """
+        if node_set_id not in self.node_sets:
+            raise ValueError(f"Node set {node_set_id} does not exist")
+
+        members = self.node_sets[node_set_id].get('members', [])
+        members.extend(new_node_set_members)
+        self.node_sets[node_set_id]['members'] = members
+
+    def get_nodes_in_node_set(self, node_set_id: int) -> List[int]:
+        """
+        Get list of nodes in a node set (alias for get_node_set_members).
+
+        Parameters
+        ----------
+        node_set_id : int
+            Node set ID
+
+        Returns
+        -------
+        list of int
+            List of node indices
+        """
+        return self.get_node_set_members(node_set_id)
+
+    def get_all_node_set_names(self) -> Dict[int, str]:
+        """
+        Get names of all node sets.
+
+        Returns
+        -------
+        dict
+            Dictionary mapping node set IDs to names
+        """
+        return {ns_id: ns_data.get('name', '')
+                for ns_id, ns_data in self.node_sets.items()}
+
+    def get_all_side_set_names(self) -> Dict[int, str]:
+        """
+        Get names of all side sets.
+
+        Returns
+        -------
+        dict
+            Dictionary mapping side set IDs to names
+        """
+        return {ss_id: ss_data.get('name', '')
+                for ss_id, ss_data in self.side_sets.items()}
+
+    def delete_empty_node_sets(self):
+        """Delete node sets that have no members."""
+        to_delete = [ns_id for ns_id, ns_data in self.node_sets.items()
+                     if not ns_data.get('members', [])]
+        for ns_id in to_delete:
+            del self.node_sets[ns_id]
+
+    def delete_empty_side_sets(self):
+        """Delete side sets that have no members."""
+        to_delete = [ss_id for ss_id, ss_data in self.side_sets.items()
+                     if not ss_data.get('members', [])]
+        for ss_id in to_delete:
+            del self.side_sets[ss_id]
+
+    # Node utility methods
+    def get_closest_node_distance(self) -> float:
+        """
+        Get the minimum distance between any two nodes.
+
+        Returns
+        -------
+        float
+            Minimum distance between nodes
+        """
+        import math
+
+        if len(self.coords_x) < 2:
+            return 0.0
+
+        min_dist = float('inf')
+        num_nodes = len(self.coords_x)
+
+        # Only check a sample if there are too many nodes
+        if num_nodes > 1000:
+            import random
+            sample_size = min(1000, num_nodes)
+            indices = random.sample(range(num_nodes), sample_size)
+        else:
+            indices = range(num_nodes)
+
+        for i in indices:
+            for j in range(i + 1, num_nodes):
+                dx = self.coords_x[i] - self.coords_x[j]
+                dy = self.coords_y[i] - self.coords_y[j]
+                dz = (self.coords_z[i] - self.coords_z[j]) if self.coords_z else 0.0
+                dist = math.sqrt(dx*dx + dy*dy + dz*dz)
+                if dist > 0 and dist < min_dist:
+                    min_dist = dist
+
+        return min_dist if min_dist != float('inf') else 0.0
+
+    def get_length_scale(self) -> float:
+        """
+        Get a characteristic length scale of the model.
+
+        Returns
+        -------
+        float
+            Characteristic length scale (bounding box diagonal)
+        """
+        import math
+
+        if not self.coords_x:
+            return 0.0
+
+        min_x, max_x = min(self.coords_x), max(self.coords_x)
+        min_y, max_y = min(self.coords_y), max(self.coords_y)
+
+        if self.coords_z:
+            min_z, max_z = min(self.coords_z), max(self.coords_z)
+        else:
+            min_z, max_z = 0.0, 0.0
+
+        dx = max_x - min_x
+        dy = max_y - min_y
+        dz = max_z - min_z
+
+        return math.sqrt(dx*dx + dy*dy + dz*dz)
+
     # Expression-based methods (not implementable without full expression parser)
     def calculate_element_field(self, expression: str, element_block_ids: Union[str, List[int]] = "all"):
         """Not implementable: requires expression evaluation."""
