@@ -195,6 +195,20 @@ class NodeSetData:
     name: str = ""
     fields: Dict[str, List[Any]] = field(default_factory=dict)
 
+    def get(self, key: str, default=None):
+        """Support dict-style .get() for backward compatibility."""
+        if key == 'name':
+            return self.name
+        elif key == 'fields':
+            return self.fields
+        elif key == 'members':
+            # Extract members from node_set
+            try:
+                return list(self.node_set.nodes) if hasattr(self.node_set, 'nodes') else []
+            except:
+                return default if default is not None else []
+        return default
+
 
 @dataclass
 class SideSetData:
@@ -213,6 +227,24 @@ class SideSetData:
     side_set: Any  # exodus.SideSet
     name: str = ""
     fields: Dict[str, List[Any]] = field(default_factory=dict)
+
+    def get(self, key: str, default=None):
+        """Support dict-style .get() for backward compatibility."""
+        if key == 'name':
+            return self.name
+        elif key == 'fields':
+            return self.fields
+        elif key == 'members':
+            # Extract members as (element, side) tuples
+            try:
+                if hasattr(self.side_set, 'elements') and hasattr(self.side_set, 'sides'):
+                    elements = list(self.side_set.elements)
+                    sides = list(self.side_set.sides)
+                    return list(zip(elements, sides))
+                return []
+            except:
+                return default if default is not None else []
+        return default
 
 
 class ElementBlocksDict(dict):
@@ -619,13 +651,13 @@ class ExodusModel:
                 except:
                     connectivity_flat = []
 
-                # Store as dict with exodus Block object
-                self.element_blocks[block_id] = {
-                    'block': block,
-                    'name': name,
-                    'connectivity_flat': connectivity_flat,
-                    'fields': {}
-                }
+                # Store as ElementBlockData
+                self.element_blocks[block_id] = ElementBlockData(
+                    block=block,
+                    name=name,
+                    connectivity_flat=connectivity_flat,
+                    fields={}
+                )
 
         # Read QA records
         try:
@@ -679,7 +711,7 @@ class ExodusModel:
                 title=self.title,
                 num_dim=self.num_dim,
                 num_nodes=self.num_nodes,
-                num_elems=sum(b['block'].num_entries for b in self.element_blocks.values()),
+                num_elems=sum(b.block.num_entries for b in self.element_blocks.values()),
                 num_elem_blocks=len(self.element_blocks),
                 num_node_sets=len(self.node_sets),
                 num_side_sets=len(self.side_sets),
@@ -696,8 +728,8 @@ class ExodusModel:
                 writer.put_block(block_data.block)
 
                 # Write flat connectivity (FAST - no conversion)
-                if block_data['connectivity_flat']:
-                    writer.put_connectivity(block_id, block_data['connectivity_flat'])
+                if block_data.connectivity_flat:
+                    writer.put_connectivity(block_id, block_data.connectivity_flat)
 
             # Write QA records
             for qa in self.qa_records:
@@ -931,8 +963,8 @@ class ExodusModel:
         # Try to use exodus NodeSet if available, otherwise use mock
         try:
             from . import NodeSet
-            node_set = NodeSet(id=node_set_id, num_entries=len(members))
-        except (ImportError, AttributeError):
+            node_set = NodeSet(id=node_set_id, nodes=members)
+        except (ImportError, AttributeError, TypeError):
             node_set = _MockNodeSet(id=node_set_id, num_entries=len(members), members=members)
 
         self.node_sets[node_set_id] = NodeSetData(
@@ -959,8 +991,8 @@ class ExodusModel:
         # Try to use exodus SideSet if available, otherwise use mock
         try:
             from . import SideSet
-            side_set = SideSet(id=side_set_id, num_entries=len(members))
-        except (ImportError, AttributeError):
+            side_set = SideSet(id=side_set_id, elements=elements, sides=sides)
+        except (ImportError, AttributeError, TypeError):
             side_set = _MockSideSet(id=side_set_id, num_entries=len(members), elements=elements, sides=sides)
 
         self.side_sets[side_set_id] = SideSetData(
@@ -1315,13 +1347,13 @@ class ExodusModel:
         """Get node set name."""
         if node_set_id not in self.node_sets:
             return ""
-        return self.node_sets[node_set_id].get('name', "")
+        return self.node_sets[node_set_id].name
 
     def get_side_set_name(self, side_set_id: int) -> str:
         """Get side set name."""
         if side_set_id not in self.side_sets:
             return ""
-        return self.side_sets[side_set_id].get('name', "")
+        return self.side_sets[side_set_id].name
 
     def rename_node_set(self, node_set_id: int, new_name: str):
         """Rename a node set."""
