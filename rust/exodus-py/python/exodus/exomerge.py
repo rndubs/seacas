@@ -176,6 +176,18 @@ class ElementBlockData:
         else:
             raise IndexError(f"Cannot set index {index} on ElementBlockData")
 
+    def get(self, key: str, default=None):
+        """Support dict-style .get() for backward compatibility."""
+        if key == 'block':
+            return self.block
+        elif key == 'name':
+            return self.name
+        elif key == 'connectivity_flat':
+            return self.connectivity_flat
+        elif key == 'fields':
+            return self.fields
+        return default
+
 
 @dataclass
 class NodeSetData:
@@ -886,7 +898,7 @@ class ExodusModel:
         self.coords_y = [n[1] if len(n) > 1 else 0.0 for n in nodes]
         self.coords_z = [n[2] if len(n) > 2 else 0.0 for n in nodes]
 
-    def create_element_block(self, block_id: int, info: List):
+    def create_element_block(self, block_id: int, info: List, connectivity: Optional[List] = None):
         """
         Create an element block.
 
@@ -896,6 +908,8 @@ class ExodusModel:
             Block ID
         info : list
             [topology, num_elems, nodes_per_elem, num_attrs]
+        connectivity : list, optional
+            Element connectivity as list of lists [[n1,n2,...], ...]
         """
         topology, num_elems, nodes_per_elem, num_attrs = info
 
@@ -920,10 +934,18 @@ class ExodusModel:
                 num_attributes=num_attrs
             )
 
+        # Flatten connectivity if provided
+        connectivity_flat = []
+        if connectivity:
+            if isinstance(connectivity[0], (list, tuple)):
+                connectivity_flat = [node_id for elem in connectivity for node_id in elem]
+            else:
+                connectivity_flat = connectivity
+
         self.element_blocks[block_id] = ElementBlockData(
             block=block,
             name="",
-            connectivity_flat=[],
+            connectivity_flat=connectivity_flat,
             fields={}
         )
 
