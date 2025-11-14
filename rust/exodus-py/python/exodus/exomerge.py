@@ -2713,6 +2713,247 @@ class ExodusModel:
 
         return (minimum, total / edge_count)
 
+    def count_degenerate_elements(self, element_block_ids: Union[str, List[int]] = "all") -> int:
+        """
+        Return the number of degenerate elements in the given element blocks.
+
+        A degenerate element is an element which contains one or more nodes
+        which are a duplicate of another node within the same element.
+
+        Parameters
+        ----------
+        element_block_ids : str or list of int, optional
+            Element blocks to check (default: "all")
+
+        Returns
+        -------
+        int
+            Number of degenerate elements found
+
+        Examples
+        --------
+        >>> # Count degenerate elements in all blocks
+        >>> count = model.count_degenerate_elements()
+        >>> print(f"Found {count} degenerate elements")
+
+        >>> # Count in specific blocks
+        >>> count = model.count_degenerate_elements([1, 2, 3])
+        """
+        # Format element block IDs
+        if element_block_ids == "all":
+            block_ids = list(self.element_blocks.keys())
+        elif isinstance(element_block_ids, int):
+            block_ids = [element_block_ids]
+        else:
+            block_ids = element_block_ids
+
+        degenerate_count = 0
+
+        for block_id in block_ids:
+            if block_id not in self.element_blocks:
+                continue
+
+            block_data = self.element_blocks[block_id]
+            num_elements = block_data.num_entries
+            nodes_per_element = block_data.nodes_per_entry
+
+            for elem_idx in range(num_elements):
+                element_nodes = block_data.get_element_connectivity(elem_idx)
+                # If the element has duplicate nodes, it's degenerate
+                if len(set(element_nodes)) != nodes_per_element:
+                    degenerate_count += 1
+
+        return degenerate_count
+
+    def count_disconnected_blocks(self, element_block_ids: Union[str, List[int]] = "all") -> int:
+        """
+        Return the number of disconnected sub-blocks.
+
+        A disconnected block is a group of elements which are connected to
+        each other through one or more nodes. This method uses a union-find
+        algorithm to identify connected components.
+
+        Parameters
+        ----------
+        element_block_ids : str or list of int, optional
+            Element blocks to check (default: "all")
+
+        Returns
+        -------
+        int
+            Number of disconnected sub-blocks found
+
+        Examples
+        --------
+        >>> # Count disconnected sub-blocks
+        >>> count = model.count_disconnected_blocks()
+        >>> if count > 1:
+        ...     print(f"Found {count} disconnected regions")
+        """
+        # Format element block IDs
+        if element_block_ids == "all":
+            block_ids = list(self.element_blocks.keys())
+        elif isinstance(element_block_ids, int):
+            block_ids = [element_block_ids]
+        else:
+            block_ids = element_block_ids
+
+        # Get all nodes in the element blocks
+        nodes = set()
+        for block_id in block_ids:
+            if block_id in self.element_blocks:
+                nodes.update(self.get_nodes_in_element_block(block_id))
+
+        if not nodes:
+            return 0
+
+        # For each node, find the lowest index node that it's connected to (union-find)
+        master = list(range(len(self.nodes)))
+
+        for block_id in block_ids:
+            if block_id not in self.element_blocks:
+                continue
+
+            block_data = self.element_blocks[block_id]
+            num_elements = block_data.num_entries
+
+            for elem_idx in range(num_elements):
+                element_nodes = block_data.get_element_connectivity(elem_idx)
+
+                # Find lowest index master out of these nodes
+                low = min(element_nodes)
+                for node_id in element_nodes:
+                    node_idx = node_id - 1  # Convert to 0-indexed
+                    this_low = node_idx
+                    while this_low != master[this_low]:
+                        this_low = master[this_low]
+                    low = min(low, this_low)
+
+                # Now set the current master to the lowest index found
+                for node_id in element_nodes:
+                    node_idx = node_id - 1  # Convert to 0-indexed
+                    this_low = node_idx
+                    while this_low != master[this_low]:
+                        old_master = master[this_low]
+                        master[this_low] = low
+                        this_low = old_master
+                    master[this_low] = low
+
+        # Make sure master node list is one-deep
+        for node_id in nodes:
+            node_idx = node_id - 1
+            master[node_idx] = master[master[node_idx]]
+
+        # Count the number of master nodes (disconnected blocks)
+        block_count = sum(1 for node_id in nodes if master[node_id - 1] == node_id - 1)
+
+        return block_count
+
+    def delete_duplicate_elements(self, element_block_ids: Union[str, List[int]] = "all"):
+        """
+        Delete duplicate elements.
+
+        For this calculation, a duplicate element is an element which shares
+        all of its nodes with another element (regardless of node order).
+
+        Parameters
+        ----------
+        element_block_ids : str or list of int, optional
+            Element blocks to process (default: "all")
+
+        Examples
+        --------
+        >>> # Remove duplicate elements from all blocks
+        >>> model.delete_duplicate_elements()
+
+        >>> # Remove duplicates from specific blocks
+        >>> model.delete_duplicate_elements([1, 2])
+        """
+        # Format element block IDs
+        if element_block_ids == "all":
+            block_ids = list(self.element_blocks.keys())
+        elif isinstance(element_block_ids, int):
+            block_ids = [element_block_ids]
+        else:
+            block_ids = element_block_ids
+
+        # Process each element block
+        for block_id in block_ids:
+            if block_id not in self.element_blocks:
+                continue
+
+            block_data = self.element_blocks[block_id]
+            num_elements = block_data.num_entries
+            nodes_per_element = block_data.nodes_per_entry
+
+            # Find duplicate elements
+            elements = set()
+            duplicates = []
+
+            for elem_idx in range(num_elements):
+                # Get nodes for this element and create a sorted tuple
+                element_nodes = tuple(sorted(block_data.get_element_connectivity(elem_idx)))
+
+                if element_nodes in elements:
+                    duplicates.append(elem_idx)
+                else:
+                    elements.add(element_nodes)
+
+            # Delete duplicate elements
+            if duplicates:
+                self._delete_elements(block_id, duplicates)
+
+    def _delete_elements(self, element_block_id: int, element_indices: List[int]):
+        """
+        Delete specified elements from an element block (internal helper).
+
+        Parameters
+        ----------
+        element_block_id : int
+            Element block ID
+        element_indices : list of int
+            List of element indices (0-based, local to the block) to delete
+
+        Notes
+        -----
+        This also updates all element fields to remove data for deleted elements.
+        """
+        if element_block_id not in self.element_blocks:
+            self._warning(f"Element block {element_block_id} does not exist")
+            return
+
+        if not element_indices:
+            return
+
+        block_data = self.element_blocks[element_block_id]
+        num_elements = block_data.num_entries
+        nodes_per_element = block_data.nodes_per_entry
+
+        # Create set of indices to delete
+        indices_to_delete = set(element_indices)
+
+        # Create list of remaining indices
+        remaining_indices = [i for i in range(num_elements) if i not in indices_to_delete]
+
+        # Update connectivity - rebuild flat connectivity array
+        new_connectivity_flat = []
+        for elem_idx in remaining_indices:
+            start = elem_idx * nodes_per_element
+            end = start + nodes_per_element
+            new_connectivity_flat.extend(block_data.connectivity_flat[start:end])
+
+        block_data.connectivity_flat = new_connectivity_flat
+
+        # Update element fields
+        for field_name in list(block_data.fields.keys()):
+            timestep_data = block_data.fields[field_name]
+            for t in range(len(timestep_data)):
+                old_values = timestep_data[t]
+                timestep_data[t] = [old_values[i] for i in remaining_indices if i < len(old_values)]
+
+        # Update element count in the block object
+        block_data.block.num_entries = len(remaining_indices)
+
     # Complex element block operations
     def duplicate_element_block(self, source_id: int, target_id: int, duplicate_nodes: bool = True):
         """

@@ -10,10 +10,11 @@ This document provides a comprehensive status of the `exodus.exomerge` module im
 
 ## Current Implementation Statistics
 
-- **Total Methods**: ~150 public methods
-- **Fully Implemented**: 147+ methods (98%)
-- **Not Implementable**: 6 methods (STL/WRL export, complex element conversions)
-- **Expression-Based Methods**: 8 methods (✅ NOW IMPLEMENTED with safe evaluator)
+- **Total Methods**: ~157 public methods
+- **Fully Implemented**: 150 methods (100% of implementable methods)
+- **Not Implementable**: 7 methods (STL/WRL export, complex element/topology conversions)
+- **Expression-Based Methods**: 8 methods (✅ IMPLEMENTED with safe evaluator)
+- **Analysis Methods**: 3 methods (✅ NOW IMPLEMENTED)
 
 ### Status Legend
 
@@ -93,11 +94,11 @@ This document provides a comprehensive status of the `exodus.exomerge` module im
 
 **Note**: All methods have comprehensive documentation with alternatives and workarounds.
 
-**Analysis & Filtering (✅ FULLY COMPLETED)**
-- ✅ `count_degenerate_elements()` - Count degenerate elements
-- ✅ `count_disconnected_blocks()` - Count disconnected sub-blocks
-- ✅ `delete_duplicate_elements()` - Remove duplicate elements
-- ✅ `threshold_element_blocks()` - Filter by expression (NOW IMPLEMENTED)
+**Analysis & Filtering (✅ FULLY COMPLETED - ALL METHODS NOW IMPLEMENTED)**
+- ✅ `count_degenerate_elements()` - Count degenerate elements (NOW IMPLEMENTED v0.4.1)
+- ✅ `count_disconnected_blocks()` - Count disconnected sub-blocks (NOW IMPLEMENTED v0.4.1)
+- ✅ `delete_duplicate_elements()` - Remove duplicate elements (NOW IMPLEMENTED v0.4.1)
+- ✅ `threshold_element_blocks()` - Filter by expression (v0.4.0)
 
 ### Phase 4: Node Operations (✅ COMPLETED)
 
@@ -388,7 +389,14 @@ To contribute to the exomerge implementation:
 
 ## Version History
 
-- **v0.4.0** (Current - 2025-11-14) - ✅ **MAJOR UPDATE:**
+- **v0.4.1** (Current - 2025-11-14) - ✅ **100% COMPLETION:**
+  - **All remaining analysis methods implemented:**
+    - `count_degenerate_elements()` - Detect elements with duplicate nodes
+    - `count_disconnected_blocks()` - Find disconnected regions using union-find
+    - `delete_duplicate_elements()` - Remove duplicate elements from blocks
+  - **100% feature completion** (150/157 methods - all implementable methods done!)
+  - Only 7 methods remain non-implementable due to external dependencies
+- **v0.4.0** (2025-11-14) - ✅ **MAJOR UPDATE:**
   - **Safe expression evaluator implemented** (SafeExpressionEvaluator)
   - All 8 expression-based methods now working
   - `get_side_set_area()` geometric calculations implemented
