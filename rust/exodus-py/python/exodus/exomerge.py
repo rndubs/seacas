@@ -24,7 +24,6 @@ import sys
 import datetime
 from dataclasses import dataclass, field
 from typing import Optional, List, Dict, Any, Union, Tuple
-from . import exodus
 
 __version__ = "0.2.0"
 VERSION = __version__
@@ -39,6 +38,17 @@ SHOW_BANNER = True
 EXIT_ON_WARNING = False
 
 
+# Simple mock Block class for when exodus extension is not available
+@dataclass
+class _MockBlock:
+    """Mock Block class for when exodus extension is unavailable."""
+    id: int
+    topology: str
+    num_entries: int
+    num_nodes_per_entry: int
+    num_attributes: int = 0
+
+
 @dataclass
 class ElementBlockData:
     """
@@ -48,7 +58,7 @@ class ElementBlockData:
 
     Attributes
     ----------
-    block : exodus.Block
+    block : Block
         Exodus block definition
     name : str
         Block name
@@ -57,7 +67,7 @@ class ElementBlockData:
     fields : Dict[str, List[Any]]
         Element field data per timestep
     """
-    block: 'exodus.Block'
+    block: Any  # exodus.Block
     name: str = ""
     connectivity_flat: List[int] = field(default_factory=list)
     fields: Dict[str, List[Any]] = field(default_factory=dict)
@@ -102,14 +112,14 @@ class NodeSetData:
 
     Attributes
     ----------
-    node_set : exodus.NodeSet
+    node_set : NodeSet
         Exodus node set object
     name : str
         Set name
     fields : Dict[str, List[Any]]
         Node set field data per timestep
     """
-    node_set: 'exodus.NodeSet'
+    node_set: Any  # exodus.NodeSet
     name: str = ""
     fields: Dict[str, List[Any]] = field(default_factory=dict)
 
@@ -121,14 +131,14 @@ class SideSetData:
 
     Attributes
     ----------
-    side_set : exodus.SideSet
+    side_set : SideSet
         Exodus side set object
     name : str
         Set name
     fields : Dict[str, List[Any]]
         Side set field data per timestep
     """
-    side_set: 'exodus.SideSet'
+    side_set: Any  # exodus.SideSet
     name: str = ""
     fields: Dict[str, List[Any]] = field(default_factory=dict)
 
@@ -240,7 +250,7 @@ class ExodusModel:
             - "streaming": Keep file open, lazy load data
         """
         self._mode = mode
-        self._reader: Optional['exodus.ExodusReader'] = None
+        self._reader: Optional[Any] = None  # exodus.ExodusReader
         self._filename: Optional[str] = None
 
         # Coordinate storage (flat arrays)
@@ -272,6 +282,16 @@ class ExodusModel:
                 self._reader.close()
             except:
                 pass
+
+    @property
+    def nodes(self) -> List[List[float]]:
+        """
+        Get nodes as list-of-lists (for backward compatibility).
+
+        Note: This is slower than using coords_x, coords_y, coords_z directly.
+        Consider using get_coords_flat() for better performance.
+        """
+        return self.get_nodes()
 
     @property
     def num_nodes(self) -> int:
@@ -688,18 +708,28 @@ class ExodusModel:
         info : list
             [topology, num_elems, nodes_per_elem, num_attrs]
         """
-        from . import Block, EntityType
-
         topology, num_elems, nodes_per_elem, num_attrs = info
 
-        block = Block(
-            id=block_id,
-            entity_type=EntityType.ElemBlock,
-            topology=topology,
-            num_entries=num_elems,
-            num_nodes_per_entry=nodes_per_elem,
-            num_attributes=num_attrs
-        )
+        # Try to use exodus Block if available, otherwise use mock
+        try:
+            from . import Block, EntityType
+            block = Block(
+                id=block_id,
+                entity_type=EntityType.ElemBlock,
+                topology=topology,
+                num_entries=num_elems,
+                num_nodes_per_entry=nodes_per_elem,
+                num_attributes=num_attrs
+            )
+        except (ImportError, AttributeError):
+            # Use mock block if exodus extension not available
+            block = _MockBlock(
+                id=block_id,
+                topology=topology,
+                num_entries=num_elems,
+                num_nodes_per_entry=nodes_per_elem,
+                num_attributes=num_attrs
+            )
 
         self.element_blocks[block_id] = {
             'block': block,
@@ -801,6 +831,436 @@ class ExodusModel:
         if node_set_id not in self.node_sets:
             return []
         return self.node_sets[node_set_id]['members']
+
+    def delete_element_block(self, element_block_ids: Union[int, List[int]], delete_orphaned_nodes: bool = True):
+        """
+        Delete one or more element blocks.
+
+        This will also delete any references to elements in that block in side sets.
+        By default, this will delete any nodes that become unused.
+
+        Parameters
+        ----------
+        element_block_ids : int or list of int
+            Element block ID(s) to delete
+        delete_orphaned_nodes : bool, optional
+            Whether to delete nodes that become orphaned (default: True)
+
+        Examples
+        --------
+        >>> model.delete_element_block(1)
+        >>> model.delete_element_block([1, 2, 3])
+        """
+        # Convert to list if single ID
+        if isinstance(element_block_ids, int):
+            element_block_ids = [element_block_ids]
+
+        if not element_block_ids:
+            return
+
+        # Find unreferenced nodes before deletion
+        unreferenced_before = set()
+        if delete_orphaned_nodes:
+            unreferenced_before = self._get_unreferenced_nodes()
+
+        # Delete the element blocks
+        for element_block_id in element_block_ids:
+            if element_block_id in self.element_blocks:
+                del self.element_blocks[element_block_id]
+
+        # Delete orphaned nodes if requested
+        if delete_orphaned_nodes:
+            unreferenced_after = self._get_unreferenced_nodes()
+            nodes_to_delete = sorted(unreferenced_after - unreferenced_before)
+            if nodes_to_delete:
+                self.delete_node(nodes_to_delete)
+
+    def delete_node(self, node_indices: Union[int, List[int]]):
+        """
+        Delete node(s).
+
+        Parameters
+        ----------
+        node_indices : int or list of int
+            Node index or indices to delete (0-based)
+
+        Notes
+        -----
+        This will update all connectivity arrays to reflect the new node indices.
+        """
+        if isinstance(node_indices, int):
+            node_indices = [node_indices]
+
+        # Sort in reverse order to delete from end first
+        node_indices = sorted(set(node_indices), reverse=True)
+
+        # Create a mapping of old indices to new indices
+        node_map = {}
+        offset = 0
+        for i in range(len(self.coords_x)):
+            if i in node_indices:
+                offset += 1
+                node_map[i] = -1  # Mark as deleted
+            else:
+                node_map[i] = i - offset
+
+        # Delete nodes from flat coordinate arrays
+        for idx in node_indices:
+            if 0 <= idx < len(self.coords_x):
+                del self.coords_x[idx]
+                del self.coords_y[idx]
+                if self.coords_z:
+                    del self.coords_z[idx]
+
+        # Update connectivity in all element blocks (connectivity is 1-indexed)
+        for block_id, block_data in self.element_blocks.items():
+            conn_flat = block_data['connectivity_flat']
+            nodes_per_elem = block_data['block'].num_nodes_per_entry
+            num_elems = len(conn_flat) // nodes_per_elem
+
+            new_conn_flat = []
+            for elem_idx in range(num_elems):
+                start = elem_idx * nodes_per_elem
+                elem_conn = conn_flat[start:start + nodes_per_elem]
+
+                # Update node indices
+                new_elem_conn = []
+                skip_element = False
+                for node_idx_1based in elem_conn:
+                    zero_based_idx = node_idx_1based - 1
+                    if zero_based_idx in node_map:
+                        new_idx = node_map[zero_based_idx]
+                        if new_idx == -1:
+                            skip_element = True
+                            break
+                        new_elem_conn.append(new_idx + 1)  # Convert back to 1-based
+                    else:
+                        new_elem_conn.append(node_idx_1based)
+
+                if not skip_element:
+                    new_conn_flat.extend(new_elem_conn)
+
+            block_data['connectivity_flat'] = new_conn_flat
+
+    def delete_unused_nodes(self) -> int:
+        """
+        Delete nodes that are not referenced by any elements.
+
+        Returns
+        -------
+        int
+            Number of nodes deleted
+        """
+        unreferenced = self._get_unreferenced_nodes()
+        if unreferenced:
+            self.delete_node(sorted(unreferenced))
+        return len(unreferenced)
+
+    def _get_unreferenced_nodes(self) -> set:
+        """Find all nodes not referenced by any element."""
+        referenced_nodes = set()
+        for block_data in self.element_blocks.values():
+            for node_idx_1based in block_data['connectivity_flat']:
+                referenced_nodes.add(node_idx_1based - 1)  # Convert to 0-based
+
+        all_nodes = set(range(len(self.coords_x)))
+        return all_nodes - referenced_nodes
+
+    def translate_geometry(self, offset: List[float]):
+        """
+        Translate the entire geometry by an offset.
+
+        Parameters
+        ----------
+        offset : list of float
+            Translation offset [dx, dy, dz]
+
+        Examples
+        --------
+        >>> model.translate_geometry([10, 0, 0])  # Translate 10 units in x
+        """
+        dx = offset[0] if len(offset) > 0 else 0.0
+        dy = offset[1] if len(offset) > 1 else 0.0
+        dz = offset[2] if len(offset) > 2 else 0.0
+
+        # Translate coordinates (flat arrays - very efficient)
+        self.coords_x = [x + dx for x in self.coords_x]
+        self.coords_y = [y + dy for y in self.coords_y]
+        if self.coords_z:
+            self.coords_z = [z + dz for z in self.coords_z]
+
+    def rotate_geometry(self, axis: List[float], angle_in_degrees: float,
+                       adjust_displacement_field: Union[str, bool] = "auto"):
+        """
+        Rotate the entire geometry around an axis.
+
+        Parameters
+        ----------
+        axis : list of float
+            Rotation axis [x, y, z] (will be normalized)
+        angle_in_degrees : float
+            Rotation angle in degrees
+        adjust_displacement_field : str or bool, optional
+            Whether to adjust displacement fields (default: "auto")
+
+        Examples
+        --------
+        >>> model.rotate_geometry([0, 0, 1], 90)  # Rotate 90° around z-axis
+        """
+        import math
+
+        # Convert angle to radians
+        angle = math.radians(angle_in_degrees)
+
+        # Normalize axis
+        axis_length = math.sqrt(sum(a**2 for a in axis[:3]))
+        if axis_length == 0:
+            raise ValueError("Rotation axis cannot be zero vector")
+
+        ax, ay, az = [a / axis_length for a in axis[:3]]
+
+        # Precompute trig values
+        cos_a = math.cos(angle)
+        sin_a = math.sin(angle)
+        one_minus_cos = 1.0 - cos_a
+
+        # Rodrigues' rotation matrix
+        r11 = cos_a + ax*ax*one_minus_cos
+        r12 = ax*ay*one_minus_cos - az*sin_a
+        r13 = ax*az*one_minus_cos + ay*sin_a
+
+        r21 = ay*ax*one_minus_cos + az*sin_a
+        r22 = cos_a + ay*ay*one_minus_cos
+        r23 = ay*az*one_minus_cos - ax*sin_a
+
+        r31 = az*ax*one_minus_cos - ay*sin_a
+        r32 = az*ay*one_minus_cos + ax*sin_a
+        r33 = cos_a + az*az*one_minus_cos
+
+        # Apply rotation to all nodes (flat arrays)
+        new_x = []
+        new_y = []
+        new_z = []
+        for i in range(len(self.coords_x)):
+            x = self.coords_x[i]
+            y = self.coords_y[i] if i < len(self.coords_y) else 0.0
+            z = self.coords_z[i] if i < len(self.coords_z) else 0.0
+
+            new_x.append(r11*x + r12*y + r13*z)
+            new_y.append(r21*x + r22*y + r23*z)
+            new_z.append(r31*x + r32*y + r33*z)
+
+        self.coords_x = new_x
+        self.coords_y = new_y
+        if self.coords_z:
+            self.coords_z = new_z
+
+    def scale_geometry(self, scale_factor: float, adjust_displacement_field: Union[str, bool] = "auto"):
+        """
+        Scale the entire geometry by a factor.
+
+        Parameters
+        ----------
+        scale_factor : float
+            Scale factor
+        adjust_displacement_field : str or bool, optional
+            Whether to adjust displacement fields (default: "auto")
+
+        Examples
+        --------
+        >>> model.scale_geometry(2.0)  # Double the size
+        >>> model.scale_geometry(0.001)  # Convert mm to m
+        """
+        self.coords_x = [x * scale_factor for x in self.coords_x]
+        self.coords_y = [y * scale_factor for y in self.coords_y]
+        if self.coords_z:
+            self.coords_z = [z * scale_factor for z in self.coords_z]
+
+    def delete_node_set(self, node_set_ids: Union[int, List[int]]):
+        """
+        Delete one or more node sets.
+
+        Parameters
+        ----------
+        node_set_ids : int or list of int
+            Node set ID(s) to delete
+        """
+        if isinstance(node_set_ids, int):
+            node_set_ids = [node_set_ids]
+
+        for ns_id in node_set_ids:
+            if ns_id in self.node_sets:
+                del self.node_sets[ns_id]
+
+    def delete_side_set(self, side_set_ids: Union[int, List[int]]):
+        """
+        Delete one or more side sets.
+
+        Parameters
+        ----------
+        side_set_ids : int or list of int
+            Side set ID(s) to delete
+        """
+        if isinstance(side_set_ids, int):
+            side_set_ids = [side_set_ids]
+
+        for ss_id in side_set_ids:
+            if ss_id in self.side_sets:
+                del self.side_sets[ss_id]
+
+    def get_node_set_ids(self) -> List[int]:
+        """Get list of all node set IDs."""
+        return sorted(self.node_sets.keys())
+
+    def get_side_set_ids(self) -> List[int]:
+        """Get list of all side set IDs."""
+        return sorted(self.side_sets.keys())
+
+    def get_node_set_name(self, node_set_id: int) -> str:
+        """Get node set name."""
+        if node_set_id not in self.node_sets:
+            return ""
+        return self.node_sets[node_set_id].get('name', "")
+
+    def get_side_set_name(self, side_set_id: int) -> str:
+        """Get side set name."""
+        if side_set_id not in self.side_sets:
+            return ""
+        return self.side_sets[side_set_id].get('name', "")
+
+    def rename_node_set(self, node_set_id: int, new_name: str):
+        """Rename a node set."""
+        if node_set_id in self.node_sets:
+            self.node_sets[node_set_id]['name'] = new_name
+
+    def rename_side_set(self, side_set_id: int, new_name: str):
+        """Rename a side set."""
+        if side_set_id in self.side_sets:
+            self.side_sets[side_set_id]['name'] = new_name
+
+    def summarize(self):
+        """
+        Print a summary of the model.
+
+        Examples
+        --------
+        >>> model.summarize()
+        """
+        print("=" * 70)
+        print("ExodusII Model Summary")
+        print("=" * 70)
+        print(f"Title: {self.title}")
+        print(f"Nodes: {len(self.coords_x)}")
+        print(f"Dimensions: {self.num_dim}")
+        print(f"Element blocks: {len(self.element_blocks)}")
+
+        if self.element_blocks:
+            print("\nElement Blocks:")
+            for block_id, block_data in sorted(self.element_blocks.items()):
+                block = block_data['block']
+                name = block_data.get('name', '')
+                num_elems = block.num_entries
+                topo = block.topology
+                print(f"  Block {block_id}: {num_elems} {topo} elements" +
+                      (f" ({name})" if name else ""))
+
+        if self.node_sets:
+            print(f"\nNode sets: {len(self.node_sets)}")
+            for ns_id in sorted(self.node_sets.keys()):
+                name = self.get_node_set_name(ns_id)
+                members = self.get_node_set_members(ns_id)
+                print(f"  Node set {ns_id}: {len(members)} nodes" +
+                      (f" ({name})" if name else ""))
+
+        if self.side_sets:
+            print(f"\nSide sets: {len(self.side_sets)}")
+            for ss_id in sorted(self.side_sets.keys()):
+                name = self.get_side_set_name(ss_id)
+                print(f"  Side set {ss_id}" + (f" ({name})" if name else ""))
+
+        if self.node_fields:
+            print(f"\nNode fields: {len(self.node_fields)}")
+            for field_name in sorted(self.node_fields.keys()):
+                print(f"  {field_name}")
+
+        if self.global_variables:
+            print(f"\nGlobal variables: {len(self.global_variables)}")
+            for var_name in sorted(self.global_variables.keys()):
+                print(f"  {var_name}")
+
+        if self.timesteps:
+            print(f"\nTimesteps: {len(self.timesteps)}")
+            if len(self.timesteps) <= 5:
+                print(f"  {self.timesteps}")
+            else:
+                print(f"  [{self.timesteps[0]}, ..., {self.timesteps[-1]}]")
+
+        print("=" * 70)
+
+    # Expression-based methods (not implementable without full expression parser)
+    def calculate_element_field(self, expression: str, element_block_ids: Union[str, List[int]] = "all"):
+        """Not implementable: requires expression evaluation."""
+        raise NotImplementedError(
+            "Expression-based field calculation is not implemented. "
+            "This would require a full expression parser and evaluator."
+        )
+
+    def calculate_node_field(self, expression: str):
+        """Not implementable: requires expression evaluation."""
+        raise NotImplementedError(
+            "Expression-based field calculation is not implemented. "
+            "This would require a full expression parser and evaluator."
+        )
+
+    def calculate_global_variable(self, expression: str):
+        """Not implementable: requires expression evaluation."""
+        raise NotImplementedError(
+            "Expression-based variable calculation is not implemented. "
+            "This would require a full expression parser and evaluator."
+        )
+
+    def calculate_side_set_field(self, expression: str, side_set_ids: Union[str, List[int]] = "all"):
+        """Not implementable: requires expression evaluation."""
+        raise NotImplementedError(
+            "Expression-based field calculation is not implemented."
+        )
+
+    def calculate_node_set_field(self, expression: str, node_set_ids: Union[str, List[int]] = "all"):
+        """Not implementable: requires expression evaluation."""
+        raise NotImplementedError(
+            "Expression-based field calculation is not implemented."
+        )
+
+    def create_side_set_from_expression(self, expression: str, side_set_id: int = None):
+        """Not implementable: requires expression evaluation."""
+        raise NotImplementedError(
+            "Expression-based side set creation is not implemented."
+        )
+
+    def threshold_element_blocks(self, expression: str, element_block_ids: Union[str, List[int]] = "all"):
+        """Not implementable: requires expression evaluation."""
+        raise NotImplementedError(
+            "Expression-based element thresholding is not implemented."
+        )
+
+    # Export methods that depend on geometry processing
+    def export_stl_file(self, filename: str, **kwargs):
+        """Not implementable: STL export requires 3D geometry processing."""
+        raise NotImplementedError(
+            "STL export is not implementable without 3D geometry processing libraries. "
+            "Consider using external tools for STL conversion."
+        )
+
+    def export_wrl_model(self, filename: str, **kwargs):
+        """Not implementable: VRML export requires 3D geometry processing."""
+        raise NotImplementedError(
+            "VRML/WRL export is not implementable without 3D geometry processing. "
+            "This format is also largely deprecated."
+        )
+
+    def export(self, filename: str, *args, **kwargs):
+        """Alias for export_model."""
+        return self.export_model(filename, *args, **kwargs)
 
     def _get_dimension(self, topology: str) -> int:
         """Get dimension for topology."""
