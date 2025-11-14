@@ -238,6 +238,25 @@ class ExodusModel:
         "pyramid5": 5,
     }
 
+    # Element volume/area/length formulas
+    # Format: [coefficient, (node_indices_1), (node_indices_2), ...]
+    VOLUME_FORMULA = {
+        "line2": [1.0, (0, 1)],
+        "line3": [1.0, (0, 1)],
+        "tri3": [0.5, (0, 1), (0, 2)],
+        "tri6": [0.5, (0, 1), (0, 2)],
+        "quad4": [0.5, (0, 2), (1, 3)],
+        "quad8": [0.5, (0, 2), (1, 3)],
+        "quad9": [0.5, (0, 2), (1, 3)],
+        "tet4": [1.0 / 6.0, (0, 1), (0, 2), (0, 3)],
+        "tet10": [1.0 / 6.0, (0, 1), (0, 2), (0, 3)],
+        "wedge6": [0.5, ((0, 3), (1, 4)), ((0, 3), (2, 5)), ((0, 1, 2), (3, 4, 5))],
+        "wedge15": [0.5, ((0, 3), (1, 4)), ((0, 3), (2, 5)), ((0, 1, 2), (3, 4, 5))],
+        "hex8": [1.0, ((0, 3, 4, 7), (1, 2, 5, 6)), ((0, 1, 4, 5), (2, 3, 6, 7)), ((0, 1, 2, 3), (4, 5, 6, 7))],
+        "hex20": [1.0, ((0, 3, 4, 7), (1, 2, 5, 6)), ((0, 1, 4, 5), (2, 3, 6, 7)), ((0, 1, 2, 3), (4, 5, 6, 7))],
+        "hex27": [1.0, ((0, 3, 4, 7), (1, 2, 5, 6)), ((0, 1, 4, 5), (2, 3, 6, 7)), ((0, 1, 2, 3), (4, 5, 6, 7))],
+    }
+
     def __init__(self, mode: str = "inmemory"):
         """
         Initialize an ExodusModel.
@@ -3089,6 +3108,756 @@ class ExodusModel:
                 self.coords_y[i] += displ_y[i]
             if self.coords_z and i < len(displ_z):
                 self.coords_z[i] += displ_z[i]
+
+    # Volume calculation methods
+    def _new_element_field_name(self, quantity: int = 1) -> Union[str, List[str]]:
+        """
+        Generate unique temporary element field name(s).
+
+        Parameters
+        ----------
+        quantity : int, optional
+            Number of unique names to generate (default: 1)
+
+        Returns
+        -------
+        str or list of str
+            Single name if quantity==1, otherwise list of names
+        """
+        id_ = 1
+        names = []
+        all_field_names = set(self.get_element_field_names())
+        for _ in range(quantity):
+            name = f"temp{id_}"
+            while name in all_field_names:
+                id_ += 1
+                name = f"temp{id_}"
+            names.append(name)
+            all_field_names.add(name)
+            id_ += 1
+
+        return names[0] if quantity == 1 else names
+
+    def calculate_element_centroids(self, element_block_ids: Union[str, List[int]] = "all",
+                                   field_prefix: str = "centroid"):
+        """
+        Calculate and store the centroid of each element.
+
+        This will approximate the element centroid as the nodal average of each
+        element and will store that value in an element field. Since a
+        timestep must be defined in order for element fields to exist, one will
+        be created if none exist.
+
+        By default, the centroid will be stored in the fields 'centroid_x',
+        'centroid_y', and 'centroid_z'. Alternatively, a prefix can be given
+        or a list of three strings can be given.
+
+        Parameters
+        ----------
+        element_block_ids : str or list of int, optional
+            Element blocks to process (default: "all")
+        field_prefix : str or list of str, optional
+            Field name prefix or list of three field names (default: "centroid")
+        """
+        # Format element block IDs
+        if element_block_ids == "all":
+            element_block_ids = list(self.element_blocks.keys())
+        elif isinstance(element_block_ids, int):
+            element_block_ids = [element_block_ids]
+
+        # Ensure at least one timestep exists
+        if not self.timesteps:
+            self.create_timestep(0.0)
+
+        # Determine field names
+        if isinstance(field_prefix, str):
+            centroid_field_names = [f"{field_prefix}_{x}" for x in ["x", "y", "z"]]
+        else:
+            centroid_field_names = field_prefix
+
+        for element_block_id in element_block_ids:
+            if element_block_id not in self.element_blocks:
+                continue
+
+            block_data = self.element_blocks[element_block_id]
+
+            # Calculate centroids
+            centroid = [[], [], []]
+            element_count = block_data.block.num_entries
+            nodes_per_element = block_data.block.num_nodes_per_entry
+
+            for element_index in range(element_count):
+                this_centroid = [0.0, 0.0, 0.0]
+                element_nodes = block_data.get_element_nodes(element_index)
+
+                # Accumulate node coordinates (1-based indexing to 0-based)
+                for node_id in element_nodes:
+                    node_idx = node_id - 1
+                    if node_idx < len(self.coords_x):
+                        this_centroid[0] += self.coords_x[node_idx]
+                        this_centroid[1] += self.coords_y[node_idx]
+                        if self.coords_z and node_idx < len(self.coords_z):
+                            this_centroid[2] += self.coords_z[node_idx]
+
+                # Average
+                for i in range(3):
+                    centroid[i].append(this_centroid[i] / nodes_per_element)
+
+            # Store centroid fields for all timesteps
+            for index, name in enumerate(centroid_field_names):
+                values = []
+                for _ in range(len(self.timesteps)):
+                    values.append(list(centroid[index]))
+                block_data.fields[name] = values
+
+    def calculate_element_volumes(self, element_block_ids: Union[str, List[int]] = "all",
+                                 field_name: str = "volume"):
+        """
+        Calculate and store the volume of each element.
+
+        This will approximate the element volume. Since a timestep must be
+        defined in order for element fields to exist, one will be created if
+        none exist.
+
+        For two dimensional elements, this calculates the area. For one
+        dimensional elements, this calculates the length.
+
+        Parameters
+        ----------
+        element_block_ids : str or list of int, optional
+            Element blocks to process (default: "all")
+        field_name : str, optional
+            Name for the volume field (default: "volume")
+        """
+        import math
+
+        # Format element block IDs
+        if element_block_ids == "all":
+            element_block_ids = list(self.element_blocks.keys())
+        elif isinstance(element_block_ids, int):
+            element_block_ids = [element_block_ids]
+
+        # Ensure at least one timestep exists
+        if not self.timesteps:
+            self.create_timestep(0.0)
+
+        for element_block_id in element_block_ids:
+            if element_block_id not in self.element_blocks:
+                continue
+
+            block_data = self.element_blocks[element_block_id]
+
+            # Get the element type
+            element_type = block_data.block.topology.lower()
+
+            if element_type not in self.VOLUME_FORMULA:
+                print(f"Warning: Volume formula for element type '{element_type}' not implemented. Skipping block {element_block_id}.")
+                continue
+
+            # Get the formula
+            formula = self.VOLUME_FORMULA[element_type]
+            coefficient = formula[0]
+
+            # Build the calculation based on element dimension
+            element_count = block_data.block.num_entries
+            volumes = []
+
+            for element_index in range(element_count):
+                element_nodes = block_data.get_element_nodes(element_index)
+
+                # Build coordinate array for this element (convert to 0-based indexing)
+                coords = []
+                for node_id in element_nodes:
+                    node_idx = node_id - 1
+                    if node_idx < len(self.coords_x):
+                        coords.append(self.coords_x[node_idx])
+                        coords.append(self.coords_y[node_idx])
+                        coords.append(self.coords_z[node_idx] if self.coords_z and node_idx < len(self.coords_z) else 0.0)
+
+                # Calculate volume based on formula type
+                if len(formula) == 2:
+                    # 1D: distance between two points
+                    rule = formula[1]
+                    vec = [0.0, 0.0, 0.0]
+                    for d in range(3):
+                        node_list_0 = rule[0] if isinstance(rule[0], tuple) else (rule[0],)
+                        node_list_1 = rule[1] if isinstance(rule[1], tuple) else (rule[1],)
+
+                        coord0 = sum(coords[n * 3 + d] for n in node_list_0) / len(node_list_0)
+                        coord1 = sum(coords[n * 3 + d] for n in node_list_1) / len(node_list_1)
+                        vec[d] = coord1 - coord0
+
+                    volume = coefficient * math.sqrt(sum(v * v for v in vec))
+
+                elif len(formula) == 3:
+                    # 2D: cross product magnitude
+                    vecs = []
+                    for rule in formula[1:]:
+                        vec = [0.0, 0.0, 0.0]
+                        for d in range(3):
+                            node_list_0 = rule[0] if isinstance(rule[0], tuple) else (rule[0],)
+                            node_list_1 = rule[1] if isinstance(rule[1], tuple) else (rule[1],)
+
+                            coord0 = sum(coords[n * 3 + d] for n in node_list_0) / len(node_list_0)
+                            coord1 = sum(coords[n * 3 + d] for n in node_list_1) / len(node_list_1)
+                            vec[d] = coord1 - coord0
+                        vecs.append(vec)
+
+                    # Cross product
+                    cross = [
+                        vecs[0][1] * vecs[1][2] - vecs[0][2] * vecs[1][1],
+                        vecs[0][2] * vecs[1][0] - vecs[0][0] * vecs[1][2],
+                        vecs[0][0] * vecs[1][1] - vecs[0][1] * vecs[1][0],
+                    ]
+                    volume = coefficient * math.sqrt(sum(c * c for c in cross))
+
+                elif len(formula) == 4:
+                    # 3D: triple product
+                    vecs = []
+                    for rule in formula[1:]:
+                        vec = [0.0, 0.0, 0.0]
+                        for d in range(3):
+                            node_list_0 = rule[0] if isinstance(rule[0], tuple) else (rule[0],)
+                            node_list_1 = rule[1] if isinstance(rule[1], tuple) else (rule[1],)
+
+                            coord0 = sum(coords[n * 3 + d] for n in node_list_0) / len(node_list_0)
+                            coord1 = sum(coords[n * 3 + d] for n in node_list_1) / len(node_list_1)
+                            vec[d] = coord1 - coord0
+                        vecs.append(vec)
+
+                    # Triple product: (vec1 × vec2) · vec3
+                    cross = [
+                        vecs[0][1] * vecs[1][2] - vecs[0][2] * vecs[1][1],
+                        vecs[0][2] * vecs[1][0] - vecs[0][0] * vecs[1][2],
+                        vecs[0][0] * vecs[1][1] - vecs[0][1] * vecs[1][0],
+                    ]
+                    volume = coefficient * (cross[0] * vecs[2][0] + cross[1] * vecs[2][1] + cross[2] * vecs[2][2])
+                else:
+                    volume = 0.0
+
+                volumes.append(abs(volume))
+
+            # Store volume field for all timesteps
+            values = []
+            for _ in range(len(self.timesteps)):
+                values.append(list(volumes))
+            block_data.fields[field_name] = values
+
+    def get_element_block_volume(self, element_block_ids: Union[str, List[int]] = "all",
+                                timestep: Union[str, float] = "last") -> float:
+        """
+        Return the total volume of the given element blocks.
+
+        Parameters
+        ----------
+        element_block_ids : str or list of int, optional
+            Element blocks to calculate volume for (default: "all")
+        timestep : str or float, optional
+            Timestep to use (default: "last") - currently unused
+
+        Returns
+        -------
+        float
+            Total volume of the element blocks
+        """
+        # Format element block IDs
+        if element_block_ids == "all":
+            element_block_ids = list(self.element_blocks.keys())
+        elif isinstance(element_block_ids, int):
+            element_block_ids = [element_block_ids]
+
+        # Create a timestep if none exist
+        created_timestep = False
+        if not self.timesteps:
+            created_timestep = True
+            self.create_timestep(0.0)
+
+        # Calculate temporary field with element volumes
+        element_volume_field_name = self._new_element_field_name()
+        self.calculate_element_volumes(element_block_ids, element_volume_field_name)
+
+        # Add up the volumes
+        volume = 0.0
+        for block_id in element_block_ids:
+            if block_id not in self.element_blocks:
+                continue
+            block_data = self.element_blocks[block_id]
+            if element_volume_field_name in block_data.fields:
+                volume += sum(block_data.fields[element_volume_field_name][0])
+
+        # Delete the temporary timestep
+        if created_timestep:
+            self.delete_timestep(0.0)
+
+        # Delete the temporary field
+        self.delete_element_field(element_volume_field_name, element_block_ids)
+
+        return volume
+
+    # Field statistics methods
+    def calculate_element_field_maximum(self, element_field_names: Union[str, List[str]],
+                                       element_block_ids: Union[str, List[int]] = "all",
+                                       timestep: Union[str, float] = "last") -> Union[float, Dict[str, float]]:
+        """
+        Find maximum value of element field(s).
+
+        Parameters
+        ----------
+        element_field_names : str or list of str
+            Element field name(s) to find maximum for
+        element_block_ids : str or list of int, optional
+            Element block IDs (default: "all")
+        timestep : str or float, optional
+            Timestep to use (default: "last")
+
+        Returns
+        -------
+        float or dict
+            Maximum value(s) of the field(s)
+        """
+        if element_block_ids == "all":
+            element_block_ids = list(self.element_blocks.keys())
+        elif isinstance(element_block_ids, int):
+            element_block_ids = [element_block_ids]
+
+        if isinstance(element_field_names, str):
+            element_field_names = [element_field_names]
+
+        # Get timestep index
+        if timestep == "last":
+            timestep_idx = len(self.timesteps) - 1 if self.timesteps else 0
+        elif timestep == "first":
+            timestep_idx = 0
+        else:
+            timestep_idx = min(range(len(self.timesteps)),
+                             key=lambda i: abs(self.timesteps[i] - float(timestep)))
+
+        max_values = {}
+        for field_name in element_field_names:
+            max_val = float('-inf')
+            for block_id in element_block_ids:
+                if block_id in self.element_blocks:
+                    block_data = self.element_blocks[block_id]
+                    if field_name in block_data.fields:
+                        values = block_data.fields[field_name][timestep_idx]
+                        if values:
+                            max_val = max(max_val, max(values))
+            max_values[field_name] = max_val if max_val != float('-inf') else None
+
+        return max_values if len(element_field_names) > 1 else max_values[element_field_names[0]]
+
+    def calculate_element_field_minimum(self, element_field_names: Union[str, List[str]],
+                                       element_block_ids: Union[str, List[int]] = "all",
+                                       timestep: Union[str, float] = "last") -> Union[float, Dict[str, float]]:
+        """
+        Find minimum value of element field(s).
+
+        Parameters
+        ----------
+        element_field_names : str or list of str
+            Element field name(s) to find minimum for
+        element_block_ids : str or list of int, optional
+            Element block IDs (default: "all")
+        timestep : str or float, optional
+            Timestep to use (default: "last")
+
+        Returns
+        -------
+        float or dict
+            Minimum value(s) of the field(s)
+        """
+        if element_block_ids == "all":
+            element_block_ids = list(self.element_blocks.keys())
+        elif isinstance(element_block_ids, int):
+            element_block_ids = [element_block_ids]
+
+        if isinstance(element_field_names, str):
+            element_field_names = [element_field_names]
+
+        # Get timestep index
+        if timestep == "last":
+            timestep_idx = len(self.timesteps) - 1 if self.timesteps else 0
+        elif timestep == "first":
+            timestep_idx = 0
+        else:
+            timestep_idx = min(range(len(self.timesteps)),
+                             key=lambda i: abs(self.timesteps[i] - float(timestep)))
+
+        min_values = {}
+        for field_name in element_field_names:
+            min_val = float('inf')
+            for block_id in element_block_ids:
+                if block_id in self.element_blocks:
+                    block_data = self.element_blocks[block_id]
+                    if field_name in block_data.fields:
+                        values = block_data.fields[field_name][timestep_idx]
+                        if values:
+                            min_val = min(min_val, min(values))
+            min_values[field_name] = min_val if min_val != float('inf') else None
+
+        return min_values if len(element_field_names) > 1 else min_values[element_field_names[0]]
+
+    def calculate_node_field_maximum(self, node_field_names: Union[str, List[str]],
+                                      timestep: Union[str, float] = "last") -> Union[float, Dict[str, float]]:
+        """
+        Calculate maximum value of node field(s).
+
+        Parameters
+        ----------
+        node_field_names : str or list of str
+            Node field name(s) to find maximum for
+        timestep : str or float, optional
+            Timestep to use (default: "last")
+
+        Returns
+        -------
+        float or dict
+            Maximum value(s) of the field(s)
+        """
+        if isinstance(node_field_names, str):
+            node_field_names = [node_field_names]
+
+        # Get timestep index
+        if timestep == "last":
+            timestep_idx = len(self.timesteps) - 1 if self.timesteps else 0
+        elif timestep == "first":
+            timestep_idx = 0
+        else:
+            timestep_idx = min(range(len(self.timesteps)),
+                             key=lambda i: abs(self.timesteps[i] - float(timestep)))
+
+        max_values = {}
+        for field_name in node_field_names:
+            if field_name in self.node_fields:
+                values = self.node_fields[field_name][timestep_idx]
+                max_values[field_name] = max(values) if values else None
+            else:
+                max_values[field_name] = None
+
+        return max_values if len(node_field_names) > 1 else max_values[node_field_names[0]]
+
+    def calculate_node_field_minimum(self, node_field_names: Union[str, List[str]],
+                                      timestep: Union[str, float] = "last") -> Union[float, Dict[str, float]]:
+        """
+        Calculate minimum value of node field(s).
+
+        Parameters
+        ----------
+        node_field_names : str or list of str
+            Node field name(s) to find minimum for
+        timestep : str or float, optional
+            Timestep to use (default: "last")
+
+        Returns
+        -------
+        float or dict
+            Minimum value(s) of the field(s)
+        """
+        if isinstance(node_field_names, str):
+            node_field_names = [node_field_names]
+
+        # Get timestep index
+        if timestep == "last":
+            timestep_idx = len(self.timesteps) - 1 if self.timesteps else 0
+        elif timestep == "first":
+            timestep_idx = 0
+        else:
+            timestep_idx = min(range(len(self.timesteps)),
+                             key=lambda i: abs(self.timesteps[i] - float(timestep)))
+
+        min_values = {}
+        for field_name in node_field_names:
+            if field_name in self.node_fields:
+                values = self.node_fields[field_name][timestep_idx]
+                min_values[field_name] = min(values) if values else None
+            else:
+                min_values[field_name] = None
+
+        return min_values if len(node_field_names) > 1 else min_values[node_field_names[0]]
+
+    # Interpolation methods
+    def create_interpolated_timestep(self, timestep: float, interpolation: str = "linear"):
+        """
+        Create a new timestep by interpolating between existing timesteps.
+
+        Parameters
+        ----------
+        timestep : float
+            New timestep value
+        interpolation : str, optional
+            Interpolation method (default: "linear")
+
+        Examples
+        --------
+        >>> model.create_interpolated_timestep(1.5)  # Interpolate at t=1.5
+        """
+        if not self.timesteps:
+            raise ValueError("No timesteps available for interpolation")
+
+        timestep = float(timestep)
+
+        # Check if timestep already exists
+        if timestep in self.timesteps:
+            print(f"Warning: Timestep {timestep} already exists")
+            return
+
+        # Find surrounding timesteps
+        lower_idx = None
+        upper_idx = None
+
+        for idx, ts in enumerate(self.timesteps):
+            if ts < timestep:
+                lower_idx = idx
+            elif ts > timestep and upper_idx is None:
+                upper_idx = idx
+                break
+
+        if lower_idx is None:
+            # Before first timestep - use first two
+            lower_idx = 0
+            upper_idx = 1 if len(self.timesteps) > 1 else 0
+        elif upper_idx is None:
+            # After last timestep - use last two
+            upper_idx = len(self.timesteps) - 1
+            lower_idx = upper_idx - 1 if len(self.timesteps) > 1 else upper_idx
+
+        t_lower = self.timesteps[lower_idx]
+        t_upper = self.timesteps[upper_idx]
+
+        # Calculate interpolation factor
+        if t_upper == t_lower:
+            factor = 0.5
+        else:
+            factor = (timestep - t_lower) / (t_upper - t_lower)
+
+        # Insert timestep in sorted order
+        insert_idx = upper_idx
+        self.timesteps.insert(insert_idx, timestep)
+
+        # Interpolate node fields
+        for field_name, timestep_data in self.node_fields.items():
+            lower_values = timestep_data[lower_idx]
+            upper_values = timestep_data[upper_idx]
+            interp_values = [
+                lower_values[i] * (1 - factor) + upper_values[i] * factor
+                for i in range(len(lower_values))
+            ]
+            timestep_data.insert(insert_idx, interp_values)
+
+        # Interpolate global variables
+        for var_name, timestep_data in self.global_variables.items():
+            lower_value = timestep_data[lower_idx]
+            upper_value = timestep_data[upper_idx]
+            interp_value = lower_value * (1 - factor) + upper_value * factor
+            timestep_data.insert(insert_idx, interp_value)
+
+        # Interpolate element fields
+        for block_id, block_data in self.element_blocks.items():
+            for field_name, timestep_data in block_data.fields.items():
+                lower_values = timestep_data[lower_idx]
+                upper_values = timestep_data[upper_idx]
+                interp_values = [
+                    lower_values[i] * (1 - factor) + upper_values[i] * factor
+                    for i in range(len(lower_values))
+                ]
+                timestep_data.insert(insert_idx, interp_values)
+
+        # Interpolate side set fields
+        for side_set_id, side_set_data in self.side_sets.items():
+            for field_name, timestep_data in side_set_data.fields.items():
+                lower_values = timestep_data[lower_idx]
+                upper_values = timestep_data[upper_idx]
+                interp_values = [
+                    lower_values[i] * (1 - factor) + upper_values[i] * factor
+                    for i in range(len(lower_values))
+                ]
+                timestep_data.insert(insert_idx, interp_values)
+
+        # Interpolate node set fields
+        for node_set_id, node_set_data in self.node_sets.items():
+            for field_name, timestep_data in node_set_data.fields.items():
+                lower_values = timestep_data[lower_idx]
+                upper_values = timestep_data[upper_idx]
+                interp_values = [
+                    lower_values[i] * (1 - factor) + upper_values[i] * factor
+                    for i in range(len(lower_values))
+                ]
+                timestep_data.insert(insert_idx, interp_values)
+
+    # Mesh generation methods
+    def build_hex8_cube(self, element_block_id: Union[str, int] = "auto",
+                       extents: Union[float, List[float]] = 1.0, divisions: Union[int, List[int]] = 3):
+        """
+        Build a HEX8 cube mesh.
+
+        Parameters
+        ----------
+        element_block_id : str or int, optional
+            Element block ID for the cube (default: "auto")
+        extents : float or list of float, optional
+            Size of cube (single value or [x, y, z]) (default: 1.0)
+        divisions : int or list of int, optional
+            Number of divisions (single value or [nx, ny, nz]) (default: 3)
+
+        Examples
+        --------
+        >>> model = ExodusModel()
+        >>> model.build_hex8_cube(element_block_id=1, extents=2.0, divisions=5)
+
+        Notes
+        -----
+        Creates a structured hexahedral mesh in the range [0, extents].
+        The mesh will have divisions+1 nodes in each direction.
+        """
+        # Process extents
+        if isinstance(extents, (int, float)):
+            ex, ey, ez = float(extents), float(extents), float(extents)
+        elif len(extents) == 1:
+            ex, ey, ez = float(extents[0]), float(extents[0]), float(extents[0])
+        elif len(extents) == 2:
+            ex, ey, ez = float(extents[0]), float(extents[1]), float(extents[1])
+        else:
+            ex, ey, ez = float(extents[0]), float(extents[1]), float(extents[2])
+
+        # Process divisions
+        if isinstance(divisions, int):
+            nx, ny, nz = divisions, divisions, divisions
+        elif len(divisions) == 1:
+            nx, ny, nz = divisions[0], divisions[0], divisions[0]
+        elif len(divisions) == 2:
+            nx, ny, nz = divisions[0], divisions[1], divisions[1]
+        else:
+            nx, ny, nz = divisions[0], divisions[1], divisions[2]
+
+        # Determine block ID
+        if element_block_id == "auto":
+            # Find next available ID
+            if self.element_blocks:
+                block_id = max(self.element_blocks.keys()) + 1
+            else:
+                block_id = 1
+        else:
+            block_id = element_block_id
+
+        # Create nodes
+        nodes_x = nx + 1
+        nodes_y = ny + 1
+        nodes_z = nz + 1
+
+        dx = ex / nx
+        dy = ey / ny
+        dz = ez / nz
+
+        node_offset = len(self.coords_x)
+
+        for k in range(nodes_z):
+            for j in range(nodes_y):
+                for i in range(nodes_x):
+                    x = i * dx
+                    y = j * dy
+                    z = k * dz
+                    self.coords_x.append(x)
+                    self.coords_y.append(y)
+                    self.coords_z.append(z)
+
+        # Create connectivity (HEX8 elements)
+        # HEX8 node ordering: bottom face (z=0) then top face (z=1)
+        # Bottom: 0-1-2-3 (counter-clockwise looking down)
+        # Top: 4-5-6-7 (counter-clockwise looking down)
+        connectivity_flat = []
+
+        def node_index(i, j, k):
+            """Get global node index from structured indices."""
+            return node_offset + k * nodes_x * nodes_y + j * nodes_x + i + 1  # 1-indexed
+
+        for k in range(nz):
+            for j in range(ny):
+                for i in range(nx):
+                    # Bottom face nodes (z = k)
+                    n0 = node_index(i, j, k)
+                    n1 = node_index(i+1, j, k)
+                    n2 = node_index(i+1, j+1, k)
+                    n3 = node_index(i, j+1, k)
+                    # Top face nodes (z = k+1)
+                    n4 = node_index(i, j, k+1)
+                    n5 = node_index(i+1, j, k+1)
+                    n6 = node_index(i+1, j+1, k+1)
+                    n7 = node_index(i, j+1, k+1)
+
+                    connectivity_flat.extend([n0, n1, n2, n3, n4, n5, n6, n7])
+
+        # Create element block
+        num_elems = nx * ny * nz
+
+        try:
+            from . import Block
+            block = Block(
+                id=block_id,
+                topology="hex8",
+                num_entries=num_elems,
+                num_nodes_per_entry=8,
+                num_attributes=0
+            )
+        except (ImportError, AttributeError):
+            block = _MockBlock(
+                id=block_id,
+                topology="hex8",
+                num_entries=num_elems,
+                num_nodes_per_entry=8,
+                num_attributes=0
+            )
+
+        self.element_blocks[block_id] = ElementBlockData(
+            block=block,
+            name="HEX8_Cube",
+            connectivity_flat=connectivity_flat,
+            fields={}
+        )
+
+    # Element conversion methods (not fully implementable)
+    def convert_hex8_block_to_tet4_block(self, element_block_id: int, scheme: str = "hex24tet"):
+        """
+        Convert HEX8 elements to TET4 elements.
+
+        Parameters
+        ----------
+        element_block_id : int
+            Element block ID to convert
+        scheme : str, optional
+            Conversion scheme (default: "hex24tet")
+
+        Notes
+        -----
+        This method is not fully implemented as it requires complex element subdivision
+        algorithms and careful handling of shared nodes.
+        """
+        raise NotImplementedError(
+            "convert_hex8_block_to_tet4_block() is not yet fully implemented. "
+            "This requires complex element subdivision algorithms."
+        )
+
+    def convert_side_set_to_cohesive_zone(self, side_set_ids: Union[int, List[int]], new_element_block_id: int):
+        """
+        Convert side set to cohesive zone element block.
+
+        Parameters
+        ----------
+        side_set_ids : int or list of int
+            Side set ID(s) to convert
+        new_element_block_id : int
+            New element block ID for cohesive zone
+
+        Notes
+        -----
+        This method is not fully implemented as it requires:
+        - Node duplication
+        - Connectivity updates
+        - Element creation with cohesive element types
+        """
+        raise NotImplementedError(
+            "convert_side_set_to_cohesive_zone() is not yet fully implemented. "
+            "This requires node duplication and complex connectivity updates."
+        )
 
     # Expression-based methods (not implementable without full expression parser)
     def calculate_element_field(self, expression: str, element_block_ids: Union[str, List[int]] = "all"):
