@@ -2289,6 +2289,807 @@ class ExodusModel:
 
         return merged_count
 
+    # Field creation and conversion methods
+    def create_node_field(self, node_field_name: str, value: Union[str, float, List] = "auto"):
+        """
+        Create a node field.
+
+        Parameters
+        ----------
+        node_field_name : str
+            Name of the node field
+        value : str, float, or list, optional
+            Initial value ("auto" for zeros, float for constant, list for per-timestep values)
+
+        Examples
+        --------
+        >>> model.create_node_field("temperature", 0.0)
+        """
+        if node_field_name in self.node_fields:
+            pass  # Overwrite existing
+
+        # Initialize field values for all timesteps
+        num_timesteps = len(self.timesteps) if self.timesteps else 1
+        num_nodes = len(self.coords_x)
+
+        if value == "auto":
+            # Create zero-filled arrays
+            field_data = [[0.0] * num_nodes for _ in range(num_timesteps)]
+        elif isinstance(value, (int, float)):
+            # Constant value for all nodes and timesteps
+            field_data = [[float(value)] * num_nodes for _ in range(num_timesteps)]
+        elif isinstance(value, list):
+            # User-provided values
+            field_data = value
+        else:
+            field_data = [[0.0] * num_nodes for _ in range(num_timesteps)]
+
+        self.node_fields[node_field_name] = field_data
+
+    def create_element_field(self, element_field_name: str,
+                           element_block_ids: Union[str, int, List[int]] = "all",
+                           value: Union[str, float, List] = "auto"):
+        """
+        Create an element field for specified blocks.
+
+        Parameters
+        ----------
+        element_field_name : str
+            Name of the element field
+        element_block_ids : str, int, or list of int, optional
+            Element block IDs (default: "all")
+        value : str, float, or list, optional
+            Initial value ("auto" for zeros, float for constant, list for per-timestep values)
+
+        Examples
+        --------
+        >>> model.create_element_field("stress", 1, 0.0)
+        >>> model.create_element_field("strain", [1, 2, 3])
+        """
+        if element_block_ids == "all":
+            element_block_ids = list(self.element_blocks.keys())
+        elif isinstance(element_block_ids, int):
+            element_block_ids = [element_block_ids]
+
+        num_timesteps = len(self.timesteps) if self.timesteps else 1
+
+        for block_id in element_block_ids:
+            if block_id not in self.element_blocks:
+                continue
+
+            block_data = self.element_blocks[block_id]
+            num_elems = block_data['block'].num_entries
+
+            if value == "auto":
+                field_data = [[0.0] * num_elems for _ in range(num_timesteps)]
+            elif isinstance(value, (int, float)):
+                field_data = [[float(value)] * num_elems for _ in range(num_timesteps)]
+            elif isinstance(value, list):
+                field_data = value
+            else:
+                field_data = [[0.0] * num_elems for _ in range(num_timesteps)]
+
+            if 'fields' not in block_data:
+                block_data['fields'] = {}
+            block_data['fields'][element_field_name] = field_data
+
+    def node_field_exists(self, node_field_name: str) -> bool:
+        """
+        Check if node field exists.
+
+        Parameters
+        ----------
+        node_field_name : str
+            Node field name
+
+        Returns
+        -------
+        bool
+            True if node field exists
+        """
+        return node_field_name in self.node_fields
+
+    def element_field_exists(self, element_field_name: str,
+                            element_block_id: int) -> bool:
+        """
+        Check if element field exists in a specific block.
+
+        Parameters
+        ----------
+        element_field_name : str
+            Element field name
+        element_block_id : int
+            Element block ID
+
+        Returns
+        -------
+        bool
+            True if element field exists
+        """
+        if element_block_id not in self.element_blocks:
+            return False
+        return element_field_name in self.element_blocks[element_block_id].get('fields', {})
+
+    def global_variable_exists(self, global_variable_name: str) -> bool:
+        """
+        Check if global variable exists.
+
+        Parameters
+        ----------
+        global_variable_name : str
+            Global variable name
+
+        Returns
+        -------
+        bool
+            True if global variable exists
+        """
+        return global_variable_name in self.global_variables
+
+    def convert_element_field_to_node_field(self, element_field_name: str,
+                                          node_field_name: Optional[str] = None,
+                                          element_block_ids: Union[str, List[int]] = "all"):
+        """
+        Convert element field to node field by averaging element values at each node.
+
+        Parameters
+        ----------
+        element_field_name : str
+            Element field name to convert
+        node_field_name : str, optional
+            Name for node field (default: same as element_field_name)
+        element_block_ids : str or list of int, optional
+            Element block IDs (default: "all")
+
+        Examples
+        --------
+        >>> model.convert_element_field_to_node_field("stress")
+        >>> model.convert_element_field_to_node_field("stress", "node_stress", [1, 2])
+        """
+        if node_field_name is None:
+            node_field_name = element_field_name
+
+        if element_block_ids == "all":
+            element_block_ids = list(self.element_blocks.keys())
+        elif isinstance(element_block_ids, int):
+            element_block_ids = [element_block_ids]
+
+        # Create node field
+        self.create_node_field(node_field_name, 0.0)
+
+        num_timesteps = len(self.timesteps) if self.timesteps else 1
+
+        for timestep_idx in range(num_timesteps):
+            # Accumulate values and counts for each node
+            num_nodes = len(self.coords_x)
+            node_sum = [0.0] * num_nodes
+            node_count = [0] * num_nodes
+
+            for block_id in element_block_ids:
+                if block_id not in self.element_blocks:
+                    continue
+
+                fields = self.element_blocks[block_id].get('fields', {})
+                if element_field_name not in fields:
+                    continue
+
+                conn_flat = self.element_blocks[block_id]['connectivity_flat']
+                nodes_per_elem = self.element_blocks[block_id]['block'].num_nodes_per_entry
+                num_elems = len(conn_flat) // nodes_per_elem
+                elem_values = fields[element_field_name][timestep_idx]
+
+                for elem_idx in range(num_elems):
+                    if elem_idx >= len(elem_values):
+                        continue
+                    elem_value = elem_values[elem_idx]
+                    start = elem_idx * nodes_per_elem
+                    elem_conn = conn_flat[start:start + nodes_per_elem]
+
+                    for node_idx_1based in elem_conn:
+                        zero_based_idx = node_idx_1based - 1
+                        if 0 <= zero_based_idx < num_nodes:
+                            node_sum[zero_based_idx] += elem_value
+                            node_count[zero_based_idx] += 1
+
+            # Calculate averages
+            node_values = [
+                node_sum[i] / node_count[i] if node_count[i] > 0 else 0.0
+                for i in range(num_nodes)
+            ]
+
+            self.node_fields[node_field_name][timestep_idx] = node_values
+
+    def convert_node_field_to_element_field(self, node_field_name: str,
+                                          element_field_name: Optional[str] = None,
+                                          element_block_ids: Union[str, List[int]] = "all"):
+        """
+        Convert node field to element field by averaging nodal values for each element.
+
+        Parameters
+        ----------
+        node_field_name : str
+            Node field name to convert
+        element_field_name : str, optional
+            Name for element field (default: same as node_field_name)
+        element_block_ids : str or list of int, optional
+            Element block IDs (default: "all")
+
+        Examples
+        --------
+        >>> model.convert_node_field_to_element_field("temperature")
+        >>> model.convert_node_field_to_element_field("temperature", "elem_temp", [1, 2])
+        """
+        if element_field_name is None:
+            element_field_name = node_field_name
+
+        if node_field_name not in self.node_fields:
+            raise ValueError(f"Node field '{node_field_name}' does not exist")
+
+        if element_block_ids == "all":
+            element_block_ids = list(self.element_blocks.keys())
+        elif isinstance(element_block_ids, int):
+            element_block_ids = [element_block_ids]
+
+        num_timesteps = len(self.timesteps) if self.timesteps else 1
+
+        for block_id in element_block_ids:
+            if block_id not in self.element_blocks:
+                continue
+
+            # Create element field for this block
+            self.create_element_field(element_field_name, block_id, 0.0)
+
+            conn_flat = self.element_blocks[block_id]['connectivity_flat']
+            nodes_per_elem = self.element_blocks[block_id]['block'].num_nodes_per_entry
+            num_elems = len(conn_flat) // nodes_per_elem
+            fields = self.element_blocks[block_id].get('fields', {})
+
+            for timestep_idx in range(num_timesteps):
+                node_values = self.node_fields[node_field_name][timestep_idx]
+                elem_values = []
+
+                for elem_idx in range(num_elems):
+                    start = elem_idx * nodes_per_elem
+                    elem_conn = conn_flat[start:start + nodes_per_elem]
+
+                    # Average node values for this element
+                    total = 0.0
+                    count = 0
+                    for node_idx_1based in elem_conn:
+                        zero_based_idx = node_idx_1based - 1
+                        if 0 <= zero_based_idx < len(node_values):
+                            total += node_values[zero_based_idx]
+                            count += 1
+                    elem_value = total / count if count > 0 else 0.0
+                    elem_values.append(elem_value)
+
+                fields[element_field_name][timestep_idx] = elem_values
+
+    # Timestep utility methods
+    def get_timesteps(self) -> List[float]:
+        """Get all timesteps."""
+        return self.timesteps
+
+    def timestep_exists(self, timestep: float) -> bool:
+        """Check if a timestep exists."""
+        return timestep in self.timesteps
+
+    def copy_timestep(self, timestep: float, new_timestep: float):
+        """
+        Copy a timestep and all its field data.
+
+        Parameters
+        ----------
+        timestep : float
+            Source timestep to copy from
+        new_timestep : float
+            New timestep value to create
+
+        Notes
+        -----
+        This creates a new timestep with all field data copied from the source timestep.
+        """
+        if timestep not in self.timesteps:
+            raise ValueError(f"Source timestep {timestep} does not exist")
+
+        if new_timestep in self.timesteps:
+            raise ValueError(f"Target timestep {new_timestep} already exists")
+
+        # Get index of source timestep
+        source_idx = self.timesteps.index(timestep)
+
+        # Add new timestep
+        self.timesteps.append(new_timestep)
+        self.timesteps.sort()
+
+        # Copy node field data
+        for field_name, field_data in self.node_fields.items():
+            if source_idx < len(field_data):
+                field_data.append(list(field_data[source_idx]))
+
+        # Copy element field data
+        for block_id, block_data in self.element_blocks.items():
+            for field_name, field_data in block_data.get('fields', {}).items():
+                if source_idx < len(field_data):
+                    field_data.append(list(field_data[source_idx]))
+
+        # Copy side set field data
+        for set_id, set_data in self.side_sets.items():
+            for field_name, field_data in set_data.get('fields', {}).items():
+                if source_idx < len(field_data):
+                    field_data.append(list(field_data[source_idx]))
+
+        # Copy node set field data
+        for set_id, set_data in self.node_sets.items():
+            for field_name, field_data in set_data.get('fields', {}).items():
+                if source_idx < len(field_data):
+                    field_data.append(list(field_data[source_idx]))
+
+        # Copy global variable data
+        for var_name, var_data in self.global_variables.items():
+            if source_idx < len(var_data):
+                var_data.append(var_data[source_idx])
+
+    def get_element_count(self, element_block_ids: Union[str, List[int]] = "all") -> int:
+        """
+        Get total element count.
+
+        Parameters
+        ----------
+        element_block_ids : str or list of int, optional
+            Element blocks to count (default: "all")
+
+        Returns
+        -------
+        int
+            Total number of elements
+        """
+        if element_block_ids == "all":
+            element_block_ids = list(self.element_blocks.keys())
+        elif isinstance(element_block_ids, int):
+            element_block_ids = [element_block_ids]
+
+        total = 0
+        for block_id in element_block_ids:
+            if block_id in self.element_blocks:
+                total += self.element_blocks[block_id]['block'].num_entries
+        return total
+
+    def get_element_block_dimension(self, element_block_id: int) -> int:
+        """
+        Get the spatial dimension of an element block.
+
+        Parameters
+        ----------
+        element_block_id : int
+            Element block ID
+
+        Returns
+        -------
+        int
+            Spatial dimension (1, 2, or 3)
+        """
+        if element_block_id not in self.element_blocks:
+            raise ValueError(f"Element block {element_block_id} does not exist")
+
+        elem_type = self.element_blocks[element_block_id]['block'].topology
+        return self._get_dimension(elem_type)
+
+    def get_nodes_per_element(self, element_block_id: int) -> int:
+        """
+        Get number of nodes per element in a block.
+
+        Parameters
+        ----------
+        element_block_id : int
+            Element block ID
+
+        Returns
+        -------
+        int
+            Number of nodes per element
+        """
+        if element_block_id not in self.element_blocks:
+            raise ValueError(f"Element block {element_block_id} does not exist")
+
+        return self.element_blocks[element_block_id]['block'].num_nodes_per_entry
+
+    def output_global_variables(self, expressions: Union[Dict, List, str],
+                                output_file: Optional[str] = None) -> str:
+        """
+        Output global variables to file or return as string.
+
+        Parameters
+        ----------
+        expressions : dict, list, or str
+            Variable names to output
+        output_file : str, optional
+            File path to write output (default: return as string)
+
+        Returns
+        -------
+        str
+            Tab-separated output of global variables
+
+        Examples
+        --------
+        >>> output = model.output_global_variables(["energy", "volume"])
+        >>> model.output_global_variables({"energy": "energy"}, "output.txt")
+        """
+        lines = []
+        lines.append("# Global Variables")
+        lines.append(f"# Timesteps: {len(self.timesteps)}")
+        lines.append("")
+
+        # Header
+        header = ["Timestep"]
+        if isinstance(expressions, dict):
+            header.extend(expressions.keys())
+            var_names = list(expressions.values())
+        elif isinstance(expressions, list):
+            var_names = expressions
+            header.extend(var_names)
+        else:
+            var_names = [expressions]
+            header.extend(var_names)
+
+        lines.append("\t".join(header))
+
+        # Data rows
+        for i, timestep in enumerate(self.timesteps):
+            row = [str(timestep)]
+            for var_name in var_names:
+                if var_name in self.global_variables:
+                    var_data = self.global_variables[var_name]
+                    if i < len(var_data):
+                        row.append(str(var_data[i]))
+                    else:
+                        row.append("0.0")
+                else:
+                    row.append("N/A")
+            lines.append("\t".join(row))
+
+        result = "\n".join(lines)
+
+        if output_file:
+            with open(output_file, 'w') as f:
+                f.write(result)
+
+        return result
+
+    # Additional field query methods
+    def get_element_field_values(self, element_field_name: str, element_block_id: int,
+                                 timestep: Union[str, float] = "last") -> List[float]:
+        """
+        Get element field values.
+
+        Parameters
+        ----------
+        element_field_name : str
+            Element field name
+        element_block_id : int
+            Element block ID
+        timestep : str or float, optional
+            Timestep ("last" or timestep value)
+
+        Returns
+        -------
+        list of float
+            Element field values
+        """
+        if element_block_id not in self.element_blocks:
+            raise ValueError(f"Element block {element_block_id} does not exist")
+
+        fields = self.element_blocks[element_block_id].get('fields', {})
+        if element_field_name not in fields:
+            raise ValueError(f"Element field '{element_field_name}' does not exist in block {element_block_id}")
+
+        field_data = fields[element_field_name]
+
+        # Determine timestep index
+        if timestep == "last":
+            timestep_idx = len(field_data) - 1 if field_data else 0
+        else:
+            # Find timestep index
+            try:
+                timestep_idx = self.timesteps.index(timestep)
+            except ValueError:
+                timestep_idx = 0
+
+        if timestep_idx < 0 or timestep_idx >= len(field_data):
+            timestep_idx = 0
+
+        return field_data[timestep_idx] if field_data else []
+
+    def get_node_set_field_names(self, node_set_id: int) -> List[str]:
+        """
+        Get all field names for a node set.
+
+        Parameters
+        ----------
+        node_set_id : int
+            Node set ID
+
+        Returns
+        -------
+        list of str
+            List of field names
+        """
+        if node_set_id not in self.node_sets:
+            raise ValueError(f"Node set {node_set_id} does not exist")
+        return sorted(self.node_sets[node_set_id].get('fields', {}).keys())
+
+    def get_node_set_field_values(self, node_set_id: int, field_name: str,
+                                  timestep: Union[str, float] = "last") -> List[float]:
+        """
+        Get node set field values.
+
+        Parameters
+        ----------
+        node_set_id : int
+            Node set ID
+        field_name : str
+            Field name
+        timestep : str or float, optional
+            Timestep ("last" or timestep value)
+
+        Returns
+        -------
+        list of float
+            Field values
+        """
+        if node_set_id not in self.node_sets:
+            raise ValueError(f"Node set {node_set_id} does not exist")
+
+        fields = self.node_sets[node_set_id].get('fields', {})
+        if field_name not in fields:
+            raise ValueError(f"Field '{field_name}' does not exist in node set {node_set_id}")
+
+        field_data = fields[field_name]
+
+        # Determine timestep index
+        if timestep == "last":
+            timestep_idx = len(field_data) - 1 if field_data else 0
+        else:
+            try:
+                timestep_idx = self.timesteps.index(timestep)
+            except ValueError:
+                timestep_idx = 0
+
+        if timestep_idx < 0 or timestep_idx >= len(field_data):
+            timestep_idx = 0
+
+        return field_data[timestep_idx] if field_data else []
+
+    def create_node_set_field(self, node_set_id: int, field_name: str,
+                             value: Union[str, float, List] = "auto"):
+        """
+        Create a field for a node set.
+
+        Parameters
+        ----------
+        node_set_id : int
+            Node set ID
+        field_name : str
+            Field name
+        value : str, float, or list, optional
+            Initial value ("auto" for zeros, float for constant, list for per-timestep values)
+        """
+        if node_set_id not in self.node_sets:
+            raise ValueError(f"Node set {node_set_id} does not exist")
+
+        num_timesteps = len(self.timesteps) if self.timesteps else 1
+        num_members = len(self.node_sets[node_set_id].get('members', []))
+
+        if value == "auto":
+            field_data = [[0.0] * num_members for _ in range(num_timesteps)]
+        elif isinstance(value, (int, float)):
+            field_data = [[float(value)] * num_members for _ in range(num_timesteps)]
+        elif isinstance(value, list):
+            field_data = value
+        else:
+            field_data = [[0.0] * num_members for _ in range(num_timesteps)]
+
+        if 'fields' not in self.node_sets[node_set_id]:
+            self.node_sets[node_set_id]['fields'] = {}
+        self.node_sets[node_set_id]['fields'][field_name] = field_data
+
+    def create_side_set_field(self, side_set_id: int, field_name: str,
+                             value: Union[str, float, List] = "auto"):
+        """
+        Create a field for a side set.
+
+        Parameters
+        ----------
+        side_set_id : int
+            Side set ID
+        field_name : str
+            Field name
+        value : str, float, or list, optional
+            Initial value ("auto" for zeros, float for constant, list for per-timestep values)
+        """
+        if side_set_id not in self.side_sets:
+            raise ValueError(f"Side set {side_set_id} does not exist")
+
+        num_timesteps = len(self.timesteps) if self.timesteps else 1
+        num_members = len(self.side_sets[side_set_id].get('members', []))
+
+        if value == "auto":
+            field_data = [[0.0] * num_members for _ in range(num_timesteps)]
+        elif isinstance(value, (int, float)):
+            field_data = [[float(value)] * num_members for _ in range(num_timesteps)]
+        elif isinstance(value, list):
+            field_data = value
+        else:
+            field_data = [[0.0] * num_members for _ in range(num_timesteps)]
+
+        if 'fields' not in self.side_sets[side_set_id]:
+            self.side_sets[side_set_id]['fields'] = {}
+        self.side_sets[side_set_id]['fields'][field_name] = field_data
+
+    def delete_node_set_field(self, field_names: Union[str, List[str]],
+                             node_set_ids: Union[str, List[int]] = "all"):
+        """
+        Delete node set field(s).
+
+        Parameters
+        ----------
+        field_names : str or list of str
+            Field name(s) to delete
+        node_set_ids : str or list of int, optional
+            Node set IDs (default: "all")
+        """
+        if isinstance(field_names, str):
+            field_names = [field_names]
+
+        if node_set_ids == "all":
+            node_set_ids = list(self.node_sets.keys())
+        elif isinstance(node_set_ids, int):
+            node_set_ids = [node_set_ids]
+
+        for ns_id in node_set_ids:
+            if ns_id in self.node_sets:
+                for field_name in field_names:
+                    if field_name in self.node_sets[ns_id].get('fields', {}):
+                        del self.node_sets[ns_id]['fields'][field_name]
+
+    def delete_side_set_field(self, field_names: Union[str, List[str]],
+                             side_set_ids: Union[str, List[int]] = "all"):
+        """
+        Delete side set field(s).
+
+        Parameters
+        ----------
+        field_names : str or list of str
+            Field name(s) to delete
+        side_set_ids : str or list of int, optional
+            Side set IDs (default: "all")
+        """
+        if isinstance(field_names, str):
+            field_names = [field_names]
+
+        if side_set_ids == "all":
+            side_set_ids = list(self.side_sets.keys())
+        elif isinstance(side_set_ids, int):
+            side_set_ids = [side_set_ids]
+
+        for ss_id in side_set_ids:
+            if ss_id in self.side_sets:
+                for field_name in field_names:
+                    if field_name in self.side_sets[ss_id].get('fields', {}):
+                        del self.side_sets[ss_id]['fields'][field_name]
+
+    def get_nodes_in_side_set(self, side_set_id: int) -> List[int]:
+        """
+        Get list of unique nodes in a side set.
+
+        Parameters
+        ----------
+        side_set_id : int
+            Side set ID
+
+        Returns
+        -------
+        list of int
+            Sorted list of unique node indices (1-based) from all elements in the side set
+
+        Notes
+        -----
+        This extracts all unique nodes from the elements referenced in the side set.
+        """
+        if side_set_id not in self.side_sets:
+            raise ValueError(f"Side set {side_set_id} does not exist")
+
+        # Get side set members
+        side_set_members = self.get_side_set_members(side_set_id)
+
+        # Extract unique nodes from elements
+        node_indices = set()
+        for elem_id, face_id in side_set_members:
+            # Find the element in the blocks (elem_id is 1-based)
+            for block_id, block_data in self.element_blocks.items():
+                num_elems = block_data['block'].num_entries
+                nodes_per_elem = block_data['block'].num_nodes_per_entry
+
+                # Check if this element is in this block
+                if 0 < elem_id <= num_elems:
+                    conn_flat = block_data['connectivity_flat']
+                    start = (elem_id - 1) * nodes_per_elem
+                    elem_conn = conn_flat[start:start + nodes_per_elem]
+                    node_indices.update(elem_conn)
+                    break
+
+        return sorted(node_indices)
+
+    def displacement_field_exists(self) -> bool:
+        """
+        Check if displacement field exists.
+
+        Returns
+        -------
+        bool
+            True if displacement fields (displ_x, displ_y, displ_z) exist
+        """
+        return ('displ_x' in self.node_fields or
+                'displacement_x' in self.node_fields or
+                'dispx' in self.node_fields)
+
+    def create_displacement_field(self, value: Union[str, float] = "auto"):
+        """
+        Create displacement fields (displ_x, displ_y, displ_z).
+
+        Parameters
+        ----------
+        value : str or float, optional
+            Initial value ("auto" for zeros, float for constant)
+        """
+        self.create_node_field("displ_x", value)
+        self.create_node_field("displ_y", value)
+        if self.num_dim >= 3:
+            self.create_node_field("displ_z", value)
+
+    def displace_element_blocks(self, element_block_ids: Union[str, List[int]] = "all",
+                                timestep: Union[str, float] = "last"):
+        """
+        Displace nodes according to displacement field.
+
+        Parameters
+        ----------
+        element_block_ids : str or list of int, optional
+            Element blocks to process (default: "all")
+        timestep : str or float, optional
+            Timestep to use (default: "last")
+        """
+        if not self.displacement_field_exists():
+            raise ValueError("No displacement field exists")
+
+        # Get displacement field names
+        displ_x_name = 'displ_x' if 'displ_x' in self.node_fields else 'displacement_x'
+        displ_y_name = 'displ_y' if 'displ_y' in self.node_fields else 'displacement_y'
+        displ_z_name = 'displ_z' if 'displ_z' in self.node_fields else 'displacement_z'
+
+        # Determine timestep index
+        if timestep == "last":
+            timestep_idx = len(self.timesteps) - 1 if self.timesteps else 0
+        else:
+            try:
+                timestep_idx = self.timesteps.index(timestep)
+            except ValueError:
+                timestep_idx = 0
+
+        # Apply displacements
+        displ_x = self.node_fields.get(displ_x_name, [[0.0] * len(self.coords_x)])[timestep_idx]
+        displ_y = self.node_fields.get(displ_y_name, [[0.0] * len(self.coords_y)])[timestep_idx]
+        displ_z = self.node_fields.get(displ_z_name, [[0.0] * len(self.coords_x if self.coords_z else [])])[timestep_idx] if self.coords_z else []
+
+        for i in range(len(self.coords_x)):
+            if i < len(displ_x):
+                self.coords_x[i] += displ_x[i]
+            if i < len(displ_y):
+                self.coords_y[i] += displ_y[i]
+            if self.coords_z and i < len(displ_z):
+                self.coords_z[i] += displ_z[i]
+
     # Expression-based methods (not implementable without full expression parser)
     def calculate_element_field(self, expression: str, element_block_ids: Union[str, List[int]] = "all"):
         """Not implementable: requires expression evaluation."""
