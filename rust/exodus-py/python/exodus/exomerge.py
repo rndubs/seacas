@@ -22,43 +22,7 @@ import sys
 import datetime
 from typing import Optional, List, Dict, Any, Union, Tuple
 
-# Import the exodus-py module (Rust bindings)
-_exodus_available = True
-try:
-    try:
-        from . import exodus
-    except ImportError:
-        import exodus
-except (ImportError, ModuleNotFoundError):
-    _exodus_available = False
-    # Create minimal stubs for testing without Rust module
-    class ExodusStub:
-        class ExodusReader:
-            @staticmethod
-            def open(filename):
-                raise NotImplementedError("Rust exodus module not available")
-
-        class ExodusWriter:
-            @staticmethod
-            def create(filename, opts=None):
-                raise NotImplementedError("Rust exodus module not available")
-
-        class CreateOptions:
-            pass
-
-        class CreateMode:
-            Clobber = None
-
-        class InitParams:
-            pass
-
-        class Block:
-            pass
-
-        class EntityType:
-            pass
-
-    exodus = ExodusStub()
+from . import exodus
 
 __version__ = "0.1.0"
 VERSION = __version__
