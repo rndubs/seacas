@@ -323,7 +323,7 @@ def test_get_connectivity_auto_error():
     model.element_blocks[2] = ["Block2", ["TET4", 1, 4, 0], [[1,2,3,4]], {}]
 
     # Should error because there are multiple blocks
-    with pytest.raises(SystemExit):  # _error() calls sys.exit()
+    with pytest.raises(ValueError):
         model.get_connectivity("auto")
 
 
@@ -333,17 +333,19 @@ def test_element_block_not_found():
 
     model = exomerge.ExodusModel()
 
-    # These should error
-    with pytest.raises(SystemExit):
-        model.get_element_block_name(999)
+    # get_element_block_name returns empty string for non-existent blocks
+    assert model.get_element_block_name(999) == ""
 
-    with pytest.raises(SystemExit):
+    # get_nodes_per_element raises ValueError for non-existent blocks
+    with pytest.raises(ValueError):
         model.get_nodes_per_element(999)
 
-    with pytest.raises(SystemExit):
+    # get_element_block_dimension raises ValueError for non-existent blocks
+    with pytest.raises(ValueError):
         model.get_element_block_dimension(999)
 
-    with pytest.raises(SystemExit):
+    # get_connectivity raises ValueError for non-existent blocks
+    with pytest.raises(ValueError):
         model.get_connectivity(999)
 
 

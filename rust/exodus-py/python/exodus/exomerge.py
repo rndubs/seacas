@@ -55,6 +55,11 @@ SHOW_BANNER = True
 # If true, will crash if warnings are generated
 EXIT_ON_WARNING = False
 
+# Deprecated function mappings (for backward compatibility)
+DEPRECATED_FUNCTIONS = {
+    'write': 'export',  # write() is deprecated, use export()
+}
+
 
 class SafeExpressionEvaluator:
     """
@@ -278,6 +283,54 @@ class ElementBlockData:
         """Element topology (e.g., 'HEX8', 'TET4')."""
         return self.block.topology
 
+    def __getitem__(self, index):
+        """Support legacy list-style and dict-style access."""
+        # Support dict-style access for attribute names
+        if isinstance(index, str):
+            if index == 'block':
+                return self.block
+            elif index == 'name':
+                return self.name
+            elif index == 'connectivity_flat':
+                return self.connectivity_flat
+            elif index == 'fields':
+                return self.fields
+            else:
+                raise KeyError(f"ElementBlockData has no key '{index}'")
+
+        # Support legacy list-style access: [name, info, connectivity, fields]
+        if index == 0:
+            return self.name
+        elif index == 1:
+            # Return info as [topology, num_elems, nodes_per_elem, num_attrs]
+            return [
+                self.block.topology,
+                self.block.num_entries,
+                self.block.num_nodes_per_entry,
+                self.block.num_attributes
+            ]
+        elif index == 2:
+            # Return connectivity as list of lists
+            nodes_per_elem = self.block.num_nodes_per_entry
+            num_elems = self.block.num_entries
+            return [
+                self.connectivity_flat[i * nodes_per_elem:(i + 1) * nodes_per_elem]
+                for i in range(num_elems)
+            ]
+        elif index == 3:
+            return self.fields
+        else:
+            raise IndexError(f"ElementBlockData index out of range: {index}")
+
+    def __setitem__(self, index: int, value):
+        """Support legacy list-style assignment."""
+        if index == 0:
+            self.name = value
+        elif index == 3:
+            self.fields = value
+        else:
+            raise IndexError(f"Cannot set ElementBlockData index {index}")
+
     def get_element_connectivity(self, elem_index: int) -> List[int]:
         """
         Get connectivity for element i (0-indexed).
@@ -322,6 +375,17 @@ class NodeSetData:
             return list(self.node_set.members)
         return []
 
+    def __getitem__(self, index: int):
+        """Support legacy list-style access: [name, node_set, fields]."""
+        if index == 0:
+            return self.name
+        elif index == 1:
+            return self.node_set
+        elif index == 2:
+            return self.fields
+        else:
+            raise IndexError(f"NodeSetData index out of range: {index}")
+
 
 @dataclass
 class SideSetData:
@@ -350,7 +414,71 @@ class SideSetData:
             return list(zip(elements, sides))
         return []
 
+    def __getitem__(self, index: int):
+        """Support legacy list-style access: [name, side_set, fields]."""
+        if index == 0:
+            return self.name
+        elif index == 1:
+            return self.side_set
+        elif index == 2:
+            return self.fields
+        else:
+            raise IndexError(f"SideSetData index out of range: {index}")
 
+
+class ElementBlocksDict(dict):
+    """
+    Custom dict for element_blocks that supports legacy list format.
+
+    Provides backward compatibility with exomerge3.py API where element blocks
+    were stored as [name, info, connectivity, fields] lists.
+    """
+
+    def __setitem__(self, key: int, value):
+        """
+        Set element block, converting from legacy format if needed.
+
+        Supports both:
+        - Modern: ElementBlockData object
+        - Legacy: [name, info, connectivity, fields] list
+        """
+        if isinstance(value, list) and len(value) >= 2:
+            # Legacy format: [name, info, connectivity, fields]
+            name = value[0] if len(value) > 0 else ""
+            info = value[1] if len(value) > 1 else []
+            connectivity = value[2] if len(value) > 2 else []
+            # fields = value[3] if len(value) > 3 else {}
+
+            # Convert info list to Block object
+            if isinstance(info, list) and len(info) >= 4:
+                topology, num_elems, nodes_per_elem, num_attrs = info[:4]
+                block = Block(
+                    id=key,
+                    entity_type=EntityType.ElemBlock,
+                    topology=topology,
+                    num_entries=num_elems,
+                    num_nodes_per_entry=nodes_per_elem,
+                    num_attributes=num_attrs
+                )
+
+                # Flatten connectivity if needed
+                connectivity_flat = []
+                if connectivity:
+                    if isinstance(connectivity[0], (list, tuple)):
+                        connectivity_flat = [node_id for elem in connectivity for node_id in elem]
+                    else:
+                        connectivity_flat = list(connectivity)
+
+                # Convert to ElementBlockData
+                value = ElementBlockData(
+                    block=block,
+                    name=name,
+                    connectivity_flat=connectivity_flat,
+                    fields={}
+                )
+
+        # Call parent setitem
+        super().__setitem__(key, value)
 
 
 def import_model(filename: str, mode: str = "inmemory", **kwargs) -> 'ExodusModel':
@@ -488,8 +616,8 @@ class ExodusModel:
         self.coords_y: List[float] = []
         self.coords_z: List[float] = []
 
-        # Block storage (exodus objects)
-        self.element_blocks: Dict[int, ElementBlockData] = {}
+        # Block storage (exodus objects with legacy format support)
+        self.element_blocks: Dict[int, ElementBlockData] = ElementBlocksDict()
 
         # Set storage (exodus objects)
         self.node_sets: Dict[int, NodeSetData] = {}
@@ -525,6 +653,57 @@ class ExodusModel:
             return 2
         else:
             return 1
+
+    # Backward compatibility properties for legacy exomerge3.py API
+    @property
+    def nodes(self) -> List[List[float]]:
+        """
+        Get nodes as list of [x, y, z] coordinate lists (legacy API).
+
+        This property provides backward compatibility with exomerge3.py.
+        For better performance, use coords_x, coords_y, coords_z directly.
+
+        Returns
+        -------
+        list of list of float
+            List of [x, y, z] coordinate lists
+        """
+        num_nodes = len(self.coords_x)
+        if num_nodes == 0:
+            return []
+
+        # Ensure all coordinate arrays have same length
+        coords_y = self.coords_y if len(self.coords_y) == num_nodes else [0.0] * num_nodes
+        coords_z = self.coords_z if len(self.coords_z) == num_nodes else [0.0] * num_nodes
+
+        return [[self.coords_x[i], coords_y[i], coords_z[i]]
+                for i in range(num_nodes)]
+
+    @nodes.setter
+    def nodes(self, node_list: List[List[float]]):
+        """
+        Set nodes from list of [x, y, z] coordinate lists (legacy API).
+
+        Parameters
+        ----------
+        node_list : list of list of float
+            List of [x, y, z] or [x, y] coordinate lists
+        """
+        if not node_list:
+            self.coords_x = []
+            self.coords_y = []
+            self.coords_z = []
+            return
+
+        num_nodes = len(node_list)
+        self.coords_x = []
+        self.coords_y = []
+        self.coords_z = []
+
+        for node in node_list:
+            self.coords_x.append(node[0] if len(node) > 0 else 0.0)
+            self.coords_y.append(node[1] if len(node) > 1 else 0.0)
+            self.coords_z.append(node[2] if len(node) > 2 else 0.0)
 
     def get_node_count(self) -> int:
         """
@@ -599,6 +778,65 @@ class ExodusModel:
         """Set the database title."""
         self.title = title
 
+    def to_lowercase(self):
+        """
+        Convert all names in the model to lowercase.
+
+        This includes:
+        - Model title
+        - Element block names
+        - Side set names
+        - Node set names
+        - Field names (node, element, global)
+        """
+        # Convert title
+        self.title = self.title.lower()
+
+        # Convert element block names
+        for block_id, block_data in self.element_blocks.items():
+            block_data.name = block_data.name.lower()
+
+        # Convert side set names
+        for set_id, set_data in self.side_sets.items():
+            set_data.name = set_data.name.lower()
+
+        # Convert node set names
+        for set_id, set_data in self.node_sets.items():
+            set_data.name = set_data.name.lower()
+
+        # Convert node field names
+        new_node_fields = {}
+        for field_name, field_data in self.node_fields.items():
+            new_node_fields[field_name.lower()] = field_data
+        self.node_fields = new_node_fields
+
+        # Convert element field names in all blocks
+        for block_id, block_data in self.element_blocks.items():
+            new_fields = {}
+            for field_name, field_data in block_data.fields.items():
+                new_fields[field_name.lower()] = field_data
+            block_data.fields = new_fields
+
+        # Convert global variable names
+        new_global_vars = {}
+        for var_name, var_data in self.global_variables.items():
+            new_global_vars[var_name.lower()] = var_data
+        self.global_variables = new_global_vars
+
+        # Convert side set field names
+        for set_id, set_data in self.side_sets.items():
+            new_fields = {}
+            for field_name, field_data in set_data.fields.items():
+                new_fields[field_name.lower()] = field_data
+            set_data.fields = new_fields
+
+        # Convert node set field names
+        for set_id, set_data in self.node_sets.items():
+            new_fields = {}
+            for field_name, field_data in set_data.fields.items():
+                new_fields[field_name.lower()] = field_data
+            set_data.fields = new_fields
+
     def get_qa_records(self) -> List[Tuple]:
         """Return QA records."""
         return self.qa_records
@@ -666,8 +904,12 @@ class ExodusModel:
                 # Get block definition (exodus Block object)
                 block = self._reader.get_block(block_id)
 
-                # Get block name
-                name = self._reader.get_name("elem_block", block_id) or ""
+                # Get block name (handle missing names gracefully)
+                try:
+                    name = self._reader.get_name("elem_block", block_id) or ""
+                except RuntimeError:
+                    # Names variable may not exist in file
+                    name = ""
 
                 # Get flat connectivity (FAST - direct from exodus)
                 connectivity_flat = list(self._reader.get_connectivity(block_id))
@@ -838,7 +1080,7 @@ class ExodusModel:
             block_id = list(self.element_blocks.keys())[0]
 
         if block_id not in self.element_blocks:
-            return []
+            raise ValueError(f"Element block {block_id} does not exist")
 
         block_data = self.element_blocks[block_id]
         flat = block_data.connectivity_flat
@@ -850,13 +1092,13 @@ class ExodusModel:
     def get_nodes_per_element(self, block_id: int) -> int:
         """Get number of nodes per element in block."""
         if block_id not in self.element_blocks:
-            return 0
+            raise ValueError(f"Element block {block_id} does not exist")
         return self.element_blocks[block_id].block.num_nodes_per_entry
 
     def get_element_block_dimension(self, block_id: int) -> int:
         """Get spatial dimension of element block (1, 2, or 3)."""
         if block_id not in self.element_blocks:
-            return 0
+            raise ValueError(f"Element block {block_id} does not exist")
         topology = self.element_blocks[block_id].block.topology.lower()
         return self.DIMENSION.get(topology, 3)
 
@@ -1273,6 +1515,33 @@ class ExodusModel:
         if self.coords_z:
             self.coords_z = new_z
 
+        # Adjust displacement field if requested
+        if adjust_displacement_field is True or (adjust_displacement_field == "auto" and "displacement" in self.node_fields):
+            # Look for displacement field (try both "displacement" and component fields)
+            if "displacement" in self.node_fields:
+                # Rotate each displacement vector for each timestep
+                for timestep_idx, timestep_data in enumerate(self.node_fields["displacement"]):
+                    rotated_displacements = []
+                    for node_idx, disp in enumerate(timestep_data):
+                        # Handle different displacement formats
+                        if isinstance(disp, (list, tuple)) and len(disp) >= 3:
+                            # Vector format [dx, dy, dz]
+                            dx, dy, dz = disp[0], disp[1], disp[2]
+                        else:
+                            dx = dy = dz = 0.0
+
+                        # Apply rotation matrix to displacement vector
+                        new_dx = r11*dx + r12*dy + r13*dz
+                        new_dy = r21*dx + r22*dy + r23*dz
+                        new_dz = r31*dx + r32*dy + r33*dz
+
+                        if isinstance(disp, (list, tuple)):
+                            rotated_displacements.append([new_dx, new_dy, new_dz])
+                        else:
+                            rotated_displacements.append(new_dx)
+
+                    self.node_fields["displacement"][timestep_idx] = rotated_displacements
+
     def scale_geometry(self, scale_factor: float, adjust_displacement_field: Union[str, bool] = "auto"):
         """
         Scale the entire geometry by a factor.
@@ -1370,7 +1639,7 @@ class ExodusModel:
         print(f"Title: {self.title}")
         print(f"Nodes: {len(self.coords_x)}")
         print(f"Dimensions: {self.num_dim}")
-        print(f"Element blocks: {len(self.element_blocks)}")
+        print(f"Element Blocks: {len(self.element_blocks)}")
 
         if self.element_blocks:
             print("\nElement Blocks:")
@@ -1383,7 +1652,7 @@ class ExodusModel:
                       (f" ({name})" if name else ""))
 
         if self.node_sets:
-            print(f"\nNode sets: {len(self.node_sets)}")
+            print(f"\nNode Sets: {len(self.node_sets)}")
             for ns_id in sorted(self.node_sets.keys()):
                 name = self.get_node_set_name(ns_id)
                 members = self.get_node_set_members(ns_id)
@@ -1391,7 +1660,7 @@ class ExodusModel:
                       (f" ({name})" if name else ""))
 
         if self.side_sets:
-            print(f"\nSide sets: {len(self.side_sets)}")
+            print(f"\nSide Sets: {len(self.side_sets)}")
             for ss_id in sorted(self.side_sets.keys()):
                 name = self.get_side_set_name(ss_id)
                 print(f"  Side set {ss_id}" + (f" ({name})" if name else ""))
@@ -1399,6 +1668,15 @@ class ExodusModel:
         if self.node_fields:
             print(f"\nNode fields: {len(self.node_fields)}")
             for field_name in sorted(self.node_fields.keys()):
+                print(f"  {field_name}")
+
+        # Collect all unique element field names across all blocks
+        element_field_names = set()
+        for block_id, block_data in self.element_blocks.items():
+            element_field_names.update(block_data.fields.keys())
+        if element_field_names:
+            print(f"\nElement fields: {len(element_field_names)}")
+            for field_name in sorted(element_field_names):
                 print(f"  {field_name}")
 
         if self.global_variables:
@@ -1910,7 +2188,7 @@ class ExodusModel:
         for block_id in element_block_ids:
             if block_id in self.element_blocks:
                 for field_name in element_field_names:
-                    if field_name in self.element_blocks[block_id].get('fields', {}):
+                    if field_name in self.element_blocks[block_id].fields:
                         del self.element_blocks[block_id].fields[field_name]
 
     def get_element_field_names(self, element_block_ids: Union[str, List[int]] = "all") -> List[str]:
@@ -1935,7 +2213,7 @@ class ExodusModel:
         field_names = set()
         for block_id in element_block_ids:
             if block_id in self.element_blocks:
-                field_names.update(self.element_blocks[block_id].get('fields', {}).keys())
+                field_names.update(self.element_blocks[block_id].fields.keys())
 
         return sorted(field_names)
 
@@ -1960,7 +2238,7 @@ class ExodusModel:
 
         for block_id in element_block_ids:
             if block_id in self.element_blocks:
-                fields = self.element_blocks[block_id].get('fields', {})
+                fields = self.element_blocks[block_id].fields
                 if element_field_name in fields:
                     fields[new_element_field_name] = fields[element_field_name]
                     del fields[element_field_name]
@@ -2074,21 +2352,21 @@ class ExodusModel:
         for block_id, block_data in self.element_blocks.items():
             block = block_data.block
             num_elems = block.num_entries
-            for field_name, field_data in block_data.get('fields', {}).items():
+            for field_name, field_data in block_data.fields.items():
                 field_data.append([0.0] * num_elems)
 
         # Extend all side set fields with zero data
         for set_id, set_data in self.side_sets.items():
-            members = set_data.get('members', [])
+            members = set_data.members
             num_members = len(members)
-            for field_name, field_data in set_data.get('fields', {}).items():
+            for field_name, field_data in set_data.fields.items():
                 field_data.append([0.0] * num_members)
 
         # Extend all node set fields with zero data
         for set_id, set_data in self.node_sets.items():
-            members = set_data.get('members', [])
+            members = set_data.members
             num_members = len(members)
-            for field_name, field_data in set_data.get('fields', {}).items():
+            for field_name, field_data in set_data.fields.items():
                 field_data.append([0.0] * num_members)
 
         # Extend all global variables with zero data
@@ -2138,21 +2416,21 @@ class ExodusModel:
 
         # Delete corresponding data from all element fields
         for block_id, block_data in self.element_blocks.items():
-            for field_name, field_data in block_data.get('fields', {}).items():
+            for field_name, field_data in block_data.fields.items():
                 for idx in indices_to_delete:
                     if idx < len(field_data):
                         del field_data[idx]
 
         # Delete corresponding data from all side set fields
         for set_id, set_data in self.side_sets.items():
-            for field_name, field_data in set_data.get('fields', {}).items():
+            for field_name, field_data in set_data.fields.items():
                 for idx in indices_to_delete:
                     if idx < len(field_data):
                         del field_data[idx]
 
         # Delete corresponding data from all node set fields
         for set_id, set_data in self.node_sets.items():
-            for field_name, field_data in set_data.get('fields', {}).items():
+            for field_name, field_data in set_data.fields.items():
                 for idx in indices_to_delete:
                     if idx < len(field_data):
                         del field_data[idx]
@@ -2180,7 +2458,7 @@ class ExodusModel:
         """
         if side_set_id not in self.side_sets:
             raise ValueError(f"Side set {side_set_id} does not exist")
-        return self.side_sets[side_set_id].get('members', [])
+        return self.side_sets[side_set_id].members
 
     def add_faces_to_side_set(self, side_set_id: int, new_side_set_members: List[Tuple[int, int]]):
         """
@@ -2196,7 +2474,7 @@ class ExodusModel:
         if side_set_id not in self.side_sets:
             raise ValueError(f"Side set {side_set_id} does not exist")
 
-        members = self.side_sets[side_set_id].get('members', [])
+        members = self.side_sets[side_set_id].members
         members.extend(new_side_set_members)
         self.side_sets[side_set_id].members = members
 
@@ -2422,9 +2700,23 @@ class ExodusModel:
         if node_set_id not in self.node_sets:
             raise ValueError(f"Node set {node_set_id} does not exist")
 
-        members = self.node_sets[node_set_id].get('members', [])
-        members.extend(new_node_set_members)
-        self.node_sets[node_set_id].members = members
+        # Get current members and add new ones
+        current_members = list(self.node_sets[node_set_id].members)
+        current_members.extend(new_node_set_members)
+        # Remove duplicates and sort
+        unique_members = sorted(set(current_members))
+
+        # Recreate the node set with updated members
+        ns_data = self.node_sets[node_set_id]
+        new_node_set = NodeSet(
+            id=node_set_id,
+            nodes=unique_members
+        )
+        self.node_sets[node_set_id] = NodeSetData(
+            node_set=new_node_set,
+            name=ns_data.name,
+            fields=ns_data.fields
+        )
 
     def get_nodes_in_node_set(self, node_set_id: int) -> List[int]:
         """
@@ -2451,7 +2743,7 @@ class ExodusModel:
         dict
             Dictionary mapping node set IDs to names
         """
-        return {ns_id: ns_data.get('name', '')
+        return {ns_id: ns_data.name
                 for ns_id, ns_data in self.node_sets.items()}
 
     def get_all_side_set_names(self) -> Dict[int, str]:
@@ -2463,20 +2755,20 @@ class ExodusModel:
         dict
             Dictionary mapping side set IDs to names
         """
-        return {ss_id: ss_data.get('name', '')
+        return {ss_id: ss_data.name
                 for ss_id, ss_data in self.side_sets.items()}
 
     def delete_empty_node_sets(self):
         """Delete node sets that have no members."""
         to_delete = [ns_id for ns_id, ns_data in self.node_sets.items()
-                     if not ns_data.get('members', [])]
+                     if not ns_data.members]
         for ns_id in to_delete:
             del self.node_sets[ns_id]
 
     def delete_empty_side_sets(self):
         """Delete side sets that have no members."""
         to_delete = [ss_id for ss_id, ss_data in self.side_sets.items()
-                     if not ss_data.get('members', [])]
+                     if not ss_data.members]
         for ss_id in to_delete:
             del self.side_sets[ss_id]
 
@@ -2987,9 +3279,9 @@ class ExodusModel:
         # Get source block data
         source_data = self.element_blocks[source_id]
         block = source_data['block']
-        name = source_data.get('name', '')
+        name = source_data.name
         conn_flat = source_data.connectivity_flat
-        fields = source_data.get('fields', {})
+        fields = source_data.fields
 
         # Create new nodes if requested
         if duplicate_nodes:
@@ -3094,7 +3386,7 @@ class ExodusModel:
             new_conn_flat.extend(self.element_blocks[block_id].connectivity_flat)
 
         # Create new info based on first block
-        first_block = self.element_blocks[element_block_ids[0]]['block']
+        first_block = self.element_blocks[element_block_ids[0]].block
         nodes_per_elem = first_block.num_nodes_per_entry
         new_elem_count = len(new_conn_flat) // nodes_per_elem
 
@@ -3109,7 +3401,7 @@ class ExodusModel:
         # Get all element field names across all blocks
         all_field_names = set()
         for block_id in element_block_ids:
-            all_field_names.update(self.element_blocks[block_id].get('fields', {}).keys())
+            all_field_names.update(self.element_blocks[block_id].fields.keys())
 
         # Combine all field data
         new_fields = {}
@@ -3117,7 +3409,7 @@ class ExodusModel:
             num_timesteps = len(self.timesteps) if self.timesteps else 1
             new_values = [[] for _ in range(num_timesteps)]
             for block_id in element_block_ids:
-                field_data = self.element_blocks[block_id].get('fields', {}).get(field_name, [])
+                field_data = self.element_blocks[block_id].fields.get(field_name, [])
                 if field_data:
                     for timestep_idx, values in enumerate(field_data):
                         if timestep_idx < len(new_values):
@@ -3239,6 +3531,178 @@ class ExodusModel:
 
         return merged_count
 
+    def unmerge_element_blocks(self, element_block_ids: Union[str, List[int]]):
+        """
+        Unmerge element blocks so they don't share any nodes.
+
+        This creates duplicate nodes for any nodes shared between the specified blocks.
+
+        Parameters
+        ----------
+        element_block_ids : str or list of int
+            Block IDs to unmerge, or "all" for all blocks
+        """
+        if element_block_ids == "all":
+            element_block_ids = list(self.element_blocks.keys())
+        elif isinstance(element_block_ids, int):
+            element_block_ids = [element_block_ids]
+
+        if len(element_block_ids) < 2:
+            return  # Nothing to unmerge
+
+        # Find all nodes used by each block
+        block_nodes = {}
+        for block_id in element_block_ids:
+            if block_id not in self.element_blocks:
+                continue
+            nodes_set = set()
+            conn_flat = self.element_blocks[block_id].connectivity_flat
+            nodes_set.update(conn_flat)
+            block_nodes[block_id] = nodes_set
+
+        # Find shared nodes between any pair of blocks
+        shared_nodes = set()
+        block_ids_list = list(block_nodes.keys())
+        for i in range(len(block_ids_list)):
+            for j in range(i + 1, len(block_ids_list)):
+                shared = block_nodes[block_ids_list[i]] & block_nodes[block_ids_list[j]]
+                shared_nodes.update(shared)
+
+        if not shared_nodes:
+            return  # No shared nodes to unmerge
+
+        # For each block except the first, duplicate its shared nodes
+        for block_id in block_ids_list[1:]:
+            node_id_map = {}  # Maps old node ID to new node ID for this block
+
+            # Duplicate shared nodes used by this block
+            for node_id_1based in sorted(shared_nodes & block_nodes[block_id]):
+                node_idx = node_id_1based - 1
+                if node_idx < len(self.coords_x):
+                    # Add duplicate node
+                    self.coords_x.append(self.coords_x[node_idx])
+                    self.coords_y.append(self.coords_y[node_idx])
+                    if self.coords_z:
+                        self.coords_z.append(self.coords_z[node_idx])
+
+                    new_node_id = len(self.coords_x)  # 1-based
+                    node_id_map[node_id_1based] = new_node_id
+
+            # Update connectivity for this block
+            if node_id_map:
+                new_conn_flat = []
+                for node_id in self.element_blocks[block_id].connectivity_flat:
+                    new_conn_flat.append(node_id_map.get(node_id, node_id))
+                self.element_blocks[block_id].connectivity_flat = new_conn_flat
+
+    def reflect_element_blocks(self, element_block_ids: Union[str, int, List[int]],
+                               normal: List[float], point: List[float] = None):
+        """
+        Reflect element blocks across a plane.
+
+        Parameters
+        ----------
+        element_block_ids : str, int, or list of int
+            Block IDs to reflect, or "all"
+        normal : list of float
+            Normal vector [nx, ny, nz] defining the reflection plane
+        point : list of float, optional
+            Point [x, y, z] on the plane (default: origin)
+        """
+        if element_block_ids == "all":
+            # Reflect all nodes
+            element_block_ids = list(self.element_blocks.keys())
+        elif isinstance(element_block_ids, int):
+            element_block_ids = [element_block_ids]
+
+        if point is None:
+            point = [0.0, 0.0, 0.0]
+
+        # Normalize the normal vector
+        normal_mag = (normal[0]**2 + normal[1]**2 + normal[2]**2)**0.5
+        if normal_mag == 0:
+            return
+        nx, ny, nz = normal[0]/normal_mag, normal[1]/normal_mag, normal[2]/normal_mag
+        px, py, pz = point[0], point[1], point[2] if len(point) > 2 else 0.0
+
+        # Find all nodes used by the specified blocks
+        nodes_to_reflect = set()
+        for block_id in element_block_ids:
+            if block_id in self.element_blocks:
+                nodes_to_reflect.update(self.element_blocks[block_id].connectivity_flat)
+
+        # Reflect each node across the plane
+        for node_id_1based in nodes_to_reflect:
+            node_idx = node_id_1based - 1
+            if node_idx >= len(self.coords_x):
+                continue
+
+            # Get node coordinates
+            x, y = self.coords_x[node_idx], self.coords_y[node_idx]
+            z = self.coords_z[node_idx] if self.coords_z and node_idx < len(self.coords_z) else 0.0
+
+            # Reflect across plane: p' = p - 2 * dot(p - point, normal) * normal
+            dx, dy, dz = x - px, y - py, z - pz
+            dot = dx*nx + dy*ny + dz*nz
+            self.coords_x[node_idx] = x - 2 * dot * nx
+            self.coords_y[node_idx] = y - 2 * dot * ny
+            if self.coords_z and node_idx < len(self.coords_z):
+                self.coords_z[node_idx] = z - 2 * dot * nz
+
+    def process_element_fields(self, element_block_id: int, integration_point_count: int = None):
+        """
+        Process element fields with integration points.
+
+        This method averages fields with multiple integration points per element.
+        For example, 8 stress fields (stress_1 through stress_8) become 1 averaged stress field.
+
+        Parameters
+        ----------
+        element_block_id : int
+            Element block ID
+        integration_point_count : int, optional
+            Number of integration points (auto-detected if None)
+        """
+        if element_block_id not in self.element_blocks:
+            return
+
+        block_data = self.element_blocks[element_block_id]
+        field_names = list(block_data.fields.keys())
+
+        # Auto-detect integration point fields (e.g., field_1, field_2, ..., field_8)
+        field_groups = {}
+        for field_name in field_names:
+            # Check if field ends with _N where N is a digit
+            if '_' in field_name:
+                parts = field_name.rsplit('_', 1)
+                if len(parts) == 2 and parts[1].isdigit():
+                    base_name = parts[0]
+                    if base_name not in field_groups:
+                        field_groups[base_name] = []
+                    field_groups[base_name].append(field_name)
+
+        # For each group, average the values and create a single field
+        for base_name, group_fields in field_groups.items():
+            if len(group_fields) <= 1:
+                continue  # Not a group
+
+            # Average all fields in the group
+            num_timesteps = len(self.timesteps) if self.timesteps else 1
+            num_elems = block_data.block.num_entries
+            averaged_data = [[0.0] * num_elems for _ in range(num_timesteps)]
+
+            for field_name in group_fields:
+                field_data = block_data.fields.get(field_name, [])
+                for t_idx in range(min(len(field_data), num_timesteps)):
+                    for e_idx in range(min(len(field_data[t_idx]), num_elems)):
+                        averaged_data[t_idx][e_idx] += field_data[t_idx][e_idx] / len(group_fields)
+
+            # Store averaged field and delete individual fields
+            block_data.fields[base_name] = averaged_data
+            for field_name in group_fields:
+                if field_name in block_data.fields:
+                    del block_data.fields[field_name]
+
     # Field creation and conversion methods
     def create_node_field(self, node_field_name: str, value: Union[str, float, List] = "auto"):
         """
@@ -3319,9 +3783,66 @@ class ExodusModel:
             else:
                 field_data = [[0.0] * num_elems for _ in range(num_timesteps)]
 
-            if 'fields' not in block_data:
-                block_data.fields = {}
             block_data.fields[element_field_name] = field_data
+
+    def create_averaged_element_field(self, field_names: List[str],
+                                      output_name: str, block_id: int):
+        """
+        Create a new element field by averaging existing fields.
+
+        Parameters
+        ----------
+        field_names : list of str
+            Names of fields to average
+        output_name : str
+            Name for the averaged output field
+        block_id : int
+            Element block ID
+
+        Examples
+        --------
+        >>> model.create_averaged_element_field(["stress_x", "stress_y"], "stress_avg", 1)
+        """
+        if block_id not in self.element_blocks:
+            raise ValueError(f"Element block {block_id} does not exist")
+
+        block_data = self.element_blocks[block_id]
+
+        # Verify all fields exist
+        for field_name in field_names:
+            if field_name not in block_data.fields:
+                raise ValueError(f"Field '{field_name}' does not exist in block {block_id}")
+
+        # Get number of timesteps from first field
+        num_timesteps = len(block_data.fields[field_names[0]])
+        num_elems = block_data.block.num_entries
+
+        # Create averaged field
+        averaged_data = []
+        for timestep_idx in range(num_timesteps):
+            timestep_avg = []
+            for elem_idx in range(num_elems):
+                # Average values from all fields for this element
+                values = []
+                for field_name in field_names:
+                    field_data = block_data.fields[field_name]
+                    if timestep_idx < len(field_data):
+                        elem_values = field_data[timestep_idx]
+                        if elem_idx < len(elem_values):
+                            values.append(elem_values[elem_idx])
+
+                # Compute average
+                if values:
+                    avg_value = sum(values) / len(values)
+                else:
+                    avg_value = 0.0
+
+                timestep_avg.append(avg_value)
+
+            averaged_data.append(timestep_avg)
+
+        # Store the averaged field
+        block_data.fields[output_name] = averaged_data
 
     def node_field_exists(self, node_field_name: str) -> bool:
         """
@@ -3358,7 +3879,7 @@ class ExodusModel:
         """
         if element_block_id not in self.element_blocks:
             return False
-        return element_field_name in self.element_blocks[element_block_id].get('fields', {})
+        return element_field_name in self.element_blocks[element_block_id].fields
 
     def global_variable_exists(self, global_variable_name: str) -> bool:
         """
@@ -3419,7 +3940,7 @@ class ExodusModel:
                 if block_id not in self.element_blocks:
                     continue
 
-                fields = self.element_blocks[block_id].get('fields', {})
+                fields = self.element_blocks[block_id].fields
                 if element_field_name not in fields:
                     continue
 
@@ -3492,7 +4013,7 @@ class ExodusModel:
             conn_flat = self.element_blocks[block_id].connectivity_flat
             nodes_per_elem = self.element_blocks[block_id].block.num_nodes_per_entry
             num_elems = len(conn_flat) // nodes_per_elem
-            fields = self.element_blocks[block_id].get('fields', {})
+            fields = self.element_blocks[block_id].fields
 
             for timestep_idx in range(num_timesteps):
                 node_values = self.node_fields[node_field_name][timestep_idx]
@@ -3559,19 +4080,19 @@ class ExodusModel:
 
         # Copy element field data
         for block_id, block_data in self.element_blocks.items():
-            for field_name, field_data in block_data.get('fields', {}).items():
+            for field_name, field_data in block_data.fields.items():
                 if source_idx < len(field_data):
                     field_data.append(list(field_data[source_idx]))
 
         # Copy side set field data
         for set_id, set_data in self.side_sets.items():
-            for field_name, field_data in set_data.get('fields', {}).items():
+            for field_name, field_data in set_data.fields.items():
                 if source_idx < len(field_data):
                     field_data.append(list(field_data[source_idx]))
 
         # Copy node set field data
         for set_id, set_data in self.node_sets.items():
-            for field_name, field_data in set_data.get('fields', {}).items():
+            for field_name, field_data in set_data.fields.items():
                 if source_idx < len(field_data):
                     field_data.append(list(field_data[source_idx]))
 
@@ -3730,7 +4251,7 @@ class ExodusModel:
         if element_block_id not in self.element_blocks:
             raise ValueError(f"Element block {element_block_id} does not exist")
 
-        fields = self.element_blocks[element_block_id].get('fields', {})
+        fields = self.element_blocks[element_block_id].fields
         if element_field_name not in fields:
             raise ValueError(f"Element field '{element_field_name}' does not exist in block {element_block_id}")
 
@@ -3767,7 +4288,7 @@ class ExodusModel:
         """
         if node_set_id not in self.node_sets:
             raise ValueError(f"Node set {node_set_id} does not exist")
-        return sorted(self.node_sets[node_set_id].get('fields', {}).keys())
+        return sorted(self.node_sets[node_set_id].fields.keys())
 
     def get_node_set_field_values(self, field_name: str, node_set_id: int,
                                   timestep: Union[str, float] = "last") -> List[float]:
@@ -3791,7 +4312,7 @@ class ExodusModel:
         if node_set_id not in self.node_sets:
             raise ValueError(f"Node set {node_set_id} does not exist")
 
-        fields = self.node_sets[node_set_id].get('fields', {})
+        fields = self.node_sets[node_set_id].fields
         if field_name not in fields:
             raise ValueError(f"Field '{field_name}' does not exist in node set {node_set_id}")
 
@@ -3829,7 +4350,7 @@ class ExodusModel:
             raise ValueError(f"Node set {node_set_id} does not exist")
 
         num_timesteps = len(self.timesteps) if self.timesteps else 1
-        num_members = len(self.node_sets[node_set_id].get('members', []))
+        num_members = len(self.node_sets[node_set_id].members)
 
         if value == "auto":
             field_data = [[0.0] * num_members for _ in range(num_timesteps)]
@@ -3840,8 +4361,6 @@ class ExodusModel:
         else:
             field_data = [[0.0] * num_members for _ in range(num_timesteps)]
 
-        if 'fields' not in self.node_sets[node_set_id]:
-            self.node_sets[node_set_id].fields = {}
         self.node_sets[node_set_id].fields[field_name] = field_data
 
     def create_side_set_field(self, field_name: str, side_set_id: int,
@@ -3862,7 +4381,7 @@ class ExodusModel:
             raise ValueError(f"Side set {side_set_id} does not exist")
 
         num_timesteps = len(self.timesteps) if self.timesteps else 1
-        num_members = len(self.side_sets[side_set_id].get('members', []))
+        num_members = len(self.side_sets[side_set_id].members)
 
         if value == "auto":
             field_data = [[0.0] * num_members for _ in range(num_timesteps)]
@@ -3873,8 +4392,6 @@ class ExodusModel:
         else:
             field_data = [[0.0] * num_members for _ in range(num_timesteps)]
 
-        if 'fields' not in self.side_sets[side_set_id]:
-            self.side_sets[side_set_id].fields = {}
         self.side_sets[side_set_id].fields[field_name] = field_data
 
     def delete_node_set_field(self, field_names: Union[str, List[str]],
@@ -3900,7 +4417,7 @@ class ExodusModel:
         for ns_id in node_set_ids:
             if ns_id in self.node_sets:
                 for field_name in field_names:
-                    if field_name in self.node_sets[ns_id].get('fields', {}):
+                    if field_name in self.node_sets[ns_id].fields:
                         del self.node_sets[ns_id].fields[field_name]
 
     def delete_side_set_field(self, field_names: Union[str, List[str]],
@@ -3926,7 +4443,7 @@ class ExodusModel:
         for ss_id in side_set_ids:
             if ss_id in self.side_sets:
                 for field_name in field_names:
-                    if field_name in self.side_sets[ss_id].get('fields', {}):
+                    if field_name in self.side_sets[ss_id].fields:
                         del self.side_sets[ss_id].fields[field_name]
 
     def rename_node_set_field(self, field_name: str, new_field_name: str,
@@ -3950,7 +4467,7 @@ class ExodusModel:
 
         for ns_id in node_set_ids:
             if ns_id in self.node_sets:
-                fields = self.node_sets[ns_id].get('fields', {})
+                fields = self.node_sets[ns_id].fields
                 if field_name in fields:
                     fields[new_field_name] = fields.pop(field_name)
 
@@ -3975,7 +4492,7 @@ class ExodusModel:
 
         for ss_id in side_set_ids:
             if ss_id in self.side_sets:
-                fields = self.side_sets[ss_id].get('fields', {})
+                fields = self.side_sets[ss_id].fields
                 if field_name in fields:
                     fields[new_field_name] = fields.pop(field_name)
 
@@ -3995,7 +4512,7 @@ class ExodusModel:
         """
         if side_set_id not in self.side_sets:
             raise ValueError(f"Side set {side_set_id} does not exist")
-        return sorted(self.side_sets[side_set_id].get('fields', {}).keys())
+        return sorted(self.side_sets[side_set_id].fields.keys())
 
     def get_side_set_field_values(self, field_name: str, side_set_id: int,
                                   timestep: Union[str, float] = "last") -> List[float]:
@@ -4019,7 +4536,7 @@ class ExodusModel:
         if side_set_id not in self.side_sets:
             raise ValueError(f"Side set {side_set_id} does not exist")
 
-        fields = self.side_sets[side_set_id].get('fields', {})
+        fields = self.side_sets[side_set_id].fields
         if field_name not in fields:
             raise ValueError(f"Field '{field_name}' does not exist in side set {side_set_id}")
 
@@ -4108,25 +4625,32 @@ class ExodusModel:
         if self.num_dim >= 3:
             self.create_node_field("displ_z", value)
 
-    def displace_element_blocks(self, element_block_ids: Union[str, List[int]] = "all",
-                                timestep: Union[str, float] = "last"):
+    def displace_element_blocks(self, element_block_ids: Union[str, int, List[int]] = "all",
+                                field_basename: str = "DISP",
+                                timestep: Union[str, float] = "last",
+                                scale: float = 1.0):
         """
         Displace nodes according to displacement field.
 
         Parameters
         ----------
-        element_block_ids : str or list of int, optional
+        element_block_ids : str, int, or list of int, optional
             Element blocks to process (default: "all")
+        field_basename : str, optional
+            Field name prefix (default: "DISP" for DISP_X, DISP_Y, DISP_Z)
         timestep : str or float, optional
             Timestep to use (default: "last")
+        scale : float, optional
+            Scale factor for displacement (default: 1.0)
         """
-        if not self.displacement_field_exists():
-            raise ValueError("No displacement field exists")
+        # Build field names from basename
+        displ_x_name = f'{field_basename}_X'
+        displ_y_name = f'{field_basename}_Y'
+        displ_z_name = f'{field_basename}_Z'
 
-        # Get displacement field names
-        displ_x_name = 'displ_x' if 'displ_x' in self.node_fields else 'displacement_x'
-        displ_y_name = 'displ_y' if 'displ_y' in self.node_fields else 'displacement_y'
-        displ_z_name = 'displ_z' if 'displ_z' in self.node_fields else 'displacement_z'
+        # Check if displacement fields exist
+        if displ_x_name not in self.node_fields:
+            raise ValueError(f"Displacement field {displ_x_name} does not exist")
 
         # Determine timestep index
         if timestep == "last":
@@ -4137,18 +4661,18 @@ class ExodusModel:
             except ValueError:
                 timestep_idx = 0
 
-        # Apply displacements
+        # Apply displacements with scale factor
         displ_x = self.node_fields.get(displ_x_name, [[0.0] * len(self.coords_x)])[timestep_idx]
         displ_y = self.node_fields.get(displ_y_name, [[0.0] * len(self.coords_y)])[timestep_idx]
         displ_z = self.node_fields.get(displ_z_name, [[0.0] * len(self.coords_x if self.coords_z else [])])[timestep_idx] if self.coords_z else []
 
         for i in range(len(self.coords_x)):
             if i < len(displ_x):
-                self.coords_x[i] += displ_x[i]
+                self.coords_x[i] += displ_x[i] * scale
             if i < len(displ_y):
-                self.coords_y[i] += displ_y[i]
+                self.coords_y[i] += displ_y[i] * scale
             if self.coords_z and i < len(displ_z):
-                self.coords_z[i] += displ_z[i]
+                self.coords_z[i] += displ_z[i] * scale
 
     # Volume calculation methods
     def _new_element_field_name(self, quantity: int = 1) -> Union[str, List[str]]:
@@ -4832,7 +5356,8 @@ class ExodusModel:
         # Create a mock block object
         block = Block(
             id=block_id,
-            topology="hex8",
+            entity_type=EntityType.ElemBlock,
+            topology="HEX8",
             num_entries=num_elems,
             num_nodes_per_entry=8,
             num_attributes=0
