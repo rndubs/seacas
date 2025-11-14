@@ -86,10 +86,11 @@ def create_simple_mesh_file():
     # Write element block
     block = exodus.Block(
         id=1,
-        elem_type="QUAD4",
-        num_elems=1,
-        nodes_per_elem=4,
-        num_attrs=0
+        entity_type=exodus.EntityType.ElemBlock,
+        topology="QUAD4",
+        num_entries=1,
+        num_nodes_per_entry=4,
+        num_attributes=0
     )
     writer.put_block(block)
     writer.put_connectivity(1, [1, 2, 3, 4])  # 1-indexed

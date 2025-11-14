@@ -785,18 +785,27 @@ class ExodusModel:
 
                         # Get connectivity
                         try:
-                            connectivity = reader.get_connectivity(block_id)
+                            flat_connectivity = reader.get_connectivity(block_id)
                         except:
-                            connectivity = []
+                            flat_connectivity = []
 
                         # Store block info: [name, info, connectivity, fields]
                         # info = [element_type, num_elements, nodes_per_element, num_attributes]
+                        num_nodes_per_entry = block.num_nodes_per_entry if hasattr(block, 'num_nodes_per_entry') else 0
+                        num_entries = block.num_entries if hasattr(block, 'num_entries') else 0
+
                         info = [
-                            block.elem_type if hasattr(block, 'elem_type') else "UNKNOWN",
-                            block.num_elems if hasattr(block, 'num_elems') else 0,
-                            block.nodes_per_elem if hasattr(block, 'nodes_per_elem') else 0,
-                            block.num_attrs if hasattr(block, 'num_attrs') else 0
+                            block.topology if hasattr(block, 'topology') else "UNKNOWN",
+                            num_entries,
+                            num_nodes_per_entry,
+                            block.num_attributes if hasattr(block, 'num_attributes') else 0
                         ]
+
+                        # Convert flat connectivity to list of lists
+                        connectivity = []
+                        if flat_connectivity and num_nodes_per_entry > 0:
+                            for i in range(0, len(flat_connectivity), num_nodes_per_entry):
+                                connectivity.append(flat_connectivity[i:i + num_nodes_per_entry])
 
                         self.element_blocks[block_id] = [name, info, connectivity, {}]
                 except Exception as e:
@@ -874,7 +883,7 @@ class ExodusModel:
         """
         # Import the exodus module (Rust bindings)
         try:
-            from . import ExodusWriter, CreateOptions, InitParams, CreateMode, Block
+            from . import ExodusWriter, CreateOptions, InitParams, CreateMode, Block, EntityType
         except ImportError:
             import exodus
             ExodusWriter = exodus.ExodusWriter
@@ -882,6 +891,7 @@ class ExodusModel:
             InitParams = exodus.InitParams
             CreateMode = exodus.CreateMode
             Block = exodus.Block
+            EntityType = exodus.EntityType
 
         # Create the file
         opts = CreateOptions(mode=CreateMode.Clobber)
@@ -918,16 +928,19 @@ class ExodusModel:
                 # Create block
                 block = Block(
                     id=block_id,
-                    elem_type=elem_type,
-                    num_elems=num_elems,
-                    nodes_per_elem=nodes_per_elem,
-                    num_attrs=num_attrs
+                    entity_type=EntityType.ElemBlock,
+                    topology=elem_type,
+                    num_entries=num_elems,
+                    num_nodes_per_entry=nodes_per_elem,
+                    num_attributes=num_attrs
                 )
                 writer.put_block(block)
 
                 # Write connectivity
                 if connectivity:
-                    writer.put_connectivity(block_id, connectivity)
+                    # Flatten connectivity list (convert from list of lists to flat list)
+                    flat_connectivity = [node_id for elem_conn in connectivity for node_id in elem_conn]
+                    writer.put_connectivity(block_id, flat_connectivity)
 
             # Write node sets
             for ns_id, ns_data in self.node_sets.items():
