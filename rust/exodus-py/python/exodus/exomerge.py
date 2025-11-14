@@ -55,6 +55,11 @@ SHOW_BANNER = True
 # If true, will crash if warnings are generated
 EXIT_ON_WARNING = False
 
+# Deprecated function mappings (for backward compatibility)
+DEPRECATED_FUNCTIONS = {
+    'write': 'export',  # write() is deprecated, use export()
+}
+
 
 class SafeExpressionEvaluator:
     """
@@ -526,6 +531,57 @@ class ExodusModel:
         else:
             return 1
 
+    # Backward compatibility properties for legacy exomerge3.py API
+    @property
+    def nodes(self) -> List[List[float]]:
+        """
+        Get nodes as list of [x, y, z] coordinate lists (legacy API).
+
+        This property provides backward compatibility with exomerge3.py.
+        For better performance, use coords_x, coords_y, coords_z directly.
+
+        Returns
+        -------
+        list of list of float
+            List of [x, y, z] coordinate lists
+        """
+        num_nodes = len(self.coords_x)
+        if num_nodes == 0:
+            return []
+
+        # Ensure all coordinate arrays have same length
+        coords_y = self.coords_y if len(self.coords_y) == num_nodes else [0.0] * num_nodes
+        coords_z = self.coords_z if len(self.coords_z) == num_nodes else [0.0] * num_nodes
+
+        return [[self.coords_x[i], coords_y[i], coords_z[i]]
+                for i in range(num_nodes)]
+
+    @nodes.setter
+    def nodes(self, node_list: List[List[float]]):
+        """
+        Set nodes from list of [x, y, z] coordinate lists (legacy API).
+
+        Parameters
+        ----------
+        node_list : list of list of float
+            List of [x, y, z] or [x, y] coordinate lists
+        """
+        if not node_list:
+            self.coords_x = []
+            self.coords_y = []
+            self.coords_z = []
+            return
+
+        num_nodes = len(node_list)
+        self.coords_x = []
+        self.coords_y = []
+        self.coords_z = []
+
+        for node in node_list:
+            self.coords_x.append(node[0] if len(node) > 0 else 0.0)
+            self.coords_y.append(node[1] if len(node) > 1 else 0.0)
+            self.coords_z.append(node[2] if len(node) > 2 else 0.0)
+
     def get_node_count(self) -> int:
         """
         Return the number of nodes.
@@ -666,8 +722,12 @@ class ExodusModel:
                 # Get block definition (exodus Block object)
                 block = self._reader.get_block(block_id)
 
-                # Get block name
-                name = self._reader.get_name("elem_block", block_id) or ""
+                # Get block name (handle missing names gracefully)
+                try:
+                    name = self._reader.get_name("elem_block", block_id) or ""
+                except RuntimeError:
+                    # Names variable may not exist in file
+                    name = ""
 
                 # Get flat connectivity (FAST - direct from exodus)
                 connectivity_flat = list(self._reader.get_connectivity(block_id))
@@ -2180,7 +2240,7 @@ class ExodusModel:
         """
         if side_set_id not in self.side_sets:
             raise ValueError(f"Side set {side_set_id} does not exist")
-        return self.side_sets[side_set_id].get('members', [])
+        return self.side_sets[side_set_id].members
 
     def add_faces_to_side_set(self, side_set_id: int, new_side_set_members: List[Tuple[int, int]]):
         """
@@ -2196,7 +2256,7 @@ class ExodusModel:
         if side_set_id not in self.side_sets:
             raise ValueError(f"Side set {side_set_id} does not exist")
 
-        members = self.side_sets[side_set_id].get('members', [])
+        members = self.side_sets[side_set_id].members
         members.extend(new_side_set_members)
         self.side_sets[side_set_id].members = members
 
@@ -2422,7 +2482,7 @@ class ExodusModel:
         if node_set_id not in self.node_sets:
             raise ValueError(f"Node set {node_set_id} does not exist")
 
-        members = self.node_sets[node_set_id].get('members', [])
+        members = self.node_sets[node_set_id].members
         members.extend(new_node_set_members)
         self.node_sets[node_set_id].members = members
 
@@ -2451,7 +2511,7 @@ class ExodusModel:
         dict
             Dictionary mapping node set IDs to names
         """
-        return {ns_id: ns_data.get('name', '')
+        return {ns_id: ns_data.name
                 for ns_id, ns_data in self.node_sets.items()}
 
     def get_all_side_set_names(self) -> Dict[int, str]:
@@ -2463,20 +2523,20 @@ class ExodusModel:
         dict
             Dictionary mapping side set IDs to names
         """
-        return {ss_id: ss_data.get('name', '')
+        return {ss_id: ss_data.name
                 for ss_id, ss_data in self.side_sets.items()}
 
     def delete_empty_node_sets(self):
         """Delete node sets that have no members."""
         to_delete = [ns_id for ns_id, ns_data in self.node_sets.items()
-                     if not ns_data.get('members', [])]
+                     if not ns_data.members]
         for ns_id in to_delete:
             del self.node_sets[ns_id]
 
     def delete_empty_side_sets(self):
         """Delete side sets that have no members."""
         to_delete = [ss_id for ss_id, ss_data in self.side_sets.items()
-                     if not ss_data.get('members', [])]
+                     if not ss_data.members]
         for ss_id in to_delete:
             del self.side_sets[ss_id]
 
@@ -3319,8 +3379,6 @@ class ExodusModel:
             else:
                 field_data = [[0.0] * num_elems for _ in range(num_timesteps)]
 
-            if 'fields' not in block_data:
-                block_data.fields = {}
             block_data.fields[element_field_name] = field_data
 
     def node_field_exists(self, node_field_name: str) -> bool:
@@ -3767,7 +3825,7 @@ class ExodusModel:
         """
         if node_set_id not in self.node_sets:
             raise ValueError(f"Node set {node_set_id} does not exist")
-        return sorted(self.node_sets[node_set_id].get('fields', {}).keys())
+        return sorted(self.node_sets[node_set_id].fields.keys())
 
     def get_node_set_field_values(self, field_name: str, node_set_id: int,
                                   timestep: Union[str, float] = "last") -> List[float]:
@@ -3791,7 +3849,7 @@ class ExodusModel:
         if node_set_id not in self.node_sets:
             raise ValueError(f"Node set {node_set_id} does not exist")
 
-        fields = self.node_sets[node_set_id].get('fields', {})
+        fields = self.node_sets[node_set_id].fields
         if field_name not in fields:
             raise ValueError(f"Field '{field_name}' does not exist in node set {node_set_id}")
 
@@ -3829,7 +3887,7 @@ class ExodusModel:
             raise ValueError(f"Node set {node_set_id} does not exist")
 
         num_timesteps = len(self.timesteps) if self.timesteps else 1
-        num_members = len(self.node_sets[node_set_id].get('members', []))
+        num_members = len(self.node_sets[node_set_id].members)
 
         if value == "auto":
             field_data = [[0.0] * num_members for _ in range(num_timesteps)]
@@ -3840,8 +3898,6 @@ class ExodusModel:
         else:
             field_data = [[0.0] * num_members for _ in range(num_timesteps)]
 
-        if 'fields' not in self.node_sets[node_set_id]:
-            self.node_sets[node_set_id].fields = {}
         self.node_sets[node_set_id].fields[field_name] = field_data
 
     def create_side_set_field(self, field_name: str, side_set_id: int,
@@ -3862,7 +3918,7 @@ class ExodusModel:
             raise ValueError(f"Side set {side_set_id} does not exist")
 
         num_timesteps = len(self.timesteps) if self.timesteps else 1
-        num_members = len(self.side_sets[side_set_id].get('members', []))
+        num_members = len(self.side_sets[side_set_id].members)
 
         if value == "auto":
             field_data = [[0.0] * num_members for _ in range(num_timesteps)]
@@ -3873,8 +3929,6 @@ class ExodusModel:
         else:
             field_data = [[0.0] * num_members for _ in range(num_timesteps)]
 
-        if 'fields' not in self.side_sets[side_set_id]:
-            self.side_sets[side_set_id].fields = {}
         self.side_sets[side_set_id].fields[field_name] = field_data
 
     def delete_node_set_field(self, field_names: Union[str, List[str]],
@@ -3900,7 +3954,7 @@ class ExodusModel:
         for ns_id in node_set_ids:
             if ns_id in self.node_sets:
                 for field_name in field_names:
-                    if field_name in self.node_sets[ns_id].get('fields', {}):
+                    if field_name in self.node_sets[ns_id].fields:
                         del self.node_sets[ns_id].fields[field_name]
 
     def delete_side_set_field(self, field_names: Union[str, List[str]],
@@ -3926,7 +3980,7 @@ class ExodusModel:
         for ss_id in side_set_ids:
             if ss_id in self.side_sets:
                 for field_name in field_names:
-                    if field_name in self.side_sets[ss_id].get('fields', {}):
+                    if field_name in self.side_sets[ss_id].fields:
                         del self.side_sets[ss_id].fields[field_name]
 
     def rename_node_set_field(self, field_name: str, new_field_name: str,
@@ -3950,7 +4004,7 @@ class ExodusModel:
 
         for ns_id in node_set_ids:
             if ns_id in self.node_sets:
-                fields = self.node_sets[ns_id].get('fields', {})
+                fields = self.node_sets[ns_id].fields
                 if field_name in fields:
                     fields[new_field_name] = fields.pop(field_name)
 
@@ -3975,7 +4029,7 @@ class ExodusModel:
 
         for ss_id in side_set_ids:
             if ss_id in self.side_sets:
-                fields = self.side_sets[ss_id].get('fields', {})
+                fields = self.side_sets[ss_id].fields
                 if field_name in fields:
                     fields[new_field_name] = fields.pop(field_name)
 
@@ -3995,7 +4049,7 @@ class ExodusModel:
         """
         if side_set_id not in self.side_sets:
             raise ValueError(f"Side set {side_set_id} does not exist")
-        return sorted(self.side_sets[side_set_id].get('fields', {}).keys())
+        return sorted(self.side_sets[side_set_id].fields.keys())
 
     def get_side_set_field_values(self, field_name: str, side_set_id: int,
                                   timestep: Union[str, float] = "last") -> List[float]:
@@ -4019,7 +4073,7 @@ class ExodusModel:
         if side_set_id not in self.side_sets:
             raise ValueError(f"Side set {side_set_id} does not exist")
 
-        fields = self.side_sets[side_set_id].get('fields', {})
+        fields = self.side_sets[side_set_id].fields
         if field_name not in fields:
             raise ValueError(f"Field '{field_name}' does not exist in side set {side_set_id}")
 
