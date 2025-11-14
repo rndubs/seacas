@@ -7,6 +7,43 @@
 
 This document outlines proposed API changes to make exomerge more performant by leveraging exodus-py Rust bindings directly instead of vanilla Python data structures. These changes will introduce some breaking changes from the legacy exomerge3.py API.
 
+## Exodus II Data Model: Key Concepts
+
+### Element Blocks are Homogeneous
+
+**Important:** In Exodus II, you cannot mix element types within a single block. Each element block contains only one element type (topology). This is a fundamental design choice that enables efficient storage.
+
+**Example - Mixed Mesh:**
+```python
+# Mesh with 100 TET4 elements and 50 HEX8 elements
+# Must use 2 blocks:
+
+element_blocks = {
+    1: Block(topology='TET4', num_entries=100, nodes_per_entry=4),
+    2: Block(topology='HEX8', num_entries=50, nodes_per_entry=8),
+}
+
+# Connectivity is separate for each block:
+connectivity[1] = [...]  # 100 * 4 = 400 node IDs for TET4 block
+connectivity[2] = [...]  # 50 * 8 = 400 node IDs for HEX8 block
+```
+
+**Why This Matters:**
+- Flat arrays work perfectly **within each block** (constant stride)
+- No need for variable-length records
+- Efficient NetCDF storage (rectangular arrays)
+- Direct memory mapping possible
+
+### Connectivity is Per-Block, Not Global
+
+The proposed flat array optimization applies **within each block**, not across the entire mesh. Since all elements in a block have the same type, they all have the same `nodes_per_entry`, making stride-based indexing trivial:
+
+```python
+# Get element i's connectivity in block_id:
+offset = i * block.nodes_per_entry
+nodes = connectivity_flat[block_id][offset : offset + block.nodes_per_entry]
+```
+
 ## Current Performance Bottlenecks
 
 ### 1. In-Memory Data Structures (High Impact)
@@ -58,23 +95,52 @@ self.connectivity_flat = {
 
 ### 2. Connectivity Storage (High Impact)
 
-**Current:**
+**Important:** Connectivity is stored **per-block** in Exodus II. Each element block is homogeneous (all elements have the same type), so all elements in a block have the same `nodes_per_entry`. This makes flat arrays work perfectly!
+
+**Current (per-block):**
 ```python
-connectivity = [[1, 2, 3, 4], [5, 6, 7, 8], ...]  # List of element node lists
+# Block 1 (TET4): 100 elements, 4 nodes each
+element_blocks[1][2] = [
+    [1, 2, 3, 4],      # Element 0
+    [5, 6, 7, 8],      # Element 1
+    ...                # 100 lists total
+]  # List of element node lists
+
+# Block 2 (HEX8): 50 elements, 8 nodes each
+element_blocks[2][2] = [
+    [1, 2, 3, 4, 5, 6, 7, 8],     # Element 0
+    [9, 10, 11, 12, 13, 14, 15, 16],  # Element 1
+    ...                                # 50 lists total
+]
 ```
 
 **Issues:**
-- Requires flattening for export: O(n*m) operation
-- Requires chunking for import: O(n*m) operation
-- Extra memory for list structures
+- Requires flattening for export: O(n*m) operation per block
+- Requires chunking for import: O(n*m) operation per block
+- Extra memory for list structures (each list is a Python object)
+- Cannot use exodus API directly (requires conversion)
 
-**Proposed:**
+**Proposed (per-block, flat):**
 ```python
-# NEW API (breaking change)
-connectivity_flat = [1, 2, 3, 4, 5, 6, 7, 8, ...]
-nodes_per_elem = 4
-num_elems = len(connectivity_flat) // nodes_per_elem
+# Block 1 (TET4): 100 elements, 4 nodes each
+connectivity_flat[1] = [1,2,3,4, 5,6,7,8, ..., 397,398,399,400]  # length=400
+nodes_per_entry[1] = 4  # From block.num_nodes_per_entry
+
+# Block 2 (HEX8): 50 elements, 8 nodes each
+connectivity_flat[2] = [1,2,3,4,5,6,7,8, 9,10,11,12,13,14,15,16, ...]  # length=400
+nodes_per_entry[2] = 8  # From block.num_nodes_per_entry
+
+# To get element i's connectivity in block_id:
+start = i * nodes_per_entry[block_id]
+end = start + nodes_per_entry[block_id]
+element_nodes = connectivity_flat[block_id][start:end]
 ```
+
+**Why This Works:**
+- Element blocks are **homogeneous** (all same type)
+- Within a block, `nodes_per_entry` is constant
+- No ambiguity about where elements start/stop
+- Direct compatibility with exodus `get_connectivity(block_id)`
 
 **Helper Methods (for backward compatibility):**
 ```python
