@@ -2535,9 +2535,24 @@ class ExodusModel:
         if node_set_id not in self.node_sets:
             raise ValueError(f"Node set {node_set_id} does not exist")
 
-        members = self.node_sets[node_set_id].members
-        members.extend(new_node_set_members)
-        self.node_sets[node_set_id].members = members
+        # Get current members and add new ones
+        current_members = list(self.node_sets[node_set_id].members)
+        current_members.extend(new_node_set_members)
+        # Remove duplicates and sort
+        unique_members = sorted(set(current_members))
+
+        # Recreate the node set with updated members
+        ns_data = self.node_sets[node_set_id]
+        new_node_set = NodeSet(
+            id=node_set_id,
+            num_entries=len(unique_members),
+            nodes=unique_members
+        )
+        self.node_sets[node_set_id] = NodeSetData(
+            node_set=new_node_set,
+            name=ns_data.name,
+            fields=ns_data.fields
+        )
 
     def get_nodes_in_node_set(self, node_set_id: int) -> List[int]:
         """
@@ -3351,6 +3366,178 @@ class ExodusModel:
             ns_data.members = sorted(new_members)
 
         return merged_count
+
+    def unmerge_element_blocks(self, element_block_ids: Union[str, List[int]]):
+        """
+        Unmerge element blocks so they don't share any nodes.
+
+        This creates duplicate nodes for any nodes shared between the specified blocks.
+
+        Parameters
+        ----------
+        element_block_ids : str or list of int
+            Block IDs to unmerge, or "all" for all blocks
+        """
+        if element_block_ids == "all":
+            element_block_ids = list(self.element_blocks.keys())
+        elif isinstance(element_block_ids, int):
+            element_block_ids = [element_block_ids]
+
+        if len(element_block_ids) < 2:
+            return  # Nothing to unmerge
+
+        # Find all nodes used by each block
+        block_nodes = {}
+        for block_id in element_block_ids:
+            if block_id not in self.element_blocks:
+                continue
+            nodes_set = set()
+            conn_flat = self.element_blocks[block_id].connectivity_flat
+            nodes_set.update(conn_flat)
+            block_nodes[block_id] = nodes_set
+
+        # Find shared nodes between any pair of blocks
+        shared_nodes = set()
+        block_ids_list = list(block_nodes.keys())
+        for i in range(len(block_ids_list)):
+            for j in range(i + 1, len(block_ids_list)):
+                shared = block_nodes[block_ids_list[i]] & block_nodes[block_ids_list[j]]
+                shared_nodes.update(shared)
+
+        if not shared_nodes:
+            return  # No shared nodes to unmerge
+
+        # For each block except the first, duplicate its shared nodes
+        for block_id in block_ids_list[1:]:
+            node_id_map = {}  # Maps old node ID to new node ID for this block
+
+            # Duplicate shared nodes used by this block
+            for node_id_1based in sorted(shared_nodes & block_nodes[block_id]):
+                node_idx = node_id_1based - 1
+                if node_idx < len(self.coords_x):
+                    # Add duplicate node
+                    self.coords_x.append(self.coords_x[node_idx])
+                    self.coords_y.append(self.coords_y[node_idx])
+                    if self.coords_z:
+                        self.coords_z.append(self.coords_z[node_idx])
+
+                    new_node_id = len(self.coords_x)  # 1-based
+                    node_id_map[node_id_1based] = new_node_id
+
+            # Update connectivity for this block
+            if node_id_map:
+                new_conn_flat = []
+                for node_id in self.element_blocks[block_id].connectivity_flat:
+                    new_conn_flat.append(node_id_map.get(node_id, node_id))
+                self.element_blocks[block_id].connectivity_flat = new_conn_flat
+
+    def reflect_element_blocks(self, element_block_ids: Union[str, int, List[int]],
+                               normal: List[float], point: List[float] = None):
+        """
+        Reflect element blocks across a plane.
+
+        Parameters
+        ----------
+        element_block_ids : str, int, or list of int
+            Block IDs to reflect, or "all"
+        normal : list of float
+            Normal vector [nx, ny, nz] defining the reflection plane
+        point : list of float, optional
+            Point [x, y, z] on the plane (default: origin)
+        """
+        if element_block_ids == "all":
+            # Reflect all nodes
+            element_block_ids = list(self.element_blocks.keys())
+        elif isinstance(element_block_ids, int):
+            element_block_ids = [element_block_ids]
+
+        if point is None:
+            point = [0.0, 0.0, 0.0]
+
+        # Normalize the normal vector
+        normal_mag = (normal[0]**2 + normal[1]**2 + normal[2]**2)**0.5
+        if normal_mag == 0:
+            return
+        nx, ny, nz = normal[0]/normal_mag, normal[1]/normal_mag, normal[2]/normal_mag
+        px, py, pz = point[0], point[1], point[2] if len(point) > 2 else 0.0
+
+        # Find all nodes used by the specified blocks
+        nodes_to_reflect = set()
+        for block_id in element_block_ids:
+            if block_id in self.element_blocks:
+                nodes_to_reflect.update(self.element_blocks[block_id].connectivity_flat)
+
+        # Reflect each node across the plane
+        for node_id_1based in nodes_to_reflect:
+            node_idx = node_id_1based - 1
+            if node_idx >= len(self.coords_x):
+                continue
+
+            # Get node coordinates
+            x, y = self.coords_x[node_idx], self.coords_y[node_idx]
+            z = self.coords_z[node_idx] if self.coords_z and node_idx < len(self.coords_z) else 0.0
+
+            # Reflect across plane: p' = p - 2 * dot(p - point, normal) * normal
+            dx, dy, dz = x - px, y - py, z - pz
+            dot = dx*nx + dy*ny + dz*nz
+            self.coords_x[node_idx] = x - 2 * dot * nx
+            self.coords_y[node_idx] = y - 2 * dot * ny
+            if self.coords_z and node_idx < len(self.coords_z):
+                self.coords_z[node_idx] = z - 2 * dot * nz
+
+    def process_element_fields(self, element_block_id: int, integration_point_count: int = None):
+        """
+        Process element fields with integration points.
+
+        This method averages fields with multiple integration points per element.
+        For example, 8 stress fields (stress_1 through stress_8) become 1 averaged stress field.
+
+        Parameters
+        ----------
+        element_block_id : int
+            Element block ID
+        integration_point_count : int, optional
+            Number of integration points (auto-detected if None)
+        """
+        if element_block_id not in self.element_blocks:
+            return
+
+        block_data = self.element_blocks[element_block_id]
+        field_names = list(block_data.fields.keys())
+
+        # Auto-detect integration point fields (e.g., field_1, field_2, ..., field_8)
+        field_groups = {}
+        for field_name in field_names:
+            # Check if field ends with _N where N is a digit
+            if '_' in field_name:
+                parts = field_name.rsplit('_', 1)
+                if len(parts) == 2 and parts[1].isdigit():
+                    base_name = parts[0]
+                    if base_name not in field_groups:
+                        field_groups[base_name] = []
+                    field_groups[base_name].append(field_name)
+
+        # For each group, average the values and create a single field
+        for base_name, group_fields in field_groups.items():
+            if len(group_fields) <= 1:
+                continue  # Not a group
+
+            # Average all fields in the group
+            num_timesteps = len(self.timesteps) if self.timesteps else 1
+            num_elems = block_data.block.num_entries
+            averaged_data = [[0.0] * num_elems for _ in range(num_timesteps)]
+
+            for field_name in group_fields:
+                field_data = block_data.fields.get(field_name, [])
+                for t_idx in range(min(len(field_data), num_timesteps)):
+                    for e_idx in range(min(len(field_data[t_idx]), num_elems)):
+                        averaged_data[t_idx][e_idx] += field_data[t_idx][e_idx] / len(group_fields)
+
+            # Store averaged field and delete individual fields
+            block_data.fields[base_name] = averaged_data
+            for field_name in group_fields:
+                if field_name in block_data.fields:
+                    del block_data.fields[field_name]
 
     # Field creation and conversion methods
     def create_node_field(self, node_field_name: str, value: Union[str, float, List] = "auto"):
