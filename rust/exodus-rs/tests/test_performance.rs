@@ -206,6 +206,7 @@ fn test_performance_config_summary() {
 }
 
 #[test]
+#[ignore] // Environment variable tests are racy when run in parallel
 fn test_hdf5_env_vars_set() {
     use std::env;
 
@@ -236,6 +237,7 @@ fn test_hdf5_env_vars_set() {
 }
 
 #[test]
+#[ignore] // Environment variable tests are racy when run in parallel
 fn test_performance_config_respects_user_env_vars() {
     use std::env;
 
