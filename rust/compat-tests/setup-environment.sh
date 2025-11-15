@@ -107,12 +107,14 @@ cd "$BUILD_DIR"
 # Configure with CMake
 if [ ! -f "CMakeCache.txt" ]; then
   echo "Configuring SEACAS build..."
+  # Note: install-tpl.sh installs to $SEACAS_ROOT/lib and $SEACAS_ROOT/include
+  # not to TPL/hdf5-1.14.6 or TPL/netcdf-4.9.2
   cmake \
     -DCMAKE_INSTALL_PREFIX="$BUILD_DIR/install" \
     -DTPL_ENABLE_Netcdf=ON \
     -DTPL_ENABLE_HDF5=ON \
-    -DNetCDF_ROOT="$SEACAS_ROOT/TPL/netcdf-4.9.2" \
-    -DHDF5_ROOT="$SEACAS_ROOT/TPL/hdf5-1.14.6" \
+    -DNetCDF_ROOT="$SEACAS_ROOT" \
+    -DHDF5_ROOT="$SEACAS_ROOT" \
     -DSEACASProj_ENABLE_ALL_PACKAGES=OFF \
     -DSEACASProj_ENABLE_SEACASExodus=ON \
     -DSEACASProj_ENABLE_TESTS=OFF \
@@ -143,12 +145,13 @@ cd "$VERIFY_DIR"
 
 # Set library paths for compilation
 export EXODUS_DIR="$BUILD_DIR/install"
-export LD_LIBRARY_PATH="$EXODUS_DIR/lib:$SEACAS_ROOT/TPL/netcdf-4.9.2/lib:$SEACAS_ROOT/TPL/hdf5-1.14.6/lib:$LD_LIBRARY_PATH"
+export LD_LIBRARY_PATH="$EXODUS_DIR/lib:$SEACAS_ROOT/lib:$LD_LIBRARY_PATH"
 
 echo "Compiling verify.c..."
 gcc verify.c \
   -I"$EXODUS_DIR/include" \
   -L"$EXODUS_DIR/lib" \
+  -L"$SEACAS_ROOT/lib" \
   -lexodus \
   -lnetcdf \
   -lhdf5 \
@@ -170,7 +173,7 @@ cat > "$ENV_FILE" << EOF
 #
 
 export EXODUS_DIR="$BUILD_DIR/install"
-export LD_LIBRARY_PATH="$EXODUS_DIR/lib:$SEACAS_ROOT/TPL/netcdf-4.9.2/lib:$SEACAS_ROOT/TPL/hdf5-1.14.6/lib:\$LD_LIBRARY_PATH"
+export LD_LIBRARY_PATH="$EXODUS_DIR/lib:$SEACAS_ROOT/lib:\$LD_LIBRARY_PATH"
 export PATH="$EXODUS_DIR/bin:\$PATH"
 
 echo "C compatibility test environment configured"
@@ -187,9 +190,9 @@ echo -e "${GREEN}========================================${NC}"
 echo -e "${GREEN}Setup Complete!${NC}"
 echo -e "${GREEN}========================================${NC}"
 echo ""
-echo "TPL libraries installed in: $SEACAS_ROOT/TPL"
-echo "  - HDF5 1.14.6"
-echo "  - NetCDF 4.9.2"
+echo "TPL libraries (HDF5, NetCDF) installed in:"
+echo "  $SEACAS_ROOT/lib/"
+echo "  $SEACAS_ROOT/include/"
 echo ""
 echo "SEACAS C Exodus library installed in: $EXODUS_DIR"
 echo ""
