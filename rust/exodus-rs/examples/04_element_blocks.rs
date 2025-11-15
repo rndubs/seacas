@@ -211,7 +211,7 @@ fn read_blocks() -> Result<(), Box<dyn std::error::Error>> {
 
     // Demonstrate topology parsing
     println!("\n  Topology information:");
-    let topology = Topology::from_str("QUAD4");
+    let topology = Topology::from_string("QUAD4");
     println!("    QUAD4 expects {} nodes", topology.expected_nodes().unwrap());
     println!("    String representation: {}", topology);
 
