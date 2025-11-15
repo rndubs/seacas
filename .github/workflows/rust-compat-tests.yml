@@ -26,12 +26,12 @@ jobs:
       run: |
         sudo apt-get update
         sudo apt-get install -y \
-          libhdf5-dev \
-          libnetcdf-dev \
-          pkg-config \
           build-essential \
           cmake \
-          gfortran
+          gfortran \
+          curl \
+          m4 \
+          zlib1g-dev
 
     - name: Install Rust toolchain
       uses: actions-rs/toolchain@v1
@@ -56,13 +56,20 @@ jobs:
         restore-keys: |
           ${{ runner.os }}-cargo-git-
 
+    - name: Cache TPL build (HDF5, NetCDF)
+      uses: actions/cache@v4
+      with:
+        path: TPL
+        key: ${{ runner.os }}-tpl-${{ hashFiles('install-tpl.sh') }}
+        restore-keys: |
+          ${{ runner.os }}-tpl-
+
     - name: Cache compat test build
       uses: actions/cache@v4
       with:
         path: |
-          rust/compat-tests/install
-          rust/compat-tests/build
-        key: ${{ runner.os }}-compat-build-${{ hashFiles('rust/compat-tests/**') }}
+          build-compat
+        key: ${{ runner.os }}-compat-build-${{ hashFiles('rust/compat-tests/**', 'packages/seacas/libraries/exodus/**') }}
         restore-keys: |
           ${{ runner.os }}-compat-build-
 
