@@ -53,6 +53,10 @@
 # ************************************************************************
 # @HEADER
 
+# Bypass HDF5 CMake config files which may have incorrect target names
+# (e.g., hdf5-shared instead of hdf5) when HDF5 is built with CMake
+set(HDF5_NO_HDF5_CMAKE TRUE)
+
 find_package(HDF5 REQUIRED COMPONENTS C HL)
 
 TRIBITS_TPL_FIND_INCLUDE_DIRS_AND_LIBRARIES(HDF5

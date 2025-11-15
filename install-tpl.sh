@@ -488,6 +488,15 @@ then
                 echo 1>&2 ${txtred}couldn\'t build hdf5. exiting.${txtrst}
                 exit 1
             fi
+
+            # Fix HDF5 CMake config files that use incompatible target names
+            # (hdf5-shared instead of hdf5) which cause linking failures with SEACAS
+            echo "${txtgrn}+++ Fixing HDF5 CMake target names to use library paths...${txtrst}"
+            if [ -f "${INSTALL_PATH}/cmake/hdf5-targets-release.cmake" ]; then
+                sed -i 's/hdf5-shared/hdf5/g' "${INSTALL_PATH}/cmake/hdf5-targets-release.cmake"
+                sed -i 's/hdf5_hl-shared/hdf5_hl/g' "${INSTALL_PATH}/cmake/hdf5-targets-release.cmake"
+                sed -i 's/hdf5_tools-shared/hdf5_tools/g' "${INSTALL_PATH}/cmake/hdf5-targets-release.cmake"
+            fi
         fi
         # Create default plugin directory...
         mkdir  ${INSTALL_PATH}/lib

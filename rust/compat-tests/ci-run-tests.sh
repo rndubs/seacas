@@ -231,6 +231,7 @@ else
   if [ "$VERBOSE" = true ]; then
     cmake \
       -DCMAKE_INSTALL_PREFIX="$BUILD_DIR/install" \
+      -DSeacas_ENABLE_Fortran=OFF \
       -DTPL_ENABLE_Netcdf=ON \
       -DTPL_ENABLE_HDF5=ON \
       -DTPL_ENABLE_fmt=ON \
@@ -248,6 +249,7 @@ else
   else
     cmake \
       -DCMAKE_INSTALL_PREFIX="$BUILD_DIR/install" \
+      -DSeacas_ENABLE_Fortran=OFF \
       -DTPL_ENABLE_Netcdf=ON \
       -DTPL_ENABLE_HDF5=ON \
       -DTPL_ENABLE_fmt=ON \

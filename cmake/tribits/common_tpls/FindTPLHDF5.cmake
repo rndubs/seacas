@@ -68,6 +68,10 @@ if (NOT TARGET HDF5::all_libs)
       set(HDF5_PREFER_PARALLEL TRUE)
     endif()
 
+    # Bypass HDF5 CMake config files which may have incorrect target names
+    # (e.g., hdf5-shared instead of hdf5) when HDF5 is built with CMake
+    set(HDF5_NO_HDF5_CMAKE TRUE)
+
     find_package(HDF5 COMPONENTS ${HDF5_COMPONENTS})
 
     # Make sure that HDF5 is parallel.
