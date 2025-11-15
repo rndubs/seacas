@@ -2,7 +2,7 @@
 name = "exodus-py"
 version = "0.1.0"
 edition = "2021"
-rust-version = "1.70"
+rust-version = "1.74"
 authors = ["SEACAS Development Team"]
 license = "BSD-3-Clause"
 description = "Python bindings for exodus-rs - Pure Rust implementation of Exodus II"
@@ -14,15 +14,19 @@ categories = ["science", "api-bindings"]
 name = "exodus"
 crate-type = ["cdylib"]
 
+# NOTE: PyO3 extension modules with the "extension-module" feature cannot run
+# Rust unit tests (cargo test) because they don't link against libpython.
+# All tests are Python integration tests in tests/ - run with: pytest tests/
+
 [dependencies]
 # PyO3 for Python bindings
-pyo3 = { version = "0.20", features = ["extension-module", "multiple-pymethods"] }
+pyo3 = { version = "0.27", features = ["extension-module", "multiple-pymethods"] }
 
 # Exodus-rs library (local dependency)
 exodus-rs = { path = "../exodus-rs", features = ["netcdf4"] }
 
 # NumPy integration (optional)
-numpy = { version = "0.20", optional = true }
+numpy = { version = "0.27", optional = true }
 
 [dev-dependencies]
 # Testing
