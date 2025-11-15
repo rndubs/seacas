@@ -7,10 +7,7 @@
 //! - Reading block information back
 //! - Iterating over connectivity data
 
-use exodus_rs::{
-    Block, EntityType, ExodusFile, InitParams, Topology,
-    mode,
-};
+use exodus_rs::{mode, Block, EntityType, ExodusFile, InitParams, Topology};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("=== Exodus Element Blocks Example ===\n");
@@ -115,8 +112,8 @@ fn create_quad_mesh() -> Result<(), Box<dyn std::error::Error>> {
     // Element 1: nodes 1,2,5,4
     // Element 2: nodes 2,3,6,5
     let conn = vec![
-        1, 2, 5, 4,  // Element 1
-        2, 3, 6, 5,  // Element 2
+        1, 2, 5, 4, // Element 1
+        2, 3, 6, 5, // Element 2
     ];
     file.put_connectivity(10, &conn)?;
 
@@ -140,9 +137,15 @@ fn create_mixed_mesh() -> Result<(), Box<dyn std::error::Error>> {
     file.init(&params)?;
 
     // Write coordinates (simplified for example)
-    let x = vec![0.0, 1.0, 0.5, 0.5, 2.0, 3.0, 3.0, 2.0, 2.0, 3.0, 3.0, 2.0, 2.0, 3.0];
-    let y = vec![0.0, 0.0, 1.0, 0.5, 0.0, 0.0, 1.0, 1.0, 0.0, 0.0, 1.0, 1.0, 0.5, 0.5];
-    let z = vec![0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0, 0.5, 0.5];
+    let x = vec![
+        0.0, 1.0, 0.5, 0.5, 2.0, 3.0, 3.0, 2.0, 2.0, 3.0, 3.0, 2.0, 2.0, 3.0,
+    ];
+    let y = vec![
+        0.0, 0.0, 1.0, 0.5, 0.0, 0.0, 1.0, 1.0, 0.0, 0.0, 1.0, 1.0, 0.5, 0.5,
+    ];
+    let z = vec![
+        0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0, 0.5, 0.5,
+    ];
     file.put_coords(&x, Some(&y), Some(&z))?;
 
     // Block 1: Tetrahedra
@@ -171,10 +174,13 @@ fn create_mixed_mesh() -> Result<(), Box<dyn std::error::Error>> {
         num_attributes: 0,
     };
     file.put_block(&hex_block)?;
-    file.put_connectivity(2, &vec![
-        5, 6, 7, 8, 9, 10, 11, 12,   // Hex 1
-        9, 10, 11, 12, 5, 6, 7, 13,  // Hex 2 (simplified)
-    ])?;
+    file.put_connectivity(
+        2,
+        &vec![
+            5, 6, 7, 8, 9, 10, 11, 12, // Hex 1
+            9, 10, 11, 12, 5, 6, 7, 13, // Hex 2 (simplified)
+        ],
+    )?;
 
     println!("  ✓ Created mixed_mesh.exo with TET4 and HEX8 elements");
     Ok(())
@@ -211,8 +217,11 @@ fn read_blocks() -> Result<(), Box<dyn std::error::Error>> {
 
     // Demonstrate topology parsing
     println!("\n  Topology information:");
-    let topology = Topology::from_str("QUAD4");
-    println!("    QUAD4 expects {} nodes", topology.expected_nodes().unwrap());
+    let topology = Topology::from_string("QUAD4");
+    println!(
+        "    QUAD4 expects {} nodes",
+        topology.expected_nodes().unwrap()
+    );
     println!("    String representation: {}", topology);
 
     Ok(())

@@ -357,7 +357,10 @@ impl TruthTable {
         if self.table.len() != expected_len {
             return Err(format!(
                 "Truth table size mismatch: expected {} ({}×{}), got {}",
-                expected_len, self.num_blocks, self.num_vars, self.table.len()
+                expected_len,
+                self.num_blocks,
+                self.num_vars,
+                self.table.len()
             ));
         }
         Ok(())
@@ -450,7 +453,7 @@ pub enum Topology {
 
 impl Topology {
     /// Parse topology from string
-    pub fn from_str(s: &str) -> Self {
+    pub fn from_string(s: &str) -> Self {
         match s.to_uppercase().as_str() {
             "SPHERE" => Self::Sphere,
             "BAR2" | "TRUSS2" | "BEAM2" => Self::Bar2,

@@ -8,7 +8,8 @@
 //! NOTE: This example demonstrates the API design. Full functionality depends on
 //! the underlying Phase 4 (blocks) implementation being complete.
 
-use exodus_rs::{BlockBuilder, MeshBuilder};
+// TODO: Re-enable when high-level builders are implemented
+// use exodus_rs::{BlockBuilder, MeshBuilder};
 
 fn main() {
     println!("=== Phase 9: High-Level Builder API ===\n");

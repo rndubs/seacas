@@ -64,8 +64,7 @@ mod integration_tests {
             file.put_block(&block).unwrap();
 
             let connectivity: Vec<i64> = (1..=8).collect();
-            file.put_connectivity(1, &connectivity)
-                .unwrap();
+            file.put_connectivity(1, &connectivity).unwrap();
 
             // Explicitly close
             file.close().unwrap();
@@ -151,7 +150,8 @@ mod integration_tests {
                 nodes: vec![5, 6, 7, 8], // Top
                 dist_factors: vec![1.0, 1.0, 1.0, 1.0],
             };
-            file.put_node_set(ns2.id, &ns2.nodes, Some(&ns2.dist_factors)).unwrap();
+            file.put_node_set(ns2.id, &ns2.nodes, Some(&ns2.dist_factors))
+                .unwrap();
 
             // Side set
             let ss = SideSet {
@@ -160,7 +160,8 @@ mod integration_tests {
                 sides: vec![1],
                 dist_factors: vec![],
             };
-            file.put_side_set(ss.id, &ss.elements, &ss.sides, None).unwrap();
+            file.put_side_set(ss.id, &ss.elements, &ss.sides, None)
+                .unwrap();
         }
 
         // Read and verify
@@ -221,8 +222,7 @@ mod integration_tests {
                 num_attributes: 0,
             };
             file.put_block(&block).unwrap();
-            file.put_connectivity(1, &vec![1, 2, 3, 4])
-                .unwrap();
+            file.put_connectivity(1, &vec![1, 2, 3, 4]).unwrap();
 
             // Define variables
             file.define_variables(EntityType::Global, &["time", "energy"])
@@ -245,8 +245,7 @@ mod integration_tests {
 
                 // Nodal variables (entity_id is ignored for Nodal, var_index is used)
                 let temps: Vec<f64> = (0..4).map(|i| 20.0 + i as f64 + step as f64).collect();
-                file.put_var(step, EntityType::Nodal, 0, 0, &temps)
-                    .unwrap();
+                file.put_var(step, EntityType::Nodal, 0, 0, &temps).unwrap();
 
                 let pressures: Vec<f64> = (0..4).map(|i| 100.0 + i as f64 * 10.0).collect();
                 file.put_var(step, EntityType::Nodal, 0, 1, &pressures)
@@ -399,8 +398,7 @@ mod integration_tests {
             file.put_block(&block1).unwrap();
             file.put_connectivity(10, &(1..=8).collect::<Vec<i64>>())
                 .unwrap();
-            file.put_name(EntityType::ElemBlock, 0, "HexBlock")
-                .unwrap();
+            file.put_name(EntityType::ElemBlock, 0, "HexBlock").unwrap();
 
             // Block 2: Tet4
             let block2 = Block {
@@ -414,10 +412,8 @@ mod integration_tests {
                 num_attributes: 0,
             };
             file.put_block(&block2).unwrap();
-            file.put_connectivity(20, &vec![9, 10, 11, 12])
-                .unwrap();
-            file.put_name(EntityType::ElemBlock, 1, "TetBlock")
-                .unwrap();
+            file.put_connectivity(20, &vec![9, 10, 11, 12]).unwrap();
+            file.put_name(EntityType::ElemBlock, 1, "TetBlock").unwrap();
 
             // Block 3: Wedge6
             let block3 = Block {
@@ -445,10 +441,7 @@ mod integration_tests {
 
             let block1 = file.block(10).unwrap();
             assert_eq!(block1.topology, "HEX8");
-            assert_eq!(
-                file.name(EntityType::ElemBlock, 0).unwrap(),
-                "HexBlock"
-            );
+            assert_eq!(file.name(EntityType::ElemBlock, 0).unwrap(), "HexBlock");
 
             let block2 = file.block(20).unwrap();
             assert_eq!(block2.topology, "TET4");
@@ -502,8 +495,7 @@ mod integration_tests {
                     conn1.push((i * 2 + j + 1) as i64);
                 }
             }
-            file.put_connectivity(1, &conn1)
-                .unwrap();
+            file.put_connectivity(1, &conn1).unwrap();
 
             // Block 2: 40 tet elements
             let block2 = Block {
@@ -524,8 +516,7 @@ mod integration_tests {
                     conn2.push((i + j + 1) as i64);
                 }
             }
-            file.put_connectivity(2, &conn2)
-                .unwrap();
+            file.put_connectivity(2, &conn2).unwrap();
         }
 
         {
@@ -703,16 +694,14 @@ mod integration_tests {
                 num_attributes: 0,
             };
             file.put_block(&block).unwrap();
-            file.put_connectivity(1, &vec![1, 2, 3, 4])
-                .unwrap();
+            file.put_connectivity(1, &vec![1, 2, 3, 4]).unwrap();
 
             // Attempt invalid operation (wrong connectivity length)
             let result = file.put_connectivity(1, &vec![1, 2]);
             assert!(result.is_err());
 
             // Continue with valid operations
-            file.put_name(EntityType::ElemBlock, 0, "Block1")
-                .unwrap();
+            file.put_name(EntityType::ElemBlock, 0, "Block1").unwrap();
         }
 
         // Verify file is still readable

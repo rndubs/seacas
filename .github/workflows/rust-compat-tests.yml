@@ -1,0 +1,96 @@
+name: Rust-C Compatibility Tests
+
+on:
+  push:
+    branches: [ main, master, 'claude/**' ]
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+
+jobs:
+  compat-tests:
+    name: Run Rust-C Compatibility Tests
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        submodules: recursive
+
+    - name: Install system dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+          build-essential \
+          cmake \
+          gfortran \
+          curl \
+          m4 \
+          zlib1g-dev
+
+    - name: Install Rust toolchain
+      uses: dtolnay/rust-toolchain@stable
+
+    - name: Cache cargo registry
+      uses: actions/cache@v4
+      with:
+        path: ~/.cargo/registry
+        key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+        restore-keys: |
+          ${{ runner.os }}-cargo-registry-
+
+    - name: Cache cargo index
+      uses: actions/cache@v4
+      with:
+        path: ~/.cargo/git
+        key: ${{ runner.os }}-cargo-git-${{ hashFiles('**/Cargo.lock') }}
+        restore-keys: |
+          ${{ runner.os }}-cargo-git-
+
+    - name: Cache TPL build (HDF5, NetCDF)
+      uses: actions/cache@v4
+      with:
+        path: TPL
+        key: ${{ runner.os }}-tpl-${{ hashFiles('install-tpl.sh') }}
+        restore-keys: |
+          ${{ runner.os }}-tpl-
+
+    - name: Cache compat test build
+      uses: actions/cache@v4
+      with:
+        path: |
+          build-compat
+        key: ${{ runner.os }}-compat-build-${{ hashFiles('rust/compat-tests/**', 'packages/seacas/libraries/exodus/**') }}
+        restore-keys: |
+          ${{ runner.os }}-compat-build-
+
+    - name: Setup C Exodus library and verification tools
+      run: |
+        cd rust/compat-tests
+        # Clean build if TPL exists but is incomplete
+        if [ -d "../../TPL" ] && [ ! -f "../../TPL/hdf5-1.14.6/lib/libhdf5.a" ]; then
+          echo "TPL directory exists but appears incomplete, cleaning..."
+          rm -rf ../../TPL ../../build-compat
+        fi
+        ./setup-environment.sh
+
+    - name: Run compatibility tests
+      run: |
+        cd rust/compat-tests
+        source ./env-compat.sh
+        ./run-compat-tests.sh
+
+    - name: Upload test results
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: compat-test-results
+        path: |
+          rust/compat-tests/**/*.exo
+          rust/compat-tests/**/*.log
+        retention-days: 7

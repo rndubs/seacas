@@ -1,0 +1,89 @@
+name: Rust Compile
+
+
+
+on:
+  push:
+    branches: [ main, master, 'claude/**' ]
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+
+jobs:
+  compile:
+    name: Compile Rust Code
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Install system dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y libhdf5-dev libnetcdf-dev pkg-config
+
+    - name: Install Rust toolchain
+      uses: dtolnay/rust-toolchain@stable
+      with:
+        components: rustfmt, clippy
+
+    - name: Cache cargo registry
+      uses: actions/cache@v4
+      with:
+        path: ~/.cargo/registry
+        key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+        restore-keys: |
+          ${{ runner.os }}-cargo-registry-
+
+    - name: Cache cargo index
+      uses: actions/cache@v4
+      with:
+        path: ~/.cargo/git
+        key: ${{ runner.os }}-cargo-git-${{ hashFiles('**/Cargo.lock') }}
+        restore-keys: |
+          ${{ runner.os }}-cargo-git-
+
+    - name: Cache cargo build
+      uses: actions/cache@v4
+      with:
+        path: rust/exodus-rs/target
+        key: ${{ runner.os }}-cargo-build-${{ hashFiles('rust/exodus-rs/Cargo.lock') }}
+        restore-keys: |
+          ${{ runner.os }}-cargo-build-
+
+    - name: Check exodus-rs formatting
+      run: |
+        cd rust/exodus-rs
+        cargo fmt --all -- --check
+
+    - name: Run exodus-rs clippy
+      run: |
+        cd rust/exodus-rs
+        cargo clippy --features netcdf4 -- -D warnings
+
+    - name: Build exodus-rs (debug)
+      run: |
+        cd rust/exodus-rs
+        cargo build --features netcdf4
+
+    - name: Build exodus-rs (release)
+      run: |
+        cd rust/exodus-rs
+        cargo build --release --features netcdf4
+
+    - name: Check exodus-rs with all features
+      run: |
+        cd rust/exodus-rs
+        cargo check --all-features
+
+    - name: Build exodus-py
+      run: |
+        cd rust/exodus-py
+        pip install maturin
+        maturin build --release
+

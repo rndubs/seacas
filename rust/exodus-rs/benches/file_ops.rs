@@ -10,9 +10,7 @@ fn benchmark_file_create(c: &mut Criterion) {
             let temp = NamedTempFile::new().unwrap();
             let mut opts = CreateOptions::default();
             opts.mode = CreateMode::Clobber;
-            let _file = black_box(
-                ExodusFile::create(temp.path(), opts).unwrap()
-            );
+            let _file = black_box(ExodusFile::create(temp.path(), opts).unwrap());
         })
     });
 
@@ -80,5 +78,10 @@ fn benchmark_file_open(c: &mut Criterion) {
     group.finish();
 }
 
-criterion_group!(benches, benchmark_file_create, benchmark_file_init, benchmark_file_open);
+criterion_group!(
+    benches,
+    benchmark_file_create,
+    benchmark_file_init,
+    benchmark_file_open
+);
 criterion_main!(benches);
