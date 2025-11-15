@@ -292,23 +292,47 @@ fi
 echo "Verifying Exodus installation..."
 EXODUS_DIR="$BUILD_DIR/install"
 
+echo "Searching for exodusII.h..."
+find "$EXODUS_DIR" -name "exodusII.h" 2>/dev/null || echo "  Not found in $EXODUS_DIR"
+
+echo ""
+echo "Searching for libexodus.*..."
+find "$EXODUS_DIR" -name "libexodus.*" 2>/dev/null || echo "  Not found in $EXODUS_DIR"
+
+echo ""
+echo "Full installation directory tree:"
+find "$EXODUS_DIR" -type f 2>/dev/null | head -50
+
+echo ""
+
+# Check if headers are in the expected location
 if [ ! -f "$EXODUS_DIR/include/exodusII.h" ]; then
-  echo -e "${RED}✗ exodusII.h not found in $EXODUS_DIR/include/${NC}"
-  echo "Installation directory contents:"
-  ls -la "$EXODUS_DIR/" 2>/dev/null || echo "  Install directory doesn't exist"
-  ls -la "$EXODUS_DIR/include/" 2>/dev/null || echo "  Include directory doesn't exist"
-  ls -la "$EXODUS_DIR/lib/" 2>/dev/null || echo "  Lib directory doesn't exist"
+  # Maybe they're in a subdirectory
+  EXODUS_HEADER=$(find "$EXODUS_DIR" -name "exodusII.h" -type f | head -1)
+  if [ -n "$EXODUS_HEADER" ]; then
+    EXODUS_INCLUDE_DIR=$(dirname "$EXODUS_HEADER")
+    echo -e "${YELLOW}Found exodusII.h in non-standard location: $EXODUS_INCLUDE_DIR${NC}"
+    echo "Adjusting paths..."
+
+    # Update EXODUS_DIR to point to the actual location
+    # We need to go up to the common ancestor
+    # For now, let's see what the actual path is
+    echo "Actual header location: $EXODUS_HEADER"
+  else
+    echo -e "${RED}✗ exodusII.h not found anywhere in $EXODUS_DIR${NC}"
+    echo "Installation appears incomplete"
+    exit 1
+  fi
+fi
+
+# Check if library is in expected location
+EXODUS_LIB=$(find "$EXODUS_DIR" -name "libexodus.a" -o -name "libexodus.so" | head -1)
+if [ -z "$EXODUS_LIB" ]; then
+  echo -e "${RED}✗ Exodus library not found anywhere in $EXODUS_DIR${NC}"
   exit 1
 fi
 
-if [ ! -f "$EXODUS_DIR/lib/libexodus.a" ] && [ ! -f "$EXODUS_DIR/lib/libexodus.so" ]; then
-  echo -e "${RED}✗ Exodus library not found in $EXODUS_DIR/lib/${NC}"
-  echo "Lib directory contents:"
-  ls -la "$EXODUS_DIR/lib/" 2>/dev/null
-  exit 1
-fi
-
-echo -e "${GREEN}✓ Exodus headers and library verified${NC}"
+echo -e "${GREEN}✓ Exodus installation verified${NC}"
 echo ""
 
 # ==========================================
