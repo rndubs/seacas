@@ -20,6 +20,22 @@ SOURCE_DIR="$DOCS_DIR"
 
 echo -e "${GREEN}=== exodus-py Documentation Build ===${NC}\n"
 
+# Show usage if --help is passed
+if [ "$1" == "--help" ] || [ "$1" == "-h" ]; then
+    echo "Usage: $0 [OPTIONS]"
+    echo ""
+    echo "Options:"
+    echo "  --test, --test-docs    Run documentation code example tests before building"
+    echo "  --help, -h             Show this help message"
+    echo ""
+    echo "Examples:"
+    echo "  $0                     Build documentation only"
+    echo "  $0 --test             Test code examples, then build documentation"
+    echo ""
+    exit 0
+fi
+
+
 # Check if we're in the right directory
 if [ ! -f "$DOCS_DIR/conf.py" ]; then
     echo -e "${RED}Error: conf.py not found in $DOCS_DIR${NC}"
@@ -92,6 +108,24 @@ echo -e "\n${YELLOW}Cleaning previous build...${NC}"
 if [ -d "$BUILD_DIR" ]; then
     rm -rf "$BUILD_DIR"
     echo -e "${GREEN}✓ Cleaned previous build${NC}"
+fi
+
+# Test documentation code examples (optional)
+if [ "$1" == "--test" ] || [ "$1" == "--test-docs" ]; then
+    echo -e "\n${YELLOW}Testing documentation code examples...${NC}"
+    cd "$DOCS_DIR"
+    $PYTHON -m pytest -v --tb=short
+    TEST_STATUS=$?
+    cd - > /dev/null
+
+    if [ $TEST_STATUS -ne 0 ]; then
+        echo -e "\n${RED}════════════════════════════════════════${NC}"
+        echo -e "${RED}✗ Documentation tests failed${NC}"
+        echo -e "${RED}════════════════════════════════════════${NC}"
+        exit 1
+    else
+        echo -e "${GREEN}✓ All documentation tests passed${NC}"
+    fi
 fi
 
 # Build documentation

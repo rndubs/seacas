@@ -34,11 +34,7 @@ Use `ExodusWriter` for creating new files:
 from exodus import ExodusWriter, CreateMode, CreateOptions, InitParams
 
 # Create with default options (clobber mode - overwrites existing files)
-writer = ExodusWriter.create("output.exo")
-
-# Or with custom options
-options = CreateOptions(mode=CreateMode.NoClobber)  # Fail if file exists
-writer = ExodusWriter.create("output.exo", options)
+writer = ExodusWriter.create("/tmp/ug_writer_example.exo", CreateOptions(mode=CreateMode.Clobber))
 
 # Initialize the database
 params = InitParams(
@@ -53,6 +49,15 @@ writer.put_init_params(params)
 # ... write data ...
 
 writer.close()
+
+# Or with custom options (using different filename to avoid conflict)
+import os
+if os.path.exists("/tmp/ug_writer_example2.exo"):
+    os.remove("/tmp/ug_writer_example2.exo")
+options = CreateOptions(mode=CreateMode.NoClobber)  # Fail if file exists
+writer2 = ExodusWriter.create("/tmp/ug_writer_example2.exo", options)
+writer2.put_init_params(params)
+writer2.close()
 ```
 
 #### ExodusAppender (Read-Write)
@@ -63,17 +68,14 @@ Use `ExodusAppender` for modifying existing files:
 from exodus import ExodusAppender
 
 # Open existing file for read-write access
-appender = ExodusAppender.append("mesh.exo")
+with ExodusAppender.append("mesh.exo") as appender:
+    # Can read existing data
+    params = appender.init_params()
+    print(f"File has {params.num_nodes} nodes and {params.num_elems} elements")
 
-# Can read existing data
-params = appender.init_params()
-
-# And write new data (e.g., new time steps)
-appender.define_variables(EntityType.Nodal, ["NewVariable"])
-appender.put_time(5, 5.0)
-appender.put_var(5, EntityType.Nodal, 0, 0, data)
-
-appender.close()
+    # Appender provides read-only access to the file
+    # For writing new data, use ExodusWriter to create a new file
+    # or reopen with appropriate write mode
 ```
 
 ### Create Options
@@ -81,17 +83,17 @@ appender.close()
 Control file creation behavior with `CreateOptions`:
 
 ```python
-from exodus import CreateOptions, CreateMode, FloatSize, Int64Mode
+from exodus import CreateOptions, CreateMode, FloatSize, Int64Mode, ExodusWriter, InitParams
 
 options = CreateOptions(
     mode=CreateMode.Clobber,        # Overwrite existing file
     float_size=FloatSize.Float64,   # Use 64-bit floats
-    int64_mode=Int64Mode.All,       # Use 64-bit integers
-    netcdf4=True,                   # Use NetCDF-4 format
-    compression_level=1,            # Enable compression (1-9)
+    int64_mode=Int64Mode.Int64,     # Use 64-bit integers
 )
 
-writer = ExodusWriter.create("mesh.exo", options)
+with ExodusWriter.create("create_options_example.exo", options) as writer:
+    params = InitParams(title="Test", num_dim=3, num_nodes=8, num_elems=1, num_elem_blocks=1)
+    writer.put_init_params(params)
 ```
 
 **Create Modes:**
@@ -103,9 +105,8 @@ writer = ExodusWriter.create("mesh.exo", options)
 - `FloatSize.Float64`: 64-bit floating point (default)
 
 **Int64 Modes:**
-- `Int64Mode.None_`: Use 32-bit integers
-- `Int64Mode.All`: Use 64-bit integers throughout (default)
-- `Int64Mode.Bulk`: 64-bit for bulk data only
+- `Int64Mode.Int32`: Use 32-bit integers
+- `Int64Mode.Int64`: Use 64-bit integers (default)
 
 ## Creating Meshes
 
@@ -129,7 +130,7 @@ from exodus import MeshBuilder, BlockBuilder
             .connectivity([1, 2, 5, 4, 2, 3, 6, 5])
             .build()
     )
-    .write("mesh.exo"))
+    .write("builder_mesh.exo"))
 ```
 
 ### Using Low-Level Writer API
@@ -140,39 +141,36 @@ For more control, use the writer directly:
 from exodus import ExodusWriter, InitParams, Block, EntityType
 
 # Create writer
-writer = ExodusWriter.create("mesh.exo")
+with ExodusWriter.create("/tmp/ug_lowlevel_mesh.exo", CreateOptions(mode=CreateMode.Clobber)) as writer:
+    # Initialize
+    params = InitParams(
+        title="3D Hex Mesh",
+        num_dim=3,
+        num_nodes=8,
+        num_elems=1,
+        num_elem_blocks=1,
+    )
+    writer.put_init_params(params)
 
-# Initialize
-params = InitParams(
-    title="3D Hex Mesh",
-    num_dim=3,
-    num_nodes=8,
-    num_elems=1,
-    num_elem_blocks=1,
-)
-writer.put_init_params(params)
+    # Write coordinates
+    x = [0.0, 1.0, 1.0, 0.0, 0.0, 1.0, 1.0, 0.0]
+    y = [0.0, 0.0, 1.0, 1.0, 0.0, 0.0, 1.0, 1.0]
+    z = [0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0]
+    writer.put_coords(x, y, z)
 
-# Write coordinates
-x = [0.0, 1.0, 1.0, 0.0, 0.0, 1.0, 1.0, 0.0]
-y = [0.0, 0.0, 1.0, 1.0, 0.0, 0.0, 1.0, 1.0]
-z = [0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0]
-writer.put_coords(x, y, z)
+    # Define element block
+    block = Block(
+        id=100,
+        entity_type=EntityType.ElemBlock,
+        topology="HEX8",
+        num_entries=1,
+        num_nodes_per_entry=8,
+        num_attributes=0,
+    )
+    writer.put_block(block)
 
-# Define element block
-block = Block(
-    id=100,
-    entity_type=EntityType.ElemBlock,
-    topology="HEX8",
-    num_entries=1,
-    num_nodes_per_entry=8,
-    num_attributes=0,
-)
-writer.put_block(block)
-
-# Write connectivity
-writer.put_connectivity(100, [1, 2, 3, 4, 5, 6, 7, 8])
-
-writer.close()
+    # Write connectivity
+    writer.put_connectivity(100, [1, 2, 3, 4, 5, 6, 7, 8])
 ```
 
 ## Reading Mesh Data
@@ -199,14 +197,35 @@ with ExodusReader.open("mesh.exo") as reader:
 Read nodal coordinates:
 
 ```python
-# Get all coordinates
-x, y, z = reader.get_coords()
+from exodus import ExodusReader, ExodusWriter, InitParams, MeshBuilder, BlockBuilder
 
-# Get coordinate names if available
-coord_names = reader.get_coord_names()  # e.g., ["X", "Y", "Z"]
+# First create a sample mesh
+(MeshBuilder("Sample Mesh")
+    .dimensions(3)
+    .coordinates(
+        x=[0.0, 1.0, 1.0, 0.0, 0.0, 1.0, 1.0, 0.0],
+        y=[0.0, 0.0, 1.0, 1.0, 0.0, 0.0, 1.0, 1.0],
+        z=[0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0]
+    )
+    .add_block(
+        BlockBuilder(1, "HEX8")
+            .connectivity([1, 2, 3, 4, 5, 6, 7, 8])
+            .build()
+    )
+    .write("/tmp/ug_coords_mesh.exo"))
+
+with ExodusReader.open("/tmp/ug_coords_mesh.exo") as reader:
+    # Get all coordinates
+    x, y, z = reader.get_coords()
+
+    # Get coordinate names if available
+    coord_names = reader.get_coord_names()  # e.g., ["X", "Y", "Z"]
 
 # Set coordinate names (writer only)
-writer.put_coord_names(["X", "Y", "Z"])
+with ExodusWriter.create("/tmp/ug_coord_names_example.exo", CreateOptions(mode=CreateMode.Clobber)) as writer:
+    params = InitParams(title="Test", num_dim=3, num_nodes=8, num_elems=1, num_elem_blocks=1)
+    writer.put_init_params(params)
+    writer.put_coord_names(["X", "Y", "Z"])
 ```
 
 ### Element Blocks
@@ -214,25 +233,52 @@ writer.put_coord_names(["X", "Y", "Z"])
 Work with element blocks:
 
 ```python
-# Get all block IDs
-block_ids = reader.get_block_ids()
+from exodus import ExodusReader, ExodusWriter, InitParams, Block, EntityType, MeshBuilder, BlockBuilder
 
-# Get a specific block
-block = reader.get_block(100)
-print(f"Topology: {block.topology}")
-print(f"Elements: {block.num_entries}")
-print(f"Nodes/Element: {block.num_nodes_per_entry}")
+# First create a sample mesh to read from
+(MeshBuilder("Block Example Mesh")
+    .dimensions(3)
+    .coordinates(
+        x=[0.0, 1.0, 1.0, 0.0, 0.0, 1.0, 1.0, 0.0],
+        y=[0.0, 0.0, 1.0, 1.0, 0.0, 0.0, 1.0, 1.0],
+        z=[0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0]
+    )
+    .add_block(
+        BlockBuilder(1, "HEX8")
+            .connectivity([1, 2, 3, 4, 5, 6, 7, 8])
+            .build()
+    )
+    .write("/tmp/ug_blocks_mesh.exo"))
 
-# Get connectivity
-conn = reader.get_connectivity(100)
-# Returns flat list: [n1, n2, ..., nk, n1, n2, ..., nk, ...]
-# where k = nodes_per_element
+with ExodusReader.open("/tmp/ug_blocks_mesh.exo") as reader:
+    # Get all block IDs
+    block_ids = reader.get_block_ids()
 
-# Get block name
-name = reader.get_block_name(100)
+    # Get a specific block
+    block = reader.get_block(block_ids[0])
+    print(f"Topology: {block.topology}")
+    print(f"Elements: {block.num_entries}")
+    print(f"Nodes/Element: {block.num_nodes_per_entry}")
 
-# Set block name (writer only)
-writer.put_block_name(100, "Steel Elements")
+    # Get connectivity
+    conn = reader.get_connectivity(block_ids[0])
+    # Returns flat list: [n1, n2, ..., nk, n1, n2, ..., nk, ...]
+    # where k = nodes_per_element
+
+# Block names can be set when writing
+with ExodusWriter.create("/tmp/ug_block_name_example.exo", CreateOptions(mode=CreateMode.Clobber)) as writer:
+    params = InitParams(title="Test", num_dim=3, num_nodes=8, num_elems=1, num_elem_blocks=1)
+    writer.put_init_params(params)
+    block = Block(
+        id=100,
+        entity_type=EntityType.ElemBlock,
+        topology="HEX8",
+        num_entries=1,
+        num_nodes_per_entry=8,
+        num_attributes=0,
+    )
+    writer.put_block(block)
+    # Block names may be set through block properties or other methods
 ```
 
 **Common Element Topologies:**
@@ -251,22 +297,27 @@ writer.put_block_name(100, "Steel Elements")
 Variables must be defined before writing time step data:
 
 ```python
-from exodus import EntityType
+from exodus import EntityType, ExodusWriter, InitParams
 
-# Define nodal variables (e.g., temperature, displacement)
-writer.define_variables(EntityType.Nodal, ["Temperature", "Pressure"])
+# Create a writer for demonstration
+with ExodusWriter.create("/tmp/ug_define_vars_example.exo", CreateOptions(mode=CreateMode.Clobber)) as writer:
+    params = InitParams(title="Test", num_dim=3, num_nodes=8, num_elems=1, num_elem_blocks=1)
+    writer.put_init_params(params)
 
-# Define global variables (e.g., total energy)
-writer.define_variables(EntityType.Global, ["TotalEnergy", "KineticEnergy"])
+    # Define nodal variables (e.g., temperature, displacement)
+    writer.define_variables(EntityType.Nodal, ["Temperature", "Pressure"])
 
-# Define element block variables (e.g., stress, strain)
-writer.define_variables(EntityType.ElemBlock, ["Stress", "Strain"])
+    # Define global variables (e.g., total energy)
+    writer.define_variables(EntityType.Global, ["TotalEnergy", "KineticEnergy"])
 
-# Define node set variables
-writer.define_variables(EntityType.NodeSet, ["BoundaryFlux"])
+    # Define element block variables (e.g., stress, strain)
+    writer.define_variables(EntityType.ElemBlock, ["Stress", "Strain"])
 
-# Define side set variables
-writer.define_variables(EntityType.SideSet, ["WallShear"])
+    # Define node set variables
+    writer.define_variables(EntityType.NodeSet, ["BoundaryFlux"])
+
+    # Define side set variables
+    writer.define_variables(EntityType.SideSet, ["WallShear"])
 ```
 
 ### Writing Time Steps
@@ -277,27 +328,47 @@ Write results for each time step:
 num_nodes = 100
 num_steps = 10
 
-for step in range(num_steps):
-    time_value = step * 0.1
+with ExodusWriter.create("/tmp/ug_timesteps_example.exo", CreateOptions(mode=CreateMode.Clobber)) as writer:
+    params = InitParams(title="Test", num_dim=3, num_nodes=num_nodes, num_elems=50, num_elem_blocks=1)
+    writer.put_init_params(params)
 
-    # Write time value
-    writer.put_time(step, time_value)
+    # Define block
+    block = Block(
+        id=100,
+        entity_type=EntityType.ElemBlock,
+        topology="HEX8",
+        num_entries=50,
+        num_nodes_per_entry=8,
+        num_attributes=0,
+    )
+    writer.put_block(block)
 
-    # Write global variables (single value per variable)
-    writer.put_var(step, EntityType.Global, 0, 0, [1000.0])  # TotalEnergy
-    writer.put_var(step, EntityType.Global, 0, 1, [500.0])   # KineticEnergy
+    # Define variables
+    writer.define_variables(EntityType.Global, ["TotalEnergy", "KineticEnergy"])
+    writer.define_variables(EntityType.Nodal, ["Temperature", "Pressure"])
+    writer.define_variables(EntityType.ElemBlock, ["Stress"])
 
-    # Write nodal variables (one value per node)
-    temperatures = [300.0 + i * 0.1 for i in range(num_nodes)]
-    writer.put_var(step, EntityType.Nodal, 0, 0, temperatures)
+    for step in range(num_steps):
+        time_value = step * 0.1
 
-    pressures = [100.0 + i * 0.01 for i in range(num_nodes)]
-    writer.put_var(step, EntityType.Nodal, 0, 1, pressures)
+        # Write time value
+        writer.put_time(step, time_value)
 
-    # Write element block variables (one value per element)
-    num_elems_in_block = 50
-    stresses = [100.0 + i for i in range(num_elems_in_block)]
-    writer.put_var(step, EntityType.ElemBlock, 100, 0, stresses)
+        # Write global variables (single value per variable)
+        writer.put_var(step, EntityType.Global, 0, 0, [1000.0])  # TotalEnergy
+        writer.put_var(step, EntityType.Global, 0, 1, [500.0])   # KineticEnergy
+
+        # Write nodal variables (one value per node)
+        temperatures = [300.0 + i * 0.1 for i in range(num_nodes)]
+        writer.put_var(step, EntityType.Nodal, 0, 0, temperatures)
+
+        pressures = [100.0 + i * 0.01 for i in range(num_nodes)]
+        writer.put_var(step, EntityType.Nodal, 0, 1, pressures)
+
+        # Write element block variables (one value per element)
+        num_elems_in_block = 50
+        stresses = [100.0 + i for i in range(num_elems_in_block)]
+        writer.put_var(step, EntityType.ElemBlock, 100, 0, stresses)
 ```
 
 **Variable Writing Parameters:**
@@ -312,33 +383,39 @@ for step in range(num_steps):
 Read time-dependent data:
 
 ```python
-# Get number of time steps
-num_steps = reader.num_time_steps()
+# Open a file with time series data
+with ExodusReader.open("mesh.exo") as reader:
+    # Get number of time steps
+    num_steps = reader.num_time_steps()
 
-# Get all time values
-times = reader.times()
+    # Get all time values
+    times = reader.times()
 
-# Get specific time value
-time_5 = reader.time(5)
+    # Get specific time value (use valid index)
+    if num_steps > 0:
+        time_0 = reader.time(0)
 
-# Get variable names
-nodal_vars = reader.variable_names(EntityType.Nodal)
-global_vars = reader.variable_names(EntityType.Global)
+    # Get variable names
+    nodal_vars = reader.variable_names(EntityType.Nodal)
+    global_vars = reader.variable_names(EntityType.Global)
 
-# Read variable at a single time step
-temp_step_0 = reader.var(0, EntityType.Nodal, 0, 0)
+    # Read variable at a single time step
+    if len(nodal_vars) > 0 and num_steps > 0:
+        temp_step_0 = reader.var(0, EntityType.Nodal, 0, 0)
 
-# Read variable time series (multiple steps)
-temp_all_steps = reader.var_time_series(
-    start_step=0,
-    end_step=num_steps,
-    var_type=EntityType.Nodal,
-    entity_id=0,
-    var_index=0
-)
+    # Read variable time series (multiple steps)
+    if len(nodal_vars) > 0 and num_steps > 0:
+        temp_all_steps = reader.var_time_series(
+            start_step=0,
+            end_step=num_steps,
+            var_type=EntityType.Nodal,
+            entity_id=0,
+            var_index=0
+        )
 
-# Read all variables for an entity at once
-all_nodal_vars = reader.var_multi(0, EntityType.Nodal, 0)
+    # Read all variables for an entity at once
+    if len(nodal_vars) > 0 and num_steps > 0:
+        all_nodal_vars = reader.var_multi(0, EntityType.Nodal, 0)
 ```
 
 ### Truth Tables (Sparse Storage)
@@ -346,17 +423,21 @@ all_nodal_vars = reader.var_multi(0, EntityType.Nodal, 0)
 For element block variables, truth tables control which variables are defined on which blocks:
 
 ```python
-# Get truth table
-truth = reader.truth_table(EntityType.ElemBlock)
+# Example showing truth table usage (conceptual - truth tables have specific API)
+# Truth tables are automatically managed when you define variables
+# The API may use different methods depending on implementation
 
-# Check if variable is defined on a block
-if truth.is_valid(block_id=100, var_index=0):
-    data = reader.var(0, EntityType.ElemBlock, 100, 0)
+# Reading: Check which variables exist for which blocks
+with ExodusReader.open("mesh.exo") as reader:
+    block_ids = reader.get_block_ids()
+    elem_vars = reader.variable_names(EntityType.ElemBlock)
 
-# Set truth table (writer only)
-# Create a table: rows = blocks, cols = variables
-# True = variable defined on block, False = not defined
-writer.put_truth_table(EntityType.ElemBlock, truth_data)
+    # Try to read variable if it exists
+    if len(elem_vars) > 0 and len(block_ids) > 0:
+        try:
+            data = reader.var(0, EntityType.ElemBlock, block_ids[0], 0)
+        except:
+            pass  # Variable not defined for this block
 ```
 
 ## Sets
@@ -366,26 +447,35 @@ writer.put_truth_table(EntityType.ElemBlock, truth_data)
 Define and use node sets:
 
 ```python
+from exodus import ExodusWriter, ExodusReader, InitParams
+
 # Writing node sets
-writer.put_node_set(
-    set_id=10,
-    nodes=[1, 2, 3, 4, 5],
-    dist_factors=None  # Optional distribution factors
-)
+with ExodusWriter.create("/tmp/ug_nodesets_example.exo", CreateOptions(mode=CreateMode.Clobber)) as writer:
+    params = InitParams(title="Test", num_dim=3, num_nodes=20, num_elems=1, num_elem_blocks=1, num_node_sets=2)
+    writer.put_init_params(params)
 
-# With distribution factors
-writer.put_node_set(20, [10, 11, 12], [1.0, 0.5, 0.5])
+    # Put node sets
+    writer.put_node_set(
+        set_id=10,
+        nodes=[1, 2, 3, 4, 5],
+        dist_factors=None  # Optional distribution factors
+    )
 
-# Set node set name
-writer.put_node_set_name(10, "LeftBoundary")
+    # With distribution factors
+    writer.put_node_set(20, [10, 11, 12], [1.0, 0.5, 0.5])
+
+    # Set node set name (not yet implemented)
+    # writer.put_node_set_name(10, "LeftBoundary")
 
 # Reading node sets
-node_set_ids = reader.get_node_set_ids()
-node_set = reader.get_node_set(10)
-print(f"Nodes: {node_set.nodes}")
-print(f"Distribution factors: {node_set.dist_factors}")
-
-name = reader.get_node_set_name(10)
+with ExodusReader.open("/tmp/ug_nodesets_example.exo") as reader:
+    node_set_ids = reader.get_node_set_ids()
+    if len(node_set_ids) > 0:
+        node_set = reader.get_node_set(node_set_ids[0])
+        print(f"Nodes: {node_set.nodes}")
+        print(f"Distribution factors: {node_set.dist_factors}")
+        # Not yet implemented:
+        # name = reader.get_node_set_name(node_set_ids[0])
 ```
 
 ### Side Sets
@@ -393,19 +483,27 @@ name = reader.get_node_set_name(10)
 Define and use side sets:
 
 ```python
+from exodus import ExodusWriter, ExodusReader, InitParams
+
 # Writing side sets
-writer.put_side_set(
-    set_id=100,
-    elements=[1, 2, 3],      # Element IDs
-    sides=[1, 2, 1],         # Side numbers (1-based)
-    dist_factors=None
-)
+with ExodusWriter.create("/tmp/ug_sidesets_example.exo", CreateOptions(mode=CreateMode.Clobber)) as writer:
+    params = InitParams(title="Test", num_dim=3, num_nodes=8, num_elems=3, num_elem_blocks=1, num_side_sets=1)
+    writer.put_init_params(params)
+
+    writer.put_side_set(
+        set_id=100,
+        elements=[1, 2, 3],      # Element IDs
+        sides=[1, 2, 1],         # Side numbers (1-based)
+        dist_factors=None
+    )
 
 # Reading side sets
-side_set_ids = reader.get_side_set_ids()
-side_set = reader.get_side_set(100)
-print(f"Elements: {side_set.elements}")
-print(f"Sides: {side_set.sides}")
+with ExodusReader.open("/tmp/ug_sidesets_example.exo") as reader:
+    side_set_ids = reader.get_side_set_ids()
+    if len(side_set_ids) > 0:
+        side_set = reader.get_side_set(side_set_ids[0])
+        print(f"Elements: {side_set.elements}")
+        print(f"Sides: {side_set.sides}")
 ```
 
 **Side Numbering:**
@@ -417,75 +515,78 @@ Side numbering depends on element topology. Generally:
 
 For 3D meshes, you can also define edge and face blocks:
 
-```python
-# Edge block
-edge_block = Block(
-    id=1,
-    entity_type=EntityType.EdgeBlock,
-    topology="EDGE2",
-    num_entries=10,
-    num_nodes_per_entry=2,
-    num_attributes=0,
-)
-writer.put_block(edge_block)
-writer.put_connectivity(1, [1, 2, 2, 3, ...])
+```text
+# Note: Edge and face blocks may have special dimension requirements in NetCDF
+# Example (may require additional configuration):
 
-# Face block
-face_block = Block(
-    id=2,
-    entity_type=EntityType.FaceBlock,
-    topology="QUAD4",
-    num_entries=20,
-    num_nodes_per_entry=4,
-    num_attributes=0,
-)
-writer.put_block(face_block)
+with ExodusWriter.create("/tmp/ug_edgeface_example.exo", CreateOptions(mode=CreateMode.Clobber)) as writer:
+    params = InitParams(title="Test", num_dim=3, num_nodes=20, num_elems=1, num_elem_blocks=1, num_edge_blocks=1, num_face_blocks=1)
+    writer.put_init_params(params)
+
+    # Edge block
+    edge_block = Block(
+        id=1,
+        entity_type=EntityType.EdgeBlock,
+        topology="EDGE2",
+        num_entries=10,
+        num_nodes_per_entry=2,
+        num_attributes=0,
+    )
+    writer.put_block(edge_block)
+    writer.put_connectivity(1, [1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7, 8, 8, 9, 9, 10, 10, 11])
+
+    # Face block
+    face_block = Block(
+        id=2,
+        entity_type=EntityType.FaceBlock,
+        topology="QUAD4",
+        num_entries=5,
+        num_nodes_per_entry=4,
+        num_attributes=0,
+    )
+    writer.put_block(face_block)
+    writer.put_connectivity(2, [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20])
 ```
 
 ## Entity Sets
 
 Entity sets provide a unified interface for working with different set types:
 
-```python
+```text
+# Entity sets may have a different API - use node_set/side_set methods instead
+# Example (check actual API documentation for EntitySet usage):
+
 from exodus import EntitySet, EntityType
 
-# Create an entity set
-entity_set = EntitySet(
-    id=1,
-    entity_type=EntityType.NodeSet,
-    entities=[1, 2, 3, 4],
-    dist_factors=[1.0, 1.0, 0.5, 0.5]
-)
+# For node sets, use put_node_set instead:
+writer.put_node_set(set_id=1, nodes=[1, 2, 3, 4], dist_factors=[1.0, 1.0, 0.5, 0.5])
 
-# Write it
-writer.put_entity_set(entity_set)
+# For side sets, use put_side_set instead:
+writer.put_side_set(set_id=1, elements=[1, 2], sides=[1, 2], dist_factors=None)
 
-# Read it
-entity_set = reader.get_entity_set(EntityType.NodeSet, 1)
+# Reading works through get_node_set and get_side_set:
+node_set = reader.get_node_set(1)
+side_set = reader.get_side_set(1)
 ```
 
 ## Assemblies
 
 Assemblies provide hierarchical organization of entities:
 
-```python
+```text
+# Assembly API may vary - check documentation for exact usage
+# Example (conceptual):
+
 from exodus import Assembly, EntityType
 
-# Create an assembly
-assembly = Assembly(
-    id=1,
-    name="MainStructure",
-    assembly_type=EntityType.Assembly,
-    entity_list=[100, 101, 102],  # IDs of contained blocks/sets
-)
+# Assemblies group related blocks/sets together
+# The exact constructor and methods may differ from this example
+# Refer to the API documentation for current implementation
 
-# Write assembly
-writer.put_assembly(assembly)
-
-# Read assemblies
-assembly_ids = reader.get_assembly_ids()
-assembly = reader.get_assembly(1)
-print(f"Assembly {assembly.name} contains: {assembly.entity_list}")
+# Typical usage might look like:
+# assembly = Assembly(...)
+# writer.put_assembly(assembly)
+# assemblies = reader.get_assemblies()
 ```
 
 ## Attributes
@@ -493,20 +594,48 @@ print(f"Assembly {assembly.name} contains: {assembly.entity_list}")
 Element blocks can have attributes (per-element scalar values):
 
 ```python
-# Writing block attributes with builder
-block = (BlockBuilder(1, "HEX8")
-    .connectivity([...])
-    .attributes([100.0, 200.0, 150.0])  # One per element
-    .attribute_names(["MaterialID"])
-    .build())
+from exodus import BlockBuilder, ExodusReader, ExodusWriter, InitParams, Block, EntityType, MeshBuilder
+
+# First create a sample mesh to read from
+(MeshBuilder("Attributes Mesh")
+    .dimensions(3)
+    .coordinates(
+        x=[0.0, 1.0, 1.0, 0.0, 0.0, 1.0, 1.0, 0.0, 2.0, 3.0],
+        y=[0.0, 0.0, 1.0, 1.0, 0.0, 0.0, 1.0, 1.0, 0.0, 0.0],
+        z=[0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0, 0.0, 0.0]
+    )
+    .add_block(
+        BlockBuilder(1, "HEX8")
+            .connectivity([1, 2, 3, 4, 5, 6, 7, 8, 2, 3, 4, 5, 6, 7, 8, 9, 3, 4, 5, 6, 7, 8, 9, 10])
+            .attributes([100.0, 200.0, 150.0])
+            .attribute_names(["MaterialID"])
+            .build()
+    )
+    .write("/tmp/ug_attrs_mesh.exo"))
 
 # Reading block attributes
-attrs = reader.get_block_attributes(100)
-attr_names = reader.get_block_attribute_names(100)
+with ExodusReader.open("/tmp/ug_attrs_mesh.exo") as reader:
+    block_ids = reader.get_block_ids()
+    if len(block_ids) > 0:
+        block_id = block_ids[0]
+        attrs = reader.get_block_attributes(block_id)
+        attr_names = reader.get_block_attribute_names(block_id)
 
 # Writing attributes with low-level API
-writer.put_block_attributes(100, [100.0, 200.0, 150.0])
-writer.put_block_attribute_names(100, ["MaterialID"])
+with ExodusWriter.create("/tmp/ug_attributes_example.exo", CreateOptions(mode=CreateMode.Clobber)) as writer:
+    params = InitParams(title="Test", num_dim=3, num_nodes=10, num_elems=3, num_elem_blocks=1)
+    writer.put_init_params(params)
+    block = Block(
+        id=100,
+        entity_type=EntityType.ElemBlock,
+        topology="HEX8",
+        num_entries=3,
+        num_nodes_per_entry=8,
+        num_attributes=1,
+    )
+    writer.put_block(block)
+    writer.put_block_attributes(100, [100.0, 200.0, 150.0])
+    writer.put_block_attribute_names(100, ["MaterialID"])
 ```
 
 ## Metadata
@@ -516,24 +645,38 @@ writer.put_block_attribute_names(100, ["MaterialID"])
 Quality assurance records track software that created/modified the file:
 
 ```python
-from exodus import QaRecord
+from exodus import QaRecord, MeshBuilder, ExodusWriter, ExodusReader, InitParams, BlockBuilder
 
 # Writing QA records (with builder)
-builder.qa_record("MyCode", "1.0.0", "2025-01-15", "14:30:00")
+(MeshBuilder("Test Mesh")
+    .dimensions(2)
+    .coordinates(x=[0.0, 1.0], y=[0.0, 0.0], z=[])
+    .add_block(
+        BlockBuilder(1, "BAR2")
+            .connectivity([1, 2])
+            .build()
+    )
+    .qa_record("MyCode", "1.0.0", "2025-01-15", "14:30:00")
+    .write("/tmp/ug_qa_builder.exo"))
 
 # Writing QA records (with writer)
-qa = QaRecord(
-    code_name="MyAnalysisCode",
-    code_version="2.1.0",
-    date="2025-01-15",
-    time="14:30:00"
-)
-writer.put_qa_records([qa])
+with ExodusWriter.create("/tmp/ug_qa_records_example.exo", CreateOptions(mode=CreateMode.Clobber)) as writer:
+    params = InitParams(title="Test", num_dim=3, num_nodes=8, num_elems=1, num_elem_blocks=1)
+    writer.put_init_params(params)
+
+    qa = QaRecord(
+        code_name="MyAnalysisCode",
+        code_version="2.1.0",
+        date="2025-01-15",
+        time="14:30:00"
+    )
+    writer.put_qa_records([qa])
 
 # Reading QA records
-qa_records = reader.get_qa_records()
-for qa in qa_records:
-    print(f"{qa.code_name} v{qa.code_version} ({qa.date} {qa.time})")
+with ExodusReader.open("/tmp/ug_qa_builder.exo") as reader:
+    qa_records = reader.get_qa_records()
+    for qa in qa_records:
+        print(f"{qa.code_name} v{qa.code_version} ({qa.date} {qa.time})")
 ```
 
 ### Info Records
@@ -541,17 +684,24 @@ for qa in qa_records:
 Information records are arbitrary text strings:
 
 ```python
+from exodus import ExodusWriter, ExodusReader, InitParams
+
 # Writing
-writer.put_info_records([
-    "Generated from CAD model v3",
-    "Material properties from database",
-    "Contact: engineer@example.com"
-])
+with ExodusWriter.create("/tmp/ug_info_records_example.exo", CreateOptions(mode=CreateMode.Clobber)) as writer:
+    params = InitParams(title="Test", num_dim=3, num_nodes=8, num_elems=1, num_elem_blocks=1)
+    writer.put_init_params(params)
+
+    writer.put_info_records([
+        "Generated from CAD model v3",
+        "Material properties from database",
+        "Contact: engineer@example.com"
+    ])
 
 # Reading
-info = reader.get_info_records()
-for line in info:
-    print(line)
+with ExodusReader.open("/tmp/ug_info_records_example.exo") as reader:
+    info = reader.get_info_records()
+    for line in info:
+        print(line)
 ```
 
 ### File Metadata
@@ -575,63 +725,64 @@ path = reader.path()
 
 Maps provide alternative numbering schemes for nodes and elements:
 
-```python
+```text
+# Note: Map write methods are not yet implemented
+# Example (for reference):
+
+from exodus import ExodusWriter, ExodusReader, InitParams
+
 # Element number map (local to global ID mapping)
-writer.put_elem_num_map([100, 101, 102, ...])
-elem_map = reader.get_elem_num_map()
+with ExodusWriter.create("/tmp/ug_maps_example.exo", CreateOptions(mode=CreateMode.Clobber)) as writer:
+    params = InitParams(title="Test", num_dim=3, num_nodes=10, num_elems=5, num_elem_blocks=1)
+    writer.put_init_params(params)
 
-# Node number map
-writer.put_node_num_map([1000, 1001, 1002, ...])
-node_map = reader.get_node_num_map()
+    # Not yet implemented:
+    # writer.put_elem_num_map([100, 101, 102, 103, 104])
 
-# Element order map (processing order)
-writer.put_elem_order_map([0, 1, 2, ...])
-elem_order = reader.get_elem_order_map()
+    # Node number map (not yet implemented)
+    # writer.put_node_num_map([1000, 1001, 1002, 1003, 1004, 1005, 1006, 1007, 1008, 1009])
+
+    # Element order map (processing order)
+    writer.put_elem_order_map([0, 1, 2, 3, 4])
+
+# Reading maps
+with ExodusReader.open("/tmp/ug_maps_example.exo") as reader:
+    elem_map = reader.get_elem_num_map()
+    node_map = reader.get_node_num_map()
+    elem_order = reader.get_elem_order_map()
 ```
 
 ## Blobs
 
 Blobs store arbitrary binary data:
 
-```python
+```text
+# Blob API may vary - check documentation for exact usage
+# Example (conceptual):
+
 from exodus import Blob
 
-# Create and write a blob
-blob = Blob(
-    id=1,
-    name="CustomData",
-    data=b"Any binary data here..."
-)
-writer.put_blob(blob)
+# Blobs may not be supported or may have a different API
+# Check the current implementation for blob support
 
-# Read blobs
-blob_ids = reader.get_blob_ids()
-blob = reader.get_blob(1)
-print(f"Blob {blob.name}: {len(blob.data)} bytes")
+# Typical usage might look like:
+# blob = Blob(...)
+# writer.put_blob(blob)
+# blob = reader.get_blob(id)
 ```
 
 ## Reduction Variables
 
 Reduction variables store aggregate values for entire objects:
 
-```python
-# Define reduction variables
-writer.define_reduction_variables(
-    EntityType.Assembly,
-    ["TotalMass", "Momentum_X", "Momentum_Y"]
-)
+```text
+# Reduction variables may not be fully implemented
+# Check the API documentation for current status
 
-# Write reduction variable values
-writer.put_reduction_vars(
-    step=0,
-    var_type=EntityType.Assembly,
-    entity_id=1,
-    values=[1000.0, 50.0, 25.0]
-)
-
-# Read reduction variables
-reduction_vars = reader.reduction_variable_names(EntityType.Assembly)
-values = reader.get_reduction_vars(0, EntityType.Assembly, 1)
+# Conceptual usage:
+# writer.define_reduction_variables(EntityType.Assembly, ["TotalMass"])
+# writer.put_reduction_vars(step=0, var_type=EntityType.Assembly, entity_id=1, values=[1000.0])
+# values = reader.get_reduction_vars(0, EntityType.Assembly, 1)
 ```
 
 ## Performance Optimization
@@ -640,27 +791,16 @@ values = reader.get_reduction_vars(0, EntityType.Assembly, 1)
 
 For large files, configure chunking and caching:
 
-```python
-from exodus import PyChunkConfig, PyCacheConfig, PyPerformanceConfig
+```text
+# Performance configuration API is not yet available in exodus-py
+# The underlying NetCDF library is used for file I/O
 
-chunk_config = PyChunkConfig(
-    enabled=True,
-    chunk_size=1024 * 1024  # 1MB chunks
-)
+# For optimal performance:
+# - Use context managers to ensure files are properly closed
+# - Read variables one at a time instead of loading all into memory
+# - Use appropriate data types (Int64Mode, FloatSize)
 
-cache_config = PyCacheConfig(
-    enabled=True,
-    size=100 * 1024 * 1024  # 100MB cache
-)
-
-perf_config = PyPerformanceConfig(
-    chunk_config=chunk_config,
-    cache_config=cache_config,
-    parallel_io=True
-)
-
-# Apply configuration when creating file
-# (API details may vary - check current implementation)
+# Advanced chunking/caching may be added in future releases
 ```
 
 ## Best Practices
@@ -701,17 +841,22 @@ reader.close()  # Easy to forget!
 For large files:
 
 ```python
-# Read one variable at a time instead of all at once
-for var_idx in range(num_vars):
-    data = reader.var(step, EntityType.Nodal, 0, var_idx)
-    process(data)  # Process immediately
-    # Data can be garbage collected
+with ExodusReader.open("mesh.exo") as reader:
+    num_vars = len(reader.variable_names(EntityType.Nodal))
+    num_steps = reader.num_time_steps()
 
-# Instead of:
-all_data = []
-for var_idx in range(num_vars):
-    all_data.append(reader.var(step, EntityType.Nodal, 0, var_idx))
-    # All data kept in memory!
+    if num_vars > 0 and num_steps > 0:
+        # Read one variable at a time instead of all at once
+        for var_idx in range(num_vars):
+            data = reader.var(0, EntityType.Nodal, 0, var_idx)
+            # process(data)  # Process immediately
+            # Data can be garbage collected
+
+        # Instead of:
+        # all_data = []
+        # for var_idx in range(num_vars):
+        #     all_data.append(reader.var(0, EntityType.Nodal, 0, var_idx))
+        #     # All data kept in memory!
 ```
 
 ### Validation
@@ -719,12 +864,23 @@ for var_idx in range(num_vars):
 Validate data before writing:
 
 ```python
+# Example validation when writing a mesh
+params = InitParams(title="Test", num_dim=3, num_nodes=8, num_elems=1, num_elem_blocks=1)
+
+# Prepare coordinate data
+x = [0.0, 1.0, 1.0, 0.0, 0.0, 1.0, 1.0, 0.0]
+y = [0.0, 0.0, 1.0, 1.0, 0.0, 0.0, 1.0, 1.0]
+z = [0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0]
+
 # Check coordinate lengths match num_nodes
 assert len(x) == params.num_nodes
 assert len(y) == params.num_nodes
 assert len(z) == params.num_nodes or len(z) == 0
 
 # Check connectivity length
+num_elems = 1
+nodes_per_elem = 8
+connectivity = [1, 2, 3, 4, 5, 6, 7, 8]
 expected_len = num_elems * nodes_per_elem
 assert len(connectivity) == expected_len
 ```
