@@ -77,7 +77,7 @@ jobs:
           echo "TPL directory exists but appears incomplete, cleaning..."
           rm -rf ../../TPL ../../build-compat
         fi
-        ./setup-environment.sh --clean
+        ./setup-environment.sh
 
     - name: Run compatibility tests
       run: |
