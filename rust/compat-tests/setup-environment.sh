@@ -68,8 +68,10 @@ echo ""
 cd "$SEACAS_ROOT"
 
 if [ "$CLEAN_BUILD" = true ]; then
-  echo "Cleaning TPL build directory..."
-  rm -rf TPL
+  echo "Cleaning TPL build artifacts..."
+  # Remove built artifacts but keep source files (*.sh, *.patch)
+  find TPL -mindepth 2 -maxdepth 2 -type d -exec rm -rf {} + 2>/dev/null || true
+  rm -rf lib include bin
 fi
 
 # Set environment variables for TPL build

@@ -72,10 +72,17 @@ jobs:
     - name: Setup C Exodus library and verification tools
       run: |
         cd rust/compat-tests
-        # Clean build if TPL exists but is incomplete
-        if [ -d "../../TPL" ] && [ ! -f "../../TPL/hdf5-1.14.6/lib/libhdf5.a" ]; then
-          echo "TPL directory exists but appears incomplete, cleaning..."
-          rm -rf ../../TPL ../../build-compat
+        # Clean build if cache exists but is incomplete
+        # Note: We check for built libraries in subdirectories of TPL source dirs
+        if [ -d "../../TPL/hdf5" ] && [ -d "../../TPL/hdf5/hdf5_1.14.6" ]; then
+          # HDF5 source was downloaded, check if build is complete
+          if [ ! -f "../../lib/libhdf5.a" ] && [ ! -f "../../lib/libhdf5.so" ]; then
+            echo "TPL build exists but appears incomplete, cleaning built artifacts..."
+            # Remove downloaded and built artifacts, but keep source files (*.sh, *.patch)
+            find ../../TPL -mindepth 2 -maxdepth 2 -type d -exec rm -rf {} + 2>/dev/null || true
+            rm -rf ../../build-compat
+            rm -rf ../../lib ../../include ../../bin
+          fi
         fi
         ./setup-environment.sh
 
