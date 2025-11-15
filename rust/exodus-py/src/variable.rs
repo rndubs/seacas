@@ -1,11 +1,9 @@
 //! Variable and time step operations for Exodus files
 
 use pyo3::prelude::*;
-use pyo3::types::PyList;
-use exodus_rs::EntityType as RustEntityType;
 
 use crate::error::IntoPyResult;
-use crate::file::{ExodusAppender, ExodusReader, ExodusWriter};
+use crate::file::{ExodusReader, ExodusWriter};
 use crate::types::{EntityType, TruthTable};
 
 /// Variable operations for ExodusReader

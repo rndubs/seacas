@@ -2,7 +2,7 @@
 
 use pyo3::prelude::*;
 use crate::error::IntoPyResult;
-use crate::file::{ExodusWriter, ExodusAppender, ExodusReader};
+use crate::file::{ExodusWriter, ExodusReader};
 use crate::types::{NodeSet, SideSet, EntitySet, EntityType};
 
 #[pymethods]

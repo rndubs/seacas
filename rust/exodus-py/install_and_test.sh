@@ -314,10 +314,15 @@ test_wheel() {
     # Run additional tests if pytest is available
     if [ -d "$SCRIPT_DIR/tests" ]; then
         log_info "Installing test dependencies..."
-        uv pip install pytest
+        uv pip install pytest numpy
 
         log_info "Running test suite..."
-        pytest "$SCRIPT_DIR/tests" -v || log_warning "Some tests failed"
+        if ! pytest "$SCRIPT_DIR/tests" -v; then
+            log_error "Tests failed!"
+            deactivate
+            exit 1
+        fi
+        log_success "All tests passed"
     fi
 
     # Run mypy type checking

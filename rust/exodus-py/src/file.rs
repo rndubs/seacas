@@ -2,7 +2,6 @@
 
 use pyo3::prelude::*;
 use exodus_rs::{ExodusFile as RustExodusFile, mode};
-use std::path::PathBuf;
 
 use crate::error::IntoPyResult;
 use crate::types::{CreateOptions, InitParams};
