@@ -33,6 +33,15 @@ cd rust/exodus-py
 maturin develop
 ```
 
+### Development Installation
+
+For development with all optional dependencies (including numpy for performance tests):
+
+```bash
+cd rust/exodus-py
+pip install -e ".[dev]"
+```
+
 ## Quick Start
 
 ### Creating a Mesh with Builder API

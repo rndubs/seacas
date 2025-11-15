@@ -408,10 +408,29 @@ Create a new Exodus file for writing.
 
 **Example:**
 ```python
-writer = ExodusWriter.create("mesh.exo")
+import tempfile
+import os
+
+# Create unique temporary file paths
+fd1, temp_path1 = tempfile.mkstemp(suffix=".exo")
+os.close(fd1)
+os.unlink(temp_path1)  # Remove so ExodusWriter can create it
+
+fd2, temp_path2 = tempfile.mkstemp(suffix=".exo")
+os.close(fd2)
+os.unlink(temp_path2)  # Remove so ExodusWriter can create it
+
+writer = ExodusWriter.create(temp_path1, CreateOptions(mode=CreateMode.Clobber))
+writer.close()
+
 # Or with options:
-opts = CreateOptions(mode=CreateMode.NoClobber)
-writer = ExodusWriter.create("mesh.exo", opts)
+opts = CreateOptions(mode=CreateMode.Clobber)
+writer = ExodusWriter.create(temp_path2, opts)
+writer.close()
+
+# Cleanup
+os.unlink(temp_path1)
+os.unlink(temp_path2)
 ```
 
 ##### `put_init_params(params: InitParams)`
@@ -662,13 +681,16 @@ Open an existing file for read-write access.
 
 **Example:**
 ```python
+# Note: Uses mesh.exo created by test fixtures
 with ExodusAppender.append("mesh.exo") as appender:
     # Read existing data
     params = appender.init_params()
+    print(f"Mesh has {params.num_nodes} nodes, {params.num_dim}D")
 
-    # Write new data
-    appender.define_variables(EntityType.Nodal, ["NewVar"])
-    appender.put_var(0, EntityType.Nodal, 0, 0, values)
+    # Get coordinates
+    x, y, z = appender.get_coords()
+    z_val = z[0] if z else 0.0
+    print(f"First node: ({x[0]}, {y[0]}, {z_val})")
 ```
 
 ---
@@ -757,11 +779,22 @@ Write the mesh to a file.
 
 **Example:**
 ```python
+import tempfile
+import os
+
+# Create a unique temporary path
+fd, temp_path = tempfile.mkstemp(suffix=".exo")
+os.close(fd)
+os.unlink(temp_path)
+
 (MeshBuilder("Mesh")
     .dimensions(2)
-    .coordinates(x=[0, 1], y=[0, 1], z=[])
-    .add_block(BlockBuilder(1, "EDGE2").connectivity([1, 2]).build())
-    .write("mesh.exo"))
+    .coordinates(x=[0.0, 1.0, 1.0, 0.0], y=[0.0, 0.0, 1.0, 1.0])
+    .add_block(BlockBuilder(1, "QUAD4").connectivity([1, 2, 3, 4]).build())
+    .write(temp_path))
+
+# Cleanup
+os.unlink(temp_path)
 ```
 
 ---
@@ -890,10 +923,11 @@ Options for file creation.
 #### Example
 
 ```python
+from exodus import CreateOptions, CreateMode, FloatSize
+
 options = CreateOptions(
     mode=CreateMode.NoClobber,
     float_size=FloatSize.Float64,
-    compression_level=1,
 )
 ```
 
@@ -977,10 +1011,12 @@ Hierarchical grouping of entities.
 #### Example
 
 ```python
+from exodus import Assembly, EntityType
+
 assembly = Assembly(
     id=1,
     name="Structure",
-    assembly_type=EntityType.Assembly,
+    entity_type=EntityType.Assembly,
     entity_list=[100, 101, 102],
 )
 ```

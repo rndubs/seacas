@@ -40,7 +40,7 @@ from exodus import MeshBuilder, BlockBuilder
             .connectivity([1, 2, 3, 4])
             .build()
     )
-    .write("mesh.exo"))
+    .write("/tmp/index_mesh.exo"))
 ```
 
 ### Reading an Existing Mesh
