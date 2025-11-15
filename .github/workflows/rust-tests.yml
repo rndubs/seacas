@@ -10,6 +10,7 @@ on:
 env:
   CARGO_TERM_COLOR: always
   RUST_BACKTRACE: 1
+  HDF5_DISABLE_VERSION_CHECK: 2
 
 jobs:
   test:
@@ -54,6 +55,8 @@ jobs:
           ${{ runner.os }}-cargo-build-
 
     - name: Run exodus-rs tests
+      env:
+        HDF5_DISABLE_VERSION_CHECK: 2
       run: |
         cd rust/exodus-rs
         cargo test --features netcdf4 -- --nocapture
