@@ -275,6 +275,29 @@ else
   echo ""
 fi
 
+# Verify installation
+echo "Verifying Exodus installation..."
+EXODUS_DIR="$BUILD_DIR/install"
+
+if [ ! -f "$EXODUS_DIR/include/exodusII.h" ]; then
+  echo -e "${RED}✗ exodusII.h not found in $EXODUS_DIR/include/${NC}"
+  echo "Installation directory contents:"
+  ls -la "$EXODUS_DIR/" 2>/dev/null || echo "  Install directory doesn't exist"
+  ls -la "$EXODUS_DIR/include/" 2>/dev/null || echo "  Include directory doesn't exist"
+  ls -la "$EXODUS_DIR/lib/" 2>/dev/null || echo "  Lib directory doesn't exist"
+  exit 1
+fi
+
+if [ ! -f "$EXODUS_DIR/lib/libexodus.a" ] && [ ! -f "$EXODUS_DIR/lib/libexodus.so" ]; then
+  echo -e "${RED}✗ Exodus library not found in $EXODUS_DIR/lib/${NC}"
+  echo "Lib directory contents:"
+  ls -la "$EXODUS_DIR/lib/" 2>/dev/null
+  exit 1
+fi
+
+echo -e "${GREEN}✓ Exodus headers and library verified${NC}"
+echo ""
+
 # ==========================================
 # Step 5: Compile C verification tool
 # ==========================================
@@ -282,7 +305,6 @@ echo -e "${YELLOW}Step 5: Compiling C Verification Tool${NC}"
 echo ""
 
 VERIFY_DIR="$SCRIPT_DIR/rust-to-c"
-EXODUS_DIR="$BUILD_DIR/install"
 
 cd "$VERIFY_DIR"
 
@@ -294,6 +316,9 @@ else
   export LD_LIBRARY_PATH="$EXODUS_DIR/lib:$SEACAS_ROOT/lib:$LD_LIBRARY_PATH"
 
   echo "Compiling verify.c..."
+  echo "  Include path: $EXODUS_DIR/include"
+  echo "  Library paths: $EXODUS_DIR/lib, $SEACAS_ROOT/lib"
+
   gcc verify.c \
     -I"$EXODUS_DIR/include" \
     -L"$EXODUS_DIR/lib" \
