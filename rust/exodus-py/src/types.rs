@@ -51,6 +51,18 @@ impl EntityType {
     fn __repr__(&self) -> String {
         format!("EntityType.{:?}", self)
     }
+
+    fn __eq__(&self, other: &Self) -> bool {
+        self == other
+    }
+
+    fn __hash__(&self) -> u64 {
+        use std::collections::hash_map::DefaultHasher;
+        use std::hash::{Hash, Hasher};
+        let mut hasher = DefaultHasher::new();
+        (*self as u8).hash(&mut hasher);
+        hasher.finish()
+    }
 }
 
 impl EntityType {
@@ -117,6 +129,18 @@ impl CreateMode {
             CreateMode::NoClobber => "NoClobber",
         }
     }
+
+    fn __eq__(&self, other: &Self) -> bool {
+        self == other
+    }
+
+    fn __hash__(&self) -> u64 {
+        use std::collections::hash_map::DefaultHasher;
+        use std::hash::{Hash, Hasher};
+        let mut hasher = DefaultHasher::new();
+        (*self as u8).hash(&mut hasher);
+        hasher.finish()
+    }
 }
 
 impl CreateMode {
@@ -146,6 +170,18 @@ impl FloatSize {
             FloatSize::Float64 => "Float64",
         }
     }
+
+    fn __eq__(&self, other: &Self) -> bool {
+        self == other
+    }
+
+    fn __hash__(&self) -> u64 {
+        use std::collections::hash_map::DefaultHasher;
+        use std::hash::{Hash, Hasher};
+        let mut hasher = DefaultHasher::new();
+        (*self as u8).hash(&mut hasher);
+        hasher.finish()
+    }
 }
 
 impl FloatSize {
@@ -174,6 +210,18 @@ impl Int64Mode {
             Int64Mode::Int32 => "Int32",
             Int64Mode::Int64 => "Int64",
         }
+    }
+
+    fn __eq__(&self, other: &Self) -> bool {
+        self == other
+    }
+
+    fn __hash__(&self) -> u64 {
+        use std::collections::hash_map::DefaultHasher;
+        use std::hash::{Hash, Hasher};
+        let mut hasher = DefaultHasher::new();
+        (*self as u8).hash(&mut hasher);
+        hasher.finish()
     }
 }
 
@@ -206,6 +254,18 @@ impl AttributeType {
             AttributeType::Double => "Double",
             AttributeType::Char => "Char",
         }
+    }
+
+    fn __eq__(&self, other: &Self) -> bool {
+        self == other
+    }
+
+    fn __hash__(&self) -> u64 {
+        use std::collections::hash_map::DefaultHasher;
+        use std::hash::{Hash, Hasher};
+        let mut hasher = DefaultHasher::new();
+        (*self as u8).hash(&mut hasher);
+        hasher.finish()
     }
 }
 
