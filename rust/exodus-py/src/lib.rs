@@ -3,6 +3,11 @@
 //! This module provides Python bindings for the exodus-rs library,
 //! exposing the high-level builder API and core file operations.
 
+// Suppress non-local definitions warning from PyO3 0.20.3 macros
+// This is a known issue with PyO3 < 0.21 and newer Rust compilers
+// Upgrading to PyO3 0.21+ requires significant API changes (bound API)
+#![allow(non_local_definitions)]
+
 use pyo3::prelude::*;
 
 // Module declarations
