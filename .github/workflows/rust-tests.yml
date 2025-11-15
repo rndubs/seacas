@@ -2,9 +2,9 @@ name: Rust Tests
 
 on:
   push:
-    branches: [ main, master, 'claude/**' ]
+    branches: [ main, master, exodus-rust-lib, 'claude/**' ]
   pull_request:
-    branches: [ main, master ]
+    branches: [ main, master, exodus-rust-lib ]
   workflow_dispatch:
 
 env:

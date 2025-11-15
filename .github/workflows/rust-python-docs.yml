@@ -2,7 +2,7 @@ name: Rust Python Documentation
 
 on:
   push:
-    branches: [ main, master ]
+    branches: [ main, master, exodus-rust-lib ]
     paths:
       - 'rust/exodus-py/docs/**'
       - 'rust/exodus-py/python/**'
