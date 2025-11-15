@@ -72,6 +72,11 @@ jobs:
     - name: Setup C Exodus library and verification tools
       run: |
         cd rust/compat-tests
+        # Clean build if TPL exists but is incomplete
+        if [ -d "../../TPL" ] && [ ! -f "../../TPL/hdf5-1.14.6/lib/libhdf5.a" ]; then
+          echo "TPL directory exists but appears incomplete, cleaning..."
+          rm -rf ../../TPL
+        fi
         ./setup-environment.sh
 
     - name: Run compatibility tests
