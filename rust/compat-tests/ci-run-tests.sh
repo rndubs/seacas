@@ -132,8 +132,21 @@ else
     rm -rf build-compat lib include bin
     echo ""
   else
-    echo "No incomplete cache detected"
-    echo ""
+    # Check if build-compat has an old CMakeCache that might have wrong paths
+    if [ -f "build-compat/CMakeCache.txt" ]; then
+      echo "Found cached CMake configuration, checking if paths are correct..."
+      if grep -q "TPL/hdf5-1.14.6\|TPL/netcdf-4.9.2" build-compat/CMakeCache.txt 2>/dev/null; then
+        echo "Detected old TPL paths in CMakeCache, clearing build cache..."
+        rm -rf build-compat
+        echo ""
+      else
+        echo "CMake configuration looks correct"
+        echo ""
+      fi
+    else
+      echo "No incomplete cache detected"
+      echo ""
+    fi
   fi
 fi
 
