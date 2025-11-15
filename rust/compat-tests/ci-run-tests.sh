@@ -233,10 +233,12 @@ else
       -DCMAKE_INSTALL_PREFIX="$BUILD_DIR/install" \
       -DTPL_ENABLE_Netcdf=ON \
       -DTPL_ENABLE_HDF5=ON \
+      -DTPL_ENABLE_fmt=ON \
       -DNetCDF_ROOT="$SEACAS_ROOT" \
       -DnetCDF_ROOT="$SEACAS_ROOT" \
       -DHDF5_ROOT="$SEACAS_ROOT" \
       -DHDF5_DIR="$SEACAS_ROOT" \
+      -Dfmt_ROOT="$SEACAS_ROOT" \
       -DSeacas_ENABLE_ALL_PACKAGES=OFF \
       -DSeacas_ENABLE_SEACASIoss=ON \
       -DSeacas_ENABLE_SEACASExodus=ON \
@@ -248,10 +250,12 @@ else
       -DCMAKE_INSTALL_PREFIX="$BUILD_DIR/install" \
       -DTPL_ENABLE_Netcdf=ON \
       -DTPL_ENABLE_HDF5=ON \
+      -DTPL_ENABLE_fmt=ON \
       -DNetCDF_ROOT="$SEACAS_ROOT" \
       -DnetCDF_ROOT="$SEACAS_ROOT" \
       -DHDF5_ROOT="$SEACAS_ROOT" \
       -DHDF5_DIR="$SEACAS_ROOT" \
+      -Dfmt_ROOT="$SEACAS_ROOT" \
       -DSeacas_ENABLE_ALL_PACKAGES=OFF \
       -DSeacas_ENABLE_SEACASIoss=ON \
       -DSeacas_ENABLE_SEACASExodus=ON \
