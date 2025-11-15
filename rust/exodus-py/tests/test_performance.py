@@ -261,8 +261,6 @@ def test_file_creation_without_performance():
 
 def test_large_mesh_with_aggressive_performance():
     """Test large mesh with aggressive performance settings"""
-    pytest.importorskip("numpy", reason="numpy is required for this performance test")
-
     with tempfile.NamedTemporaryFile(suffix=".exo", delete=False) as tmp:
         tmp_path = tmp.name
 
