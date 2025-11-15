@@ -75,9 +75,9 @@ jobs:
         # Clean build if TPL exists but is incomplete
         if [ -d "../../TPL" ] && [ ! -f "../../TPL/hdf5-1.14.6/lib/libhdf5.a" ]; then
           echo "TPL directory exists but appears incomplete, cleaning..."
-          rm -rf ../../TPL
+          rm -rf ../../TPL ../../build-compat
         fi
-        ./setup-environment.sh
+        ./setup-environment.sh --clean
 
     - name: Run compatibility tests
       run: |
