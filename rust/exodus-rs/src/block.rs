@@ -143,7 +143,7 @@ impl ExodusFile<mode::Write> {
         let id_var_name = self.get_block_id_var_name(block.entity_type)?;
         if let Some(mut id_var) = self.nc_file.variable_mut(&id_var_name) {
             // Use put_values with a slice instead of put_value
-            id_var.put_values(&[block.id], block_index..block_index+1)?;
+            id_var.put_values(&[block.id], block_index..block_index + 1)?;
         }
 
         // Create attribute variable if needed
@@ -153,10 +153,8 @@ impl ExodusFile<mode::Write> {
                 .add_dimension(&attr_dim_name, block.num_attributes)?;
 
             let attr_var_name = format!("attrib{}", block_index + 1);
-            self.nc_file.add_variable::<f64>(
-                &attr_var_name,
-                &[&dim_name_entries, &attr_dim_name],
-            )?;
+            self.nc_file
+                .add_variable::<f64>(&attr_var_name, &[&dim_name_entries, &attr_dim_name])?;
         }
 
         Ok(())
@@ -196,10 +194,7 @@ impl ExodusFile<mode::Write> {
         })?;
 
         // Convert i64 to i32 for NetCDF
-        let conn_i32: Vec<i32> = connectivity
-            .iter()
-            .map(|&x| x as i32)
-            .collect();
+        let conn_i32: Vec<i32> = connectivity.iter().map(|&x| x as i32).collect();
 
         // Write the full connectivity array
         var.put_values(&conn_i32, ..)?;
@@ -268,7 +263,7 @@ impl ExodusFile<mode::Write> {
             for (j, &byte) in name_str.as_bytes().iter().take(32).enumerate() {
                 buf[j] = byte as i8;
             }
-            var.put_values(&buf, (i..i+1, 0..33))?;
+            var.put_values(&buf, (i..i + 1, 0..33))?;
         }
 
         Ok(())
@@ -458,7 +453,7 @@ impl ExodusFile<mode::Read> {
             let mut names = Vec::with_capacity(block.num_attributes);
 
             for i in 0..block.num_attributes {
-                let bytes: Vec<i8> = var.get_values((i..i+1, 0..33))?;
+                let bytes: Vec<i8> = var.get_values((i..i + 1, 0..33))?;
                 let name = String::from_utf8_lossy(
                     &bytes
                         .iter()
@@ -614,7 +609,11 @@ impl ExodusFile<mode::Append> {
         })
     }
 
-    fn find_block_index_append(&self, entity_type: EntityType, block_id: EntityId) -> Result<usize> {
+    fn find_block_index_append(
+        &self,
+        entity_type: EntityType,
+        block_id: EntityId,
+    ) -> Result<usize> {
         let id_var_name = match entity_type {
             EntityType::ElemBlock => "eb_prop1",
             EntityType::EdgeBlock => "ed_prop1",

@@ -42,26 +42,14 @@ fn test_nodal_variables() {
         file.put_time(1, 1.0).unwrap();
 
         // Write variable values at time step 0
-        file.put_var(
-            0,
-            EntityType::Nodal,
-            0,
-            0,
-            &[100.0, 200.0, 300.0, 400.0],
-        )
-        .unwrap();
+        file.put_var(0, EntityType::Nodal, 0, 0, &[100.0, 200.0, 300.0, 400.0])
+            .unwrap();
         file.put_var(0, EntityType::Nodal, 0, 1, &[1.0, 2.0, 3.0, 4.0])
             .unwrap();
 
         // Write variable values at time step 1
-        file.put_var(
-            1,
-            EntityType::Nodal,
-            0,
-            0,
-            &[110.0, 210.0, 310.0, 410.0],
-        )
-        .unwrap();
+        file.put_var(1, EntityType::Nodal, 0, 0, &[110.0, 210.0, 310.0, 410.0])
+            .unwrap();
         file.put_var(1, EntityType::Nodal, 0, 1, &[1.1, 2.1, 3.1, 4.1])
             .unwrap();
     }
@@ -298,8 +286,7 @@ fn test_truth_table() {
         let mut truth = TruthTable::new(EntityType::ElemBlock, 2, 2);
         truth.set(1, 1, false); // Block 2 (index 1) doesn't have Strain (var index 1)
 
-        file.put_truth_table(EntityType::ElemBlock, &truth)
-            .unwrap();
+        file.put_truth_table(EntityType::ElemBlock, &truth).unwrap();
 
         // Write time step
         file.put_time(0, 0.0).unwrap();
@@ -418,14 +405,11 @@ fn test_global_variables() {
         file.put_time(0, 0.0).unwrap();
         file.put_var(0, EntityType::Global, 0, 0, &[1000.0])
             .unwrap();
-        file.put_var(0, EntityType::Global, 0, 1, &[500.0])
-            .unwrap();
+        file.put_var(0, EntityType::Global, 0, 1, &[500.0]).unwrap();
 
         file.put_time(1, 1.0).unwrap();
-        file.put_var(1, EntityType::Global, 0, 0, &[950.0])
-            .unwrap();
-        file.put_var(1, EntityType::Global, 0, 1, &[550.0])
-            .unwrap();
+        file.put_var(1, EntityType::Global, 0, 0, &[950.0]).unwrap();
+        file.put_var(1, EntityType::Global, 0, 1, &[550.0]).unwrap();
     }
 
     // Read
@@ -472,8 +456,7 @@ fn test_many_time_steps() {
         })
         .unwrap();
 
-        file.define_variables(EntityType::Nodal, &["X"])
-            .unwrap();
+        file.define_variables(EntityType::Nodal, &["X"]).unwrap();
 
         // Write 100 time steps
         for i in 0..100 {
@@ -709,9 +692,7 @@ fn test_var_time_series_nodal() {
         let file = ExodusFile::<mode::Read>::open(tmp.path()).unwrap();
 
         // Read time series
-        let series = file
-            .var_time_series(0, 3, EntityType::Nodal, 0, 0)
-            .unwrap();
+        let series = file.var_time_series(0, 3, EntityType::Nodal, 0, 0).unwrap();
         assert_eq!(series, vec![0.0, 0.0, 1.0, 1.0, 2.0, 2.0]);
 
         // Verify by reading individual time steps

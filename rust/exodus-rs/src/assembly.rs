@@ -53,7 +53,11 @@ impl ExodusFile<mode::Write> {
 
         // Count existing assemblies by checking for assembly variables
         let mut num_assemblies = 0;
-        while self.nc_file.variable(&format!("assembly{}_entity_list", num_assemblies + 1)).is_some() {
+        while self
+            .nc_file
+            .variable(&format!("assembly{}_entity_list", num_assemblies + 1))
+            .is_some()
+        {
             num_assemblies += 1;
         }
 
@@ -119,7 +123,11 @@ impl ExodusFile<mode::Read> {
     pub fn assembly_ids(&self) -> Result<Vec<i64>> {
         // Count assemblies by checking for assembly variables
         let mut num_assemblies = 0;
-        while self.nc_file.variable(&format!("assembly{}_entity_list", num_assemblies + 1)).is_some() {
+        while self
+            .nc_file
+            .variable(&format!("assembly{}_entity_list", num_assemblies + 1))
+            .is_some()
+        {
             num_assemblies += 1;
         }
 
@@ -173,7 +181,11 @@ impl ExodusFile<mode::Read> {
     pub fn assembly(&self, assembly_id: i64) -> Result<Assembly> {
         // Count assemblies by checking for assembly variables
         let mut num_assemblies = 0;
-        while self.nc_file.variable(&format!("assembly{}_entity_list", num_assemblies + 1)).is_some() {
+        while self
+            .nc_file
+            .variable(&format!("assembly{}_entity_list", num_assemblies + 1))
+            .is_some()
+        {
             num_assemblies += 1;
         }
 
@@ -215,30 +227,30 @@ impl ExodusFile<mode::Read> {
                                 String::new()
                             };
 
-                            let entity_type_str = if let Some(type_attr) = var.attribute("entity_type") {
-                                if let Ok(type_value) = type_attr.value() {
-                                    match type_value {
-                                        netcdf::AttributeValue::Str(s) => s,
-                                        _ => "elem_block".to_string(),
+                            let entity_type_str =
+                                if let Some(type_attr) = var.attribute("entity_type") {
+                                    if let Ok(type_value) = type_attr.value() {
+                                        match type_value {
+                                            netcdf::AttributeValue::Str(s) => s,
+                                            _ => "elem_block".to_string(),
+                                        }
+                                    } else {
+                                        "elem_block".to_string()
                                     }
                                 } else {
                                     "elem_block".to_string()
-                                }
-                            } else {
-                                "elem_block".to_string()
-                            };
-
-                                // Parse entity type string
-                                let entity_type = match entity_type_str.as_str() {
-                                    "elem_block" => EntityType::ElemBlock,
-                                    "node_set" => EntityType::NodeSet,
-                                    "side_set" => EntityType::SideSet,
-                                    _ => EntityType::ElemBlock, // Default
                                 };
 
-                            let entity_list: Vec<i64> = var
-                                .get_values(..)
-                                .map_err(ExodusError::NetCdf)?;
+                            // Parse entity type string
+                            let entity_type = match entity_type_str.as_str() {
+                                "elem_block" => EntityType::ElemBlock,
+                                "node_set" => EntityType::NodeSet,
+                                "side_set" => EntityType::SideSet,
+                                _ => EntityType::ElemBlock, // Default
+                            };
+
+                            let entity_list: Vec<i64> =
+                                var.get_values(..).map_err(ExodusError::NetCdf)?;
 
                             return Ok(Assembly {
                                 id: assembly_id,

@@ -140,8 +140,7 @@ impl ExodusFile<mode::Write> {
                     .map_err(ExodusError::NetCdf)?;
 
                 // Write values
-                var.put_values(&values, ..)
-                    .map_err(ExodusError::NetCdf)?;
+                var.put_values(&values, ..).map_err(ExodusError::NetCdf)?;
 
                 // Store metadata
                 var.put_attribute("entity_id", entity_id)
@@ -165,8 +164,7 @@ impl ExodusFile<mode::Write> {
                     .map_err(ExodusError::NetCdf)?;
 
                 // Write values
-                var.put_values(&values, ..)
-                    .map_err(ExodusError::NetCdf)?;
+                var.put_values(&values, ..).map_err(ExodusError::NetCdf)?;
 
                 // Store metadata
                 var.put_attribute("entity_id", entity_id)
@@ -191,8 +189,7 @@ impl ExodusFile<mode::Write> {
                     .map_err(ExodusError::NetCdf)?;
 
                 // Write character data
-                var.put_values(&chars, ..)
-                    .map_err(ExodusError::NetCdf)?;
+                var.put_values(&chars, ..).map_err(ExodusError::NetCdf)?;
 
                 // Store metadata
                 var.put_attribute("entity_id", entity_id)
@@ -270,53 +267,53 @@ impl ExodusFile<mode::Read> {
                 if let Ok(type_value) = type_attr.value() {
                     match type_value {
                         netcdf::AttributeValue::Str(s) => s,
-                        _ => return Err(ExodusError::Other(
-                            format!("Invalid attribute type for '{}'", name)
-                        )),
+                        _ => {
+                            return Err(ExodusError::Other(format!(
+                                "Invalid attribute type for '{}'",
+                                name
+                            )))
+                        }
                     }
                 } else {
-                    return Err(ExodusError::Other(
-                        format!("Cannot read attribute type for '{}'", name)
-                    ));
+                    return Err(ExodusError::Other(format!(
+                        "Cannot read attribute type for '{}'",
+                        name
+                    )));
                 }
             } else {
-                return Err(ExodusError::Other(
-                    format!("Attribute '{}' missing type metadata", name)
-                ));
+                return Err(ExodusError::Other(format!(
+                    "Attribute '{}' missing type metadata",
+                    name
+                )));
             };
 
             // Read values based on type
             match attr_type.as_str() {
                 "integer" => {
-                    let values: Vec<i64> = var
-                        .get_values(..)
-                        .map_err(ExodusError::NetCdf)?;
+                    let values: Vec<i64> = var.get_values(..).map_err(ExodusError::NetCdf)?;
                     Ok(AttributeData::Integer(values))
                 }
                 "double" => {
-                    let values: Vec<f64> = var
-                        .get_values(..)
-                        .map_err(ExodusError::NetCdf)?;
+                    let values: Vec<f64> = var.get_values(..).map_err(ExodusError::NetCdf)?;
                     Ok(AttributeData::Double(values))
                 }
                 "char" => {
-                    let bytes: Vec<u8> = var
-                        .get_values(..)
-                        .map_err(ExodusError::NetCdf)?;
-                    let text = String::from_utf8(bytes)
-                        .map_err(|_| ExodusError::Other(
-                            format!("Invalid UTF-8 in char attribute '{}'", name)
-                        ))?;
+                    let bytes: Vec<u8> = var.get_values(..).map_err(ExodusError::NetCdf)?;
+                    let text = String::from_utf8(bytes).map_err(|_| {
+                        ExodusError::Other(format!("Invalid UTF-8 in char attribute '{}'", name))
+                    })?;
                     Ok(AttributeData::Char(text))
                 }
-                _ => Err(ExodusError::Other(
-                    format!("Unknown attribute type '{}' for '{}'", attr_type, name)
-                )),
+                _ => Err(ExodusError::Other(format!(
+                    "Unknown attribute type '{}' for '{}'",
+                    attr_type, name
+                ))),
             }
         } else {
-            Err(ExodusError::Other(
-                format!("Attribute '{}' not found", name)
-            ))
+            Err(ExodusError::Other(format!(
+                "Attribute '{}' not found",
+                name
+            )))
         }
     }
 
@@ -339,11 +336,7 @@ impl ExodusFile<mode::Read> {
     /// let names = file.attribute_names(EntityType::ElemBlock, 100)?;
     /// # Ok::<(), ExodusError>(())
     /// ```
-    pub fn attribute_names(
-        &self,
-        entity_type: EntityType,
-        entity_id: i64,
-    ) -> Result<Vec<String>> {
+    pub fn attribute_names(&self, entity_type: EntityType, entity_id: i64) -> Result<Vec<String>> {
         let entity_type_str = match entity_type {
             EntityType::ElemBlock => "eb",
             EntityType::NodeSet => "ns",
@@ -490,9 +483,7 @@ mod tests {
                 _ => panic!("Expected integer attribute"),
             }
 
-            let names = file
-                .attribute_names(EntityType::ElemBlock, 100)
-                .unwrap();
+            let names = file.attribute_names(EntityType::ElemBlock, 100).unwrap();
             assert_eq!(names.len(), 1);
             assert!(names.contains(&"material_id".to_string()));
         }
@@ -832,18 +823,14 @@ mod tests {
             assert!(matches!(name, AttributeData::Char(_)));
 
             // Check attribute names
-            let names = file
-                .attribute_names(EntityType::ElemBlock, 100)
-                .unwrap();
+            let names = file.attribute_names(EntityType::ElemBlock, 100).unwrap();
             assert_eq!(names.len(), 3);
             assert!(names.contains(&"material_id".to_string()));
             assert!(names.contains(&"density".to_string()));
             assert!(names.contains(&"material_name".to_string()));
 
             // Get all attributes
-            let all_attrs = file
-                .entity_attributes(EntityType::ElemBlock, 100)
-                .unwrap();
+            let all_attrs = file.entity_attributes(EntityType::ElemBlock, 100).unwrap();
             assert_eq!(all_attrs.len(), 3);
         }
     }

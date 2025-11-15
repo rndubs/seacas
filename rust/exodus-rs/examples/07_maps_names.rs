@@ -6,9 +6,7 @@
 //! - Entity naming
 //! - Property arrays
 
-use exodus_rs::{
-    mode, CreateMode, CreateOptions, EntityType, ExodusFile, InitParams, Result,
-};
+use exodus_rs::{mode, CreateMode, CreateOptions, EntityType, ExodusFile, InitParams, Result};
 
 fn main() -> Result<()> {
     println!("=== Phase 7: Maps and Names Example ===\n");

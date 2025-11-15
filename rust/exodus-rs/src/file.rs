@@ -184,10 +184,7 @@ impl ExodusFile<mode::Write> {
         }
 
         if env::var("HDF5_CHUNK_CACHE_W0").is_err() {
-            env::set_var(
-                "HDF5_CHUNK_CACHE_W0",
-                config.cache.preemption.to_string(),
-            );
+            env::set_var("HDF5_CHUNK_CACHE_W0", config.cache.preemption.to_string());
         }
 
         // Calculate or use provided num_slots
@@ -522,7 +519,9 @@ impl ExodusFile<mode::Append> {
 
             // Load dimension cache
             if let Some(nodes_dim) = nc_file.dimension("num_nodes") {
-                metadata.dim_cache.insert("num_nodes".to_string(), nodes_dim.len());
+                metadata
+                    .dim_cache
+                    .insert("num_nodes".to_string(), nodes_dim.len());
             }
         }
 
@@ -566,7 +565,6 @@ impl ExodusFile<mode::Append> {
     pub fn is_define_mode(&self) -> bool {
         self.metadata.define_mode == DefineMode::Define
     }
-
 
     /// Ensure the file is in data mode, transitioning if necessary
     ///

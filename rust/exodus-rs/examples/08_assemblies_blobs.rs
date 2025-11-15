@@ -142,7 +142,8 @@ fn main() -> Result<()> {
 
         // Blob 1: Material properties (JSON-like data)
         println!("   - Blob 1: Material properties");
-        let material_data = br#"{"steel": {"E": 200e9, "nu": 0.3}, "aluminum": {"E": 70e9, "nu": 0.33}}"#;
+        let material_data =
+            br#"{"steel": {"E": 200e9, "nu": 0.3}, "aluminum": {"E": 70e9, "nu": 0.33}}"#;
         let material_blob = Blob {
             id: 1,
             name: "material_properties".into(),
@@ -179,7 +180,7 @@ fn main() -> Result<()> {
             1,
             "material_id",
             AttributeType::Integer,
-            AttributeData::Integer(vec![1]),  // Steel
+            AttributeData::Integer(vec![1]), // Steel
         )?;
 
         file.put_attribute(
@@ -187,7 +188,7 @@ fn main() -> Result<()> {
             2,
             "material_id",
             AttributeType::Integer,
-            AttributeData::Integer(vec![1]),  // Steel
+            AttributeData::Integer(vec![1]), // Steel
         )?;
 
         file.put_attribute(
@@ -195,7 +196,7 @@ fn main() -> Result<()> {
             3,
             "material_id",
             AttributeType::Integer,
-            AttributeData::Integer(vec![2]),  // Aluminum
+            AttributeData::Integer(vec![2]), // Aluminum
         )?;
 
         // Double attributes - material properties
@@ -205,7 +206,7 @@ fn main() -> Result<()> {
             1,
             "density",
             AttributeType::Double,
-            AttributeData::Double(vec![7850.0]),  // kg/m^3 for steel
+            AttributeData::Double(vec![7850.0]), // kg/m^3 for steel
         )?;
 
         file.put_attribute(
@@ -213,7 +214,7 @@ fn main() -> Result<()> {
             2,
             "density",
             AttributeType::Double,
-            AttributeData::Double(vec![7850.0]),  // kg/m^3 for steel
+            AttributeData::Double(vec![7850.0]), // kg/m^3 for steel
         )?;
 
         file.put_attribute(
@@ -221,7 +222,7 @@ fn main() -> Result<()> {
             3,
             "density",
             AttributeType::Double,
-            AttributeData::Double(vec![2700.0]),  // kg/m^3 for aluminum
+            AttributeData::Double(vec![2700.0]), // kg/m^3 for aluminum
         )?;
 
         // Multi-value double attributes - elastic properties
@@ -231,7 +232,7 @@ fn main() -> Result<()> {
             1,
             "elastic_props",
             AttributeType::Double,
-            AttributeData::Double(vec![200e9, 0.3]),  // E, nu for steel
+            AttributeData::Double(vec![200e9, 0.3]), // E, nu for steel
         )?;
 
         file.put_attribute(
@@ -239,7 +240,7 @@ fn main() -> Result<()> {
             3,
             "elastic_props",
             AttributeType::Double,
-            AttributeData::Double(vec![70e9, 0.33]),  // E, nu for aluminum
+            AttributeData::Double(vec![70e9, 0.33]), // E, nu for aluminum
         )?;
 
         // Character attributes - material names and boundary conditions
@@ -299,7 +300,11 @@ fn main() -> Result<()> {
         // ====================================================================
         println!("   Assemblies:");
         let assembly_ids = file.assembly_ids()?;
-        println!("   - Found {} assemblies with IDs: {:?}", assembly_ids.len(), assembly_ids);
+        println!(
+            "   - Found {} assemblies with IDs: {:?}",
+            assembly_ids.len(),
+            assembly_ids
+        );
 
         for &id in &assembly_ids {
             let assembly = file.assembly(id)?;
@@ -314,7 +319,11 @@ fn main() -> Result<()> {
         // ====================================================================
         println!("\n   Blobs:");
         let blob_ids = file.blob_ids()?;
-        println!("   - Found {} blobs with IDs: {:?}", blob_ids.len(), blob_ids);
+        println!(
+            "   - Found {} blobs with IDs: {:?}",
+            blob_ids.len(),
+            blob_ids
+        );
 
         for &id in &blob_ids {
             let (blob, data) = file.blob(id)?;
@@ -334,7 +343,8 @@ fn main() -> Result<()> {
                 }
             } else {
                 // Show hex dump for binary data
-                let preview: String = data.iter()
+                let preview: String = data
+                    .iter()
                     .take(8)
                     .map(|b| format!("{:02X}", b))
                     .collect::<Vec<_>>()

@@ -436,8 +436,7 @@ fn test_many_variables() {
     let var_names: Vec<String> = (0..50).map(|i| format!("var_{}", i)).collect();
     let var_refs: Vec<&str> = var_names.iter().map(|s| s.as_str()).collect();
 
-    file.define_variables(EntityType::Nodal, &var_refs)
-        .unwrap();
+    file.define_variables(EntityType::Nodal, &var_refs).unwrap();
 }
 
 #[test]

@@ -190,14 +190,20 @@ impl ExodusFile<mode::Write> {
         }
 
         // Get number of nodes (may be 0, in which case dimension doesn't exist)
-        let num_nodes = self.metadata.dim_cache.get("num_nodes").copied().unwrap_or(0);
+        let num_nodes = self
+            .metadata
+            .dim_cache
+            .get("num_nodes")
+            .copied()
+            .unwrap_or(0);
         let num_dim = self.metadata.num_dim.ok_or(ExodusError::Other(
             "num_dim not set in metadata".to_string(),
         ))?;
 
         // If num_nodes is 0, just return Ok if coordinate arrays are empty
         if num_nodes == 0 {
-            if x.is_empty() && y.map_or(true, |v| v.is_empty()) && z.map_or(true, |v| v.is_empty()) {
+            if x.is_empty() && y.map_or(true, |v| v.is_empty()) && z.map_or(true, |v| v.is_empty())
+            {
                 return Ok(());
             } else {
                 return Err(ExodusError::InvalidArrayLength {
@@ -356,9 +362,14 @@ impl ExodusFile<mode::Write> {
         }
 
         // Get number of nodes and dimensions
-        let num_nodes = self.metadata.dim_cache.get("num_nodes").copied().ok_or(
-            ExodusError::Other("num_nodes dimension not found".to_string()),
-        )?;
+        let num_nodes =
+            self.metadata
+                .dim_cache
+                .get("num_nodes")
+                .copied()
+                .ok_or(ExodusError::Other(
+                    "num_nodes dimension not found".to_string(),
+                ))?;
         let num_dim = self.metadata.num_dim.ok_or(ExodusError::Other(
             "num_dim not set in metadata".to_string(),
         ))?;
@@ -515,7 +526,8 @@ impl ExodusFile<mode::Write> {
 
         // Create coordinate names variable: coor_names(num_dim, len_name)
         if self.nc_file.variable("coor_names").is_none() {
-            self.nc_file.add_variable::<u8>("coor_names", &["num_dim", "len_name"])?;
+            self.nc_file
+                .add_variable::<u8>("coor_names", &["num_dim", "len_name"])?;
         }
 
         // Write each coordinate name
@@ -889,9 +901,14 @@ impl ExodusFile<mode::Append> {
             return Err(ExodusError::NotInitialized);
         }
 
-        let num_nodes = self.metadata.dim_cache.get("num_nodes").copied().ok_or(
-            ExodusError::Other("num_nodes dimension not found".to_string()),
-        )?;
+        let num_nodes =
+            self.metadata
+                .dim_cache
+                .get("num_nodes")
+                .copied()
+                .ok_or(ExodusError::Other(
+                    "num_nodes dimension not found".to_string(),
+                ))?;
         let num_dim = self.metadata.num_dim.ok_or(ExodusError::Other(
             "num_dim not set in metadata".to_string(),
         ))?;
@@ -1069,7 +1086,9 @@ mod tests {
     use tempfile::NamedTempFile;
 
     // Helper function to create file with clobber mode for tests
-    fn create_test_file(path: impl AsRef<std::path::Path>) -> crate::Result<ExodusFile<mode::Write>> {
+    fn create_test_file(
+        path: impl AsRef<std::path::Path>,
+    ) -> crate::Result<ExodusFile<mode::Write>> {
         ExodusFile::create(
             path,
             CreateOptions {
@@ -1086,11 +1105,7 @@ mod tests {
         // Write
         {
             let mut file = create_test_file(tmp.path()).unwrap();
-            file.builder()
-                .dimensions(2)
-                .nodes(4)
-                .finish()
-                .unwrap();
+            file.builder().dimensions(2).nodes(4).finish().unwrap();
 
             let x = vec![0.0, 1.0, 1.0, 0.0];
             let y = vec![0.0, 0.0, 1.0, 1.0];
@@ -1123,11 +1138,7 @@ mod tests {
         // Write
         {
             let mut file = create_test_file(tmp.path()).unwrap();
-            file.builder()
-                .dimensions(3)
-                .nodes(8)
-                .finish()
-                .unwrap();
+            file.builder().dimensions(3).nodes(8).finish().unwrap();
 
             let x = vec![0.0, 1.0, 1.0, 0.0, 0.0, 1.0, 1.0, 0.0];
             let y = vec![0.0, 0.0, 1.0, 1.0, 0.0, 0.0, 1.0, 1.0];
@@ -1165,23 +1176,17 @@ mod tests {
         // Write
         {
             let mut file = create_test_file(tmp.path()).unwrap();
-            file.builder()
-                .dimensions(2)
-                .nodes(10)
-                .finish()
-                .unwrap();
+            file.builder().dimensions(2).nodes(10).finish().unwrap();
 
             // Write first 5 nodes
             let x1 = vec![0.0, 1.0, 2.0, 3.0, 4.0];
             let y1 = vec![0.0, 0.0, 0.0, 0.0, 0.0];
-            file.put_partial_coords(0, 5, &x1, Some(&y1), None)
-                .unwrap();
+            file.put_partial_coords(0, 5, &x1, Some(&y1), None).unwrap();
 
             // Write next 5 nodes
             let x2 = vec![5.0, 6.0, 7.0, 8.0, 9.0];
             let y2 = vec![1.0, 1.0, 1.0, 1.0, 1.0];
-            file.put_partial_coords(5, 5, &x2, Some(&y2), None)
-                .unwrap();
+            file.put_partial_coords(5, 5, &x2, Some(&y2), None).unwrap();
         }
 
         // Read partial
@@ -1206,11 +1211,7 @@ mod tests {
         // Write as f32
         {
             let mut file = create_test_file(tmp.path()).unwrap();
-            file.builder()
-                .dimensions(2)
-                .nodes(3)
-                .finish()
-                .unwrap();
+            file.builder().dimensions(2).nodes(3).finish().unwrap();
 
             let x: Vec<f32> = vec![0.0, 1.0, 2.0];
             let y: Vec<f32> = vec![0.0, 1.0, 2.0];
@@ -1261,11 +1262,7 @@ mod tests {
         // Write
         {
             let mut file = create_test_file(tmp.path()).unwrap();
-            file.builder()
-                .dimensions(2)
-                .nodes(4)
-                .finish()
-                .unwrap();
+            file.builder().dimensions(2).nodes(4).finish().unwrap();
 
             let x = vec![0.0, 1.0, 1.0, 0.0];
             let y = vec![0.0, 0.0, 1.0, 1.0];
@@ -1278,8 +1275,7 @@ mod tests {
             let mut x_buf = vec![0.0f64; 4];
             let mut y_buf = vec![0.0f64; 4];
 
-            file.get_coords(&mut x_buf, Some(&mut y_buf), None)
-                .unwrap();
+            file.get_coords(&mut x_buf, Some(&mut y_buf), None).unwrap();
 
             assert_relative_eq!(x_buf[0], 0.0);
             assert_relative_eq!(x_buf[2], 1.0);
@@ -1294,11 +1290,7 @@ mod tests {
         // Write each dimension separately
         {
             let mut file = create_test_file(tmp.path()).unwrap();
-            file.builder()
-                .dimensions(3)
-                .nodes(2)
-                .finish()
-                .unwrap();
+            file.builder().dimensions(3).nodes(2).finish().unwrap();
 
             let x = vec![1.0, 2.0];
             let y = vec![3.0, 4.0];

@@ -52,7 +52,11 @@ impl ExodusFile<mode::Write> {
 
         // Count existing blobs by checking for blob variables
         let mut num_blobs = 0;
-        while self.nc_file.variable(&format!("blob{}_data", num_blobs + 1)).is_some() {
+        while self
+            .nc_file
+            .variable(&format!("blob{}_data", num_blobs + 1))
+            .is_some()
+        {
             num_blobs += 1;
         }
 
@@ -73,9 +77,7 @@ impl ExodusFile<mode::Write> {
             .map_err(ExodusError::NetCdf)?;
 
         // Write blob data
-        data_var
-            .put_values(data, ..)
-            .map_err(ExodusError::NetCdf)?;
+        data_var.put_values(data, ..).map_err(ExodusError::NetCdf)?;
 
         // Store blob metadata as attributes
         data_var
@@ -113,7 +115,11 @@ impl ExodusFile<mode::Read> {
     pub fn blob_ids(&self) -> Result<Vec<i64>> {
         // Count blobs by checking for blob variables
         let mut num_blobs = 0;
-        while self.nc_file.variable(&format!("blob{}_data", num_blobs + 1)).is_some() {
+        while self
+            .nc_file
+            .variable(&format!("blob{}_data", num_blobs + 1))
+            .is_some()
+        {
             num_blobs += 1;
         }
 
@@ -168,7 +174,11 @@ impl ExodusFile<mode::Read> {
     pub fn blob(&self, blob_id: i64) -> Result<(Blob, Vec<u8>)> {
         // Count blobs by checking for blob variables
         let mut num_blobs = 0;
-        while self.nc_file.variable(&format!("blob{}_data", num_blobs + 1)).is_some() {
+        while self
+            .nc_file
+            .variable(&format!("blob{}_data", num_blobs + 1))
+            .is_some()
+        {
             num_blobs += 1;
         }
 
@@ -210,17 +220,9 @@ impl ExodusFile<mode::Read> {
                                 String::new()
                             };
 
-                            let data: Vec<u8> = var
-                                .get_values(..)
-                                .map_err(ExodusError::NetCdf)?;
+                            let data: Vec<u8> = var.get_values(..).map_err(ExodusError::NetCdf)?;
 
-                            return Ok((
-                                Blob {
-                                    id: blob_id,
-                                    name,
-                                },
-                                data,
-                            ));
+                            return Ok((Blob { id: blob_id, name }, data));
                         }
                     }
                 }
@@ -311,16 +313,22 @@ mod tests {
             file.init(&params).unwrap();
 
             // Add multiple blobs
-            file.put_blob(&Blob {
-                id: 1,
-                name: "data1".into(),
-            }, &[1, 2, 3])
+            file.put_blob(
+                &Blob {
+                    id: 1,
+                    name: "data1".into(),
+                },
+                &[1, 2, 3],
+            )
             .unwrap();
 
-            file.put_blob(&Blob {
-                id: 2,
-                name: "data2".into(),
-            }, &[4, 5, 6, 7, 8])
+            file.put_blob(
+                &Blob {
+                    id: 2,
+                    name: "data2".into(),
+                },
+                &[4, 5, 6, 7, 8],
+            )
             .unwrap();
         }
 

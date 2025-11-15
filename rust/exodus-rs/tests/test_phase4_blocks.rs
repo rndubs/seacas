@@ -61,8 +61,7 @@ mod block_tests {
 
             // Two triangles sharing an edge
             let connectivity = vec![1, 2, 3, 2, 4, 3];
-            file.put_connectivity(1, &connectivity)
-                .unwrap();
+            file.put_connectivity(1, &connectivity).unwrap();
         }
 
         let file = ExodusFile::<mode::Read>::open(path).unwrap();
@@ -108,8 +107,7 @@ mod block_tests {
             file.put_block(&block).unwrap();
 
             let connectivity = vec![1, 2, 3, 4];
-            file.put_connectivity(10, &connectivity)
-                .unwrap();
+            file.put_connectivity(10, &connectivity).unwrap();
         }
 
         let file = ExodusFile::<mode::Read>::open(path).unwrap();
@@ -149,8 +147,7 @@ mod block_tests {
             file.put_block(&block).unwrap();
 
             let connectivity = vec![1, 2, 3, 4, 5, 6, 7, 8];
-            file.put_connectivity(1, &connectivity)
-                .unwrap();
+            file.put_connectivity(1, &connectivity).unwrap();
         }
 
         let file = ExodusFile::<mode::Read>::open(path).unwrap();
@@ -192,8 +189,7 @@ mod block_tests {
             file.put_block(&block).unwrap();
 
             let connectivity = vec![1, 2, 3, 4];
-            file.put_connectivity(1, &connectivity)
-                .unwrap();
+            file.put_connectivity(1, &connectivity).unwrap();
         }
 
         let file = ExodusFile::<mode::Read>::open(path).unwrap();
@@ -233,8 +229,7 @@ mod block_tests {
             file.put_block(&block).unwrap();
 
             let connectivity: Vec<i64> = (1..=10).collect();
-            file.put_connectivity(1, &connectivity)
-                .unwrap();
+            file.put_connectivity(1, &connectivity).unwrap();
         }
 
         let file = ExodusFile::<mode::Read>::open(path).unwrap();
@@ -272,8 +267,7 @@ mod block_tests {
             file.put_block(&block).unwrap();
 
             let connectivity: Vec<i64> = (1..=8).collect();
-            file.put_connectivity(1, &connectivity)
-                .unwrap();
+            file.put_connectivity(1, &connectivity).unwrap();
         }
 
         let file = ExodusFile::<mode::Read>::open(path).unwrap();
@@ -313,8 +307,7 @@ mod block_tests {
             file.put_block(&block).unwrap();
 
             let connectivity: Vec<i64> = (1..=20).collect();
-            file.put_connectivity(1, &connectivity)
-                .unwrap();
+            file.put_connectivity(1, &connectivity).unwrap();
         }
 
         let file = ExodusFile::<mode::Read>::open(path).unwrap();
@@ -352,8 +345,7 @@ mod block_tests {
             file.put_block(&block).unwrap();
 
             let connectivity: Vec<i64> = (1..=6).collect();
-            file.put_connectivity(1, &connectivity)
-                .unwrap();
+            file.put_connectivity(1, &connectivity).unwrap();
         }
 
         let file = ExodusFile::<mode::Read>::open(path).unwrap();
@@ -391,8 +383,7 @@ mod block_tests {
             file.put_block(&block).unwrap();
 
             let connectivity: Vec<i64> = (1..=5).collect();
-            file.put_connectivity(1, &connectivity)
-                .unwrap();
+            file.put_connectivity(1, &connectivity).unwrap();
         }
 
         let file = ExodusFile::<mode::Read>::open(path).unwrap();
@@ -512,8 +503,7 @@ mod block_tests {
             file.put_block(&block).unwrap();
 
             let connectivity: Vec<i64> = (1..=12).collect();
-            file.put_connectivity(1, &connectivity)
-                .unwrap();
+            file.put_connectivity(1, &connectivity).unwrap();
         }
 
         let file = ExodusFile::<mode::Read>::open(path).unwrap();
@@ -556,8 +546,7 @@ mod block_tests {
             file.put_block(&block).unwrap();
 
             let connectivity: Vec<i64> = (1..=8).collect();
-            file.put_connectivity(1, &connectivity)
-                .unwrap();
+            file.put_connectivity(1, &connectivity).unwrap();
         }
 
         let file = ExodusFile::<mode::Read>::open(path).unwrap();
@@ -595,14 +584,11 @@ mod block_tests {
             file.put_block(&block).unwrap();
 
             let attr_names = vec!["density", "material_id"];
-            file.put_block_attribute_names(1, &attr_names)
-                .unwrap();
+            file.put_block_attribute_names(1, &attr_names).unwrap();
         }
 
         let file = ExodusFile::<mode::Read>::open(path).unwrap();
-        let names = file
-            .block_attribute_names(1)
-            .unwrap();
+        let names = file.block_attribute_names(1).unwrap();
 
         assert_eq!(names.len(), 2);
         assert_eq!(names[0], "density");
@@ -705,10 +691,10 @@ mod block_tests {
             // Write attribute values: 4 elements × 2 attributes = 8 values
             // Layout: [elem1_attr1, elem1_attr2, elem2_attr1, elem2_attr2, ...]
             let attributes = vec![
-                0.01, 200e9,  // Element 1
-                0.02, 210e9,  // Element 2
+                0.01, 200e9, // Element 1
+                0.02, 210e9, // Element 2
                 0.015, 205e9, // Element 3
-                0.01, 200e9,  // Element 4
+                0.01, 200e9, // Element 4
             ];
             file.put_block_attributes(200, &attributes).unwrap();
         }
@@ -809,8 +795,10 @@ mod block_tests {
                 num_attributes: 3,
             };
             file.put_block(&block1).unwrap();
-            file.put_block_attribute_names(100, &vec!["a1", "a2", "a3"]).unwrap();
-            file.put_block_attributes(100, &vec![1.0, 2.0, 3.0]).unwrap();
+            file.put_block_attribute_names(100, &vec!["a1", "a2", "a3"])
+                .unwrap();
+            file.put_block_attributes(100, &vec![1.0, 2.0, 3.0])
+                .unwrap();
 
             // Block 2: 2 tet elements, 2 attributes
             let block2 = Block {
@@ -824,8 +812,10 @@ mod block_tests {
                 num_attributes: 2,
             };
             file.put_block(&block2).unwrap();
-            file.put_block_attribute_names(200, &vec!["b1", "b2"]).unwrap();
-            file.put_block_attributes(200, &vec![10.0, 20.0, 30.0, 40.0]).unwrap();
+            file.put_block_attribute_names(200, &vec!["b1", "b2"])
+                .unwrap();
+            file.put_block_attributes(200, &vec![10.0, 20.0, 30.0, 40.0])
+                .unwrap();
         }
 
         // Read and verify both blocks
@@ -925,8 +915,7 @@ mod block_tests {
                 }
             }
 
-            file.put_connectivity(1, &connectivity)
-                .unwrap();
+            file.put_connectivity(1, &connectivity).unwrap();
         }
 
         let file = ExodusFile::<mode::Read>::open(path).unwrap();
@@ -981,12 +970,10 @@ mod block_tests {
             file.put_block(&block2).unwrap();
 
             let conn1: Vec<i64> = (1..=8).collect();
-            file.put_connectivity(10, &conn1)
-                .unwrap();
+            file.put_connectivity(10, &conn1).unwrap();
 
             let conn2: Vec<i64> = (9..=16).collect();
-            file.put_connectivity(20, &conn2)
-                .unwrap();
+            file.put_connectivity(20, &conn2).unwrap();
         }
 
         let file = ExodusFile::<mode::Read>::open(path).unwrap();
@@ -1039,12 +1026,10 @@ mod block_tests {
             file.put_block(&block2).unwrap();
 
             let conn1: Vec<i64> = (1..=8).collect();
-            file.put_connectivity(1, &conn1)
-                .unwrap();
+            file.put_connectivity(1, &conn1).unwrap();
 
             let conn2: Vec<i64> = (9..=12).collect();
-            file.put_connectivity(2, &conn2)
-                .unwrap();
+            file.put_connectivity(2, &conn2).unwrap();
         }
 
         let file = ExodusFile::<mode::Read>::open(path).unwrap();
@@ -1090,8 +1075,7 @@ mod block_tests {
                 file.put_block(&block).unwrap();
 
                 let conn: Vec<i64> = (1..=8).collect();
-                file.put_connectivity(id, &conn)
-                    .unwrap();
+                file.put_connectivity(id, &conn).unwrap();
             }
         }
 
@@ -1135,8 +1119,7 @@ mod block_tests {
                 file.put_block(&block).unwrap();
 
                 let conn: Vec<i64> = (1..=8).collect();
-                file.put_connectivity(id, &conn)
-                    .unwrap();
+                file.put_connectivity(id, &conn).unwrap();
             }
         }
 
@@ -1186,8 +1169,7 @@ mod block_tests {
             file.put_block(&block).unwrap();
 
             let connectivity = vec![1, 2, 2, 3, 3, 4, 4, 5, 5, 6];
-            file.put_connectivity(1, &connectivity)
-                .unwrap();
+            file.put_connectivity(1, &connectivity).unwrap();
         }
 
         let file = ExodusFile::<mode::Read>::open(path).unwrap();
@@ -1227,8 +1209,7 @@ mod block_tests {
             file.put_block(&block).unwrap();
 
             let connectivity: Vec<i64> = (1..=16).collect();
-            file.put_connectivity(1, &connectivity)
-                .unwrap();
+            file.put_connectivity(1, &connectivity).unwrap();
         }
 
         let file = ExodusFile::<mode::Read>::open(path).unwrap();

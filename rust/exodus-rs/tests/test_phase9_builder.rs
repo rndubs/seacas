@@ -1,6 +1,6 @@
 //! Integration tests for Phase 9: High-Level Builder API
 
-use exodus_rs::{BlockBuilder, ExodusFile, MeshBuilder, mode};
+use exodus_rs::{mode, BlockBuilder, ExodusFile, MeshBuilder};
 use tempfile::NamedTempFile;
 
 #[test]
@@ -11,15 +11,11 @@ fn test_phase9_2d_quad_mesh() {
     // Create using builder API
     MeshBuilder::new("Phase 9 Test - 2D Quad")
         .dimensions(2)
-        .coordinates(
-            vec![0.0, 1.0, 1.0, 0.0],
-            vec![0.0, 0.0, 1.0, 1.0],
-            vec![],
-        )
+        .coordinates(vec![0.0, 1.0, 1.0, 0.0], vec![0.0, 0.0, 1.0, 1.0], vec![])
         .add_block(
             BlockBuilder::new(1, "QUAD4")
                 .connectivity(vec![1, 2, 3, 4])
-                .build()
+                .build(),
         )
         .write(tmp.path())
         .expect("Failed to write 2D mesh");
@@ -50,7 +46,7 @@ fn test_phase9_3d_hex_with_metadata() {
         .add_block(
             BlockBuilder::new(100, "HEX8")
                 .connectivity(vec![1, 2, 3, 4, 5, 6, 7, 8])
-                .build()
+                .build(),
         )
         .qa_record("exodus-rs", "0.1.0", "2025-11-10", "12:00:00")
         .info("Phase 9 integration test")
@@ -86,14 +82,14 @@ fn test_phase9_multi_block_with_attributes() {
                 .connectivity(vec![1, 2, 3, 4, 5, 6, 7, 8])
                 .attributes(vec![1.0])
                 .attribute_names(vec!["MaterialID"])
-                .build()
+                .build(),
         )
         .add_block(
             BlockBuilder::new(2, "TRI3")
                 .connectivity(vec![2, 9, 10])
                 .attributes(vec![2.0])
                 .attribute_names(vec!["MaterialID"])
-                .build()
+                .build(),
         )
         .write(tmp.path())
         .expect("Failed to write multi-block mesh");
@@ -108,7 +104,9 @@ fn test_phase9_multi_block_with_attributes() {
     assert_eq!(params.num_elem_blocks, 2);
 
     // Verify blocks
-    let block_ids = file.block_ids(exodus_rs::types::EntityType::ElemBlock).unwrap();
+    let block_ids = file
+        .block_ids(exodus_rs::types::EntityType::ElemBlock)
+        .unwrap();
     assert_eq!(block_ids.len(), 2);
     assert!(block_ids.contains(&1));
     assert!(block_ids.contains(&2));
@@ -129,7 +127,7 @@ fn test_phase9_coordinates_readback() {
         .add_block(
             BlockBuilder::new(1, "QUAD4")
                 .connectivity(vec![1, 2, 3, 4])
-                .build()
+                .build(),
         )
         .write(tmp.path())
         .unwrap();
@@ -160,7 +158,7 @@ fn test_phase9_connectivity_readback() {
         .add_block(
             BlockBuilder::new(1, "HEX8")
                 .connectivity(connectivity.clone())
-                .build()
+                .build(),
         )
         .write(tmp.path())
         .unwrap();

@@ -1,8 +1,6 @@
 //! Comprehensive tests for Phase 6: Variables and Time Steps (All Types)
 
-use exodus_rs::{
-    mode, Block, CreateMode, CreateOptions, EntityType, ExodusFile, InitParams, Set,
-};
+use exodus_rs::{mode, Block, CreateMode, CreateOptions, EntityType, ExodusFile, InitParams, Set};
 use tempfile::NamedTempFile;
 
 #[test]
@@ -344,15 +342,13 @@ fn test_multiple_time_steps_all_types() {
 
         file.define_variables(EntityType::Global, &["Time"])
             .unwrap();
-        file.define_variables(EntityType::Nodal, &["Temp"])
-            .unwrap();
+        file.define_variables(EntityType::Nodal, &["Temp"]).unwrap();
         file.define_variables(EntityType::ElemBlock, &["Stress"])
             .unwrap();
 
         // Time step 0
         file.put_time(0, 0.0).unwrap();
-        file.put_var(0, EntityType::Global, 0, 0, &[0.0])
-            .unwrap();
+        file.put_var(0, EntityType::Global, 0, 0, &[0.0]).unwrap();
         file.put_var(0, EntityType::Nodal, 0, 0, &[20.0, 20.0, 20.0, 20.0])
             .unwrap();
         file.put_var(0, EntityType::ElemBlock, 1, 0, &[100.0])
@@ -360,8 +356,7 @@ fn test_multiple_time_steps_all_types() {
 
         // Time step 1
         file.put_time(1, 1.0).unwrap();
-        file.put_var(1, EntityType::Global, 0, 0, &[1.0])
-            .unwrap();
+        file.put_var(1, EntityType::Global, 0, 0, &[1.0]).unwrap();
         file.put_var(1, EntityType::Nodal, 0, 0, &[25.0, 25.0, 25.0, 25.0])
             .unwrap();
         file.put_var(1, EntityType::ElemBlock, 1, 0, &[150.0])
@@ -369,8 +364,7 @@ fn test_multiple_time_steps_all_types() {
 
         // Time step 2
         file.put_time(2, 2.0).unwrap();
-        file.put_var(2, EntityType::Global, 0, 0, &[2.0])
-            .unwrap();
+        file.put_var(2, EntityType::Global, 0, 0, &[2.0]).unwrap();
         file.put_var(2, EntityType::Nodal, 0, 0, &[30.0, 30.0, 30.0, 30.0])
             .unwrap();
         file.put_var(2, EntityType::ElemBlock, 1, 0, &[200.0])
@@ -630,8 +624,7 @@ fn test_invalid_time_step_access() {
         })
         .unwrap();
 
-        file.define_variables(EntityType::Nodal, &["Var1"])
-            .unwrap();
+        file.define_variables(EntityType::Nodal, &["Var1"]).unwrap();
 
         file.put_time(0, 0.0).unwrap();
         file.put_var(0, EntityType::Nodal, 0, 0, &[1.0]).unwrap();

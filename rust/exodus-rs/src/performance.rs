@@ -61,9 +61,9 @@ impl NodeType {
     /// - Unknown: 16 MB (moderate default)
     pub fn default_cache_size(&self) -> usize {
         match self {
-            NodeType::Login => 4 * 1024 * 1024,      // 4 MB
-            NodeType::Compute => 128 * 1024 * 1024,  // 128 MB
-            NodeType::Unknown => 16 * 1024 * 1024,   // 16 MB
+            NodeType::Login => 4 * 1024 * 1024,     // 4 MB
+            NodeType::Compute => 128 * 1024 * 1024, // 128 MB
+            NodeType::Unknown => 16 * 1024 * 1024,  // 16 MB
         }
     }
 

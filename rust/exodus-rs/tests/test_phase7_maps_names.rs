@@ -547,7 +547,9 @@ fn test_property_array_roundtrip() {
     // Read and verify
     {
         let file = ExodusFile::<mode::Read>::open(tmp.path()).unwrap();
-        let props = file.property_array(EntityType::ElemBlock, "MATERIAL_ID").unwrap();
+        let props = file
+            .property_array(EntityType::ElemBlock, "MATERIAL_ID")
+            .unwrap();
         assert_eq!(props, vec![1, 2, 3]);
     }
 }
@@ -586,10 +588,14 @@ fn test_multiple_properties() {
     {
         let file = ExodusFile::<mode::Read>::open(tmp.path()).unwrap();
 
-        let material_ids = file.property_array(EntityType::ElemBlock, "MATERIAL_ID").unwrap();
+        let material_ids = file
+            .property_array(EntityType::ElemBlock, "MATERIAL_ID")
+            .unwrap();
         assert_eq!(material_ids, vec![1, 2, 3]);
 
-        let processor_ids = file.property_array(EntityType::ElemBlock, "PROCESSOR_ID").unwrap();
+        let processor_ids = file
+            .property_array(EntityType::ElemBlock, "PROCESSOR_ID")
+            .unwrap();
         assert_eq!(processor_ids, vec![0, 1, 0]);
 
         let prop_names = file.property_names(EntityType::ElemBlock).unwrap();
@@ -734,19 +740,24 @@ fn test_all_maps_and_names_together() {
         file.init(&params).unwrap();
 
         // Set ID maps
-        file.put_id_map(EntityType::NodeMap, &[100, 101, 102, 103]).unwrap();
+        file.put_id_map(EntityType::NodeMap, &[100, 101, 102, 103])
+            .unwrap();
         file.put_id_map(EntityType::ElemMap, &[1000, 1001]).unwrap();
 
         // Set order map
         file.put_elem_order_map(&[2, 1]).unwrap();
 
         // Set names
-        file.put_names(EntityType::ElemBlock, &["Material1", "Material2"]).unwrap();
-        file.put_names(EntityType::NodeSet, &["Inlet", "Outlet"]).unwrap();
+        file.put_names(EntityType::ElemBlock, &["Material1", "Material2"])
+            .unwrap();
+        file.put_names(EntityType::NodeSet, &["Inlet", "Outlet"])
+            .unwrap();
 
         // Set properties
-        file.put_property_array(EntityType::ElemBlock, "MATERIAL_ID", &[1, 2]).unwrap();
-        file.put_property_array(EntityType::NodeSet, "BC_TYPE", &[10, 20]).unwrap();
+        file.put_property_array(EntityType::ElemBlock, "MATERIAL_ID", &[1, 2])
+            .unwrap();
+        file.put_property_array(EntityType::NodeSet, "BC_TYPE", &[10, 20])
+            .unwrap();
     }
 
     // Read and verify
@@ -772,7 +783,9 @@ fn test_all_maps_and_names_together() {
         assert_eq!(nodeset_names, vec!["Inlet", "Outlet"]);
 
         // Verify properties
-        let mat_ids = file.property_array(EntityType::ElemBlock, "MATERIAL_ID").unwrap();
+        let mat_ids = file
+            .property_array(EntityType::ElemBlock, "MATERIAL_ID")
+            .unwrap();
         assert_eq!(mat_ids, vec![1, 2]);
 
         let bc_types = file.property_array(EntityType::NodeSet, "BC_TYPE").unwrap();

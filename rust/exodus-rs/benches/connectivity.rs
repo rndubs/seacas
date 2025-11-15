@@ -17,7 +17,12 @@ fn benchmark_write_connectivity(c: &mut Criterion) {
 
                 b.iter(|| {
                     let temp = NamedTempFile::new().unwrap();
-                    let mut file = ExodusFile::create(temp.path(), { let mut opts = CreateOptions::default(); opts.mode = CreateMode::Clobber; opts }).unwrap();
+                    let mut file = ExodusFile::create(temp.path(), {
+                        let mut opts = CreateOptions::default();
+                        opts.mode = CreateMode::Clobber;
+                        opts
+                    })
+                    .unwrap();
 
                     let params = InitParams {
                         title: "Benchmark".to_string(),
@@ -62,7 +67,12 @@ fn benchmark_read_connectivity(c: &mut Criterion) {
         // Setup: create a file with connectivity
         let temp = NamedTempFile::new().unwrap();
         {
-            let mut file = ExodusFile::create(temp.path(), { let mut opts = CreateOptions::default(); opts.mode = CreateMode::Clobber; opts }).unwrap();
+            let mut file = ExodusFile::create(temp.path(), {
+                let mut opts = CreateOptions::default();
+                opts.mode = CreateMode::Clobber;
+                opts
+            })
+            .unwrap();
             let params = InitParams {
                 title: "Benchmark".to_string(),
                 num_dim: 3,
@@ -116,7 +126,12 @@ fn benchmark_multiple_blocks(c: &mut Criterion) {
 
                 b.iter(|| {
                     let temp = NamedTempFile::new().unwrap();
-                    let mut file = ExodusFile::create(temp.path(), { let mut opts = CreateOptions::default(); opts.mode = CreateMode::Clobber; opts }).unwrap();
+                    let mut file = ExodusFile::create(temp.path(), {
+                        let mut opts = CreateOptions::default();
+                        opts.mode = CreateMode::Clobber;
+                        opts
+                    })
+                    .unwrap();
 
                     let params = InitParams {
                         title: "Benchmark".to_string(),
@@ -144,7 +159,8 @@ fn benchmark_multiple_blocks(c: &mut Criterion) {
                         let connectivity: Vec<i64> = (0..elems_per_block * 8)
                             .map(|j| (i * elems_per_block * 8 + j) as i64 + 1)
                             .collect();
-                        file.put_connectivity((i + 1) as i64, &connectivity).unwrap();
+                        file.put_connectivity((i + 1) as i64, &connectivity)
+                            .unwrap();
                     }
 
                     black_box(&file);
@@ -156,5 +172,10 @@ fn benchmark_multiple_blocks(c: &mut Criterion) {
     group.finish();
 }
 
-criterion_group!(benches, benchmark_write_connectivity, benchmark_read_connectivity, benchmark_multiple_blocks);
+criterion_group!(
+    benches,
+    benchmark_write_connectivity,
+    benchmark_read_connectivity,
+    benchmark_multiple_blocks
+);
 criterion_main!(benches);

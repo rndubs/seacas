@@ -357,7 +357,10 @@ impl TruthTable {
         if self.table.len() != expected_len {
             return Err(format!(
                 "Truth table size mismatch: expected {} ({}×{}), got {}",
-                expected_len, self.num_blocks, self.num_vars, self.table.len()
+                expected_len,
+                self.num_blocks,
+                self.num_vars,
+                self.table.len()
             ));
         }
         Ok(())

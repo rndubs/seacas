@@ -14,7 +14,12 @@ fn benchmark_write_nodal_vars(c: &mut Criterion) {
 
                 b.iter(|| {
                     let temp = NamedTempFile::new().unwrap();
-                    let mut file = ExodusFile::create(temp.path(), { let mut opts = CreateOptions::default(); opts.mode = CreateMode::Clobber; opts }).unwrap();
+                    let mut file = ExodusFile::create(temp.path(), {
+                        let mut opts = CreateOptions::default();
+                        opts.mode = CreateMode::Clobber;
+                        opts
+                    })
+                    .unwrap();
 
                     let params = InitParams {
                         title: "Benchmark".to_string(),
@@ -24,7 +29,8 @@ fn benchmark_write_nodal_vars(c: &mut Criterion) {
                     };
                     file.init(&params).unwrap();
 
-                    file.define_variables(EntityType::Nodal, &["temperature"]).unwrap();
+                    file.define_variables(EntityType::Nodal, &["temperature"])
+                        .unwrap();
                     file.put_time(1, 0.0).unwrap();
 
                     black_box(file.put_var(1, EntityType::Nodal, 0, 0, &values).unwrap());
@@ -45,7 +51,12 @@ fn benchmark_read_nodal_vars(c: &mut Criterion) {
         // Setup: create a file with variables
         let temp = NamedTempFile::new().unwrap();
         {
-            let mut file = ExodusFile::create(temp.path(), { let mut opts = CreateOptions::default(); opts.mode = CreateMode::Clobber; opts }).unwrap();
+            let mut file = ExodusFile::create(temp.path(), {
+                let mut opts = CreateOptions::default();
+                opts.mode = CreateMode::Clobber;
+                opts
+            })
+            .unwrap();
             let params = InitParams {
                 title: "Benchmark".to_string(),
                 num_dim: 3,
@@ -54,7 +65,8 @@ fn benchmark_read_nodal_vars(c: &mut Criterion) {
             };
             file.init(&params).unwrap();
 
-            file.define_variables(EntityType::Nodal, &["temperature"]).unwrap();
+            file.define_variables(EntityType::Nodal, &["temperature"])
+                .unwrap();
             file.put_time(1, 0.0).unwrap();
             file.put_var(1, EntityType::Nodal, 0, 0, &values).unwrap();
         }
@@ -83,15 +95,18 @@ fn benchmark_write_global_vars(c: &mut Criterion) {
             BenchmarkId::from_parameter(num_vars),
             num_vars,
             |b, &num_vars| {
-                let var_names: Vec<String> = (0..num_vars)
-                    .map(|i| format!("var_{}", i))
-                    .collect();
+                let var_names: Vec<String> = (0..num_vars).map(|i| format!("var_{}", i)).collect();
                 let var_names_ref: Vec<&str> = var_names.iter().map(|s| s.as_str()).collect();
                 let values: Vec<f64> = (0..num_vars).map(|i| i as f64).collect();
 
                 b.iter(|| {
                     let temp = NamedTempFile::new().unwrap();
-                    let mut file = ExodusFile::create(temp.path(), { let mut opts = CreateOptions::default(); opts.mode = CreateMode::Clobber; opts }).unwrap();
+                    let mut file = ExodusFile::create(temp.path(), {
+                        let mut opts = CreateOptions::default();
+                        opts.mode = CreateMode::Clobber;
+                        opts
+                    })
+                    .unwrap();
 
                     let params = InitParams {
                         title: "Benchmark".to_string(),
@@ -101,11 +116,13 @@ fn benchmark_write_global_vars(c: &mut Criterion) {
                     };
                     file.init(&params).unwrap();
 
-                    file.define_variables(EntityType::Global, &var_names_ref).unwrap();
+                    file.define_variables(EntityType::Global, &var_names_ref)
+                        .unwrap();
                     file.put_time(1, 0.0).unwrap();
 
                     for (i, &val) in values.iter().enumerate() {
-                        file.put_var(1, EntityType::Global, i as i64, 0, &[val]).unwrap();
+                        file.put_var(1, EntityType::Global, i as i64, 0, &[val])
+                            .unwrap();
                     }
 
                     black_box(&file);
@@ -130,7 +147,12 @@ fn benchmark_multiple_time_steps(c: &mut Criterion) {
 
                 b.iter(|| {
                     let temp = NamedTempFile::new().unwrap();
-                    let mut file = ExodusFile::create(temp.path(), { let mut opts = CreateOptions::default(); opts.mode = CreateMode::Clobber; opts }).unwrap();
+                    let mut file = ExodusFile::create(temp.path(), {
+                        let mut opts = CreateOptions::default();
+                        opts.mode = CreateMode::Clobber;
+                        opts
+                    })
+                    .unwrap();
 
                     let params = InitParams {
                         title: "Benchmark".to_string(),
@@ -140,11 +162,14 @@ fn benchmark_multiple_time_steps(c: &mut Criterion) {
                     };
                     file.init(&params).unwrap();
 
-                    file.define_variables(EntityType::Nodal, &["temperature"]).unwrap();
+                    file.define_variables(EntityType::Nodal, &["temperature"])
+                        .unwrap();
 
                     for step in 0..num_steps {
-                        file.put_time((step + 1) as usize, step as f64 * 0.1).unwrap();
-                        file.put_var((step + 1) as usize, EntityType::Nodal, 0, 0, &values).unwrap();
+                        file.put_time((step + 1) as usize, step as f64 * 0.1)
+                            .unwrap();
+                        file.put_var((step + 1) as usize, EntityType::Nodal, 0, 0, &values)
+                            .unwrap();
                     }
 
                     black_box(&file);

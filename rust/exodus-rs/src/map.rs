@@ -10,7 +10,6 @@ use crate::error::{ExodusError, Result};
 use crate::types::EntityType;
 use crate::{mode, ExodusFile, FileMode};
 
-
 // ============================================================================
 // ID Maps
 // ============================================================================
@@ -23,7 +22,7 @@ impl<M: FileMode> ExodusFile<M> {
             EntityType::ElemMap => Ok("elem_num_map"),
             EntityType::EdgeMap => Ok("edge_num_map"),
             EntityType::FaceMap => Ok("face_num_map"),
-            EntityType::ElemBlock => Ok("elem_map"),  // Global element map
+            EntityType::ElemBlock => Ok("elem_map"), // Global element map
             _ => Err(ExodusError::InvalidEntityType(format!(
                 "Entity type {:?} does not support ID maps",
                 entity_type
@@ -83,9 +82,7 @@ impl ExodusFile<mode::Write> {
         let dim_size = self
             .nc_file
             .dimension(dim_name)
-            .ok_or_else(|| {
-                ExodusError::Other(format!("Dimension {} not found", dim_name))
-            })?
+            .ok_or_else(|| ExodusError::Other(format!("Dimension {} not found", dim_name)))?
             .len();
 
         if map.len() != dim_size {
@@ -98,9 +95,9 @@ impl ExodusFile<mode::Write> {
         // Create the variable if it doesn't exist
         if self.nc_file.variable(var_name).is_none() {
             // Verify dimension exists
-            self.nc_file.dimension(dim_name).ok_or_else(|| {
-                ExodusError::Other(format!("Dimension {} not found", dim_name))
-            })?;
+            self.nc_file
+                .dimension(dim_name)
+                .ok_or_else(|| ExodusError::Other(format!("Dimension {} not found", dim_name)))?;
 
             self.nc_file
                 .add_variable::<i64>(var_name, &[dim_name])
@@ -108,12 +105,12 @@ impl ExodusFile<mode::Write> {
         }
 
         // Write the map
-        let mut var = self.nc_file.variable_mut(var_name).ok_or_else(|| {
-            ExodusError::VariableNotDefined(var_name.to_string())
-        })?;
+        let mut var = self
+            .nc_file
+            .variable_mut(var_name)
+            .ok_or_else(|| ExodusError::VariableNotDefined(var_name.to_string()))?;
 
-        var.put_values(map, ..)
-            .map_err(ExodusError::NetCdf)?;
+        var.put_values(map, ..).map_err(ExodusError::NetCdf)?;
 
         Ok(())
     }
@@ -150,9 +147,7 @@ impl ExodusFile<mode::Write> {
         let dim_size = self
             .nc_file
             .dimension(dim_name)
-            .ok_or_else(|| {
-                ExodusError::Other(format!("Dimension {} not found", dim_name))
-            })?
+            .ok_or_else(|| ExodusError::Other(format!("Dimension {} not found", dim_name)))?
             .len();
 
         if order.len() != dim_size {
@@ -165,9 +160,9 @@ impl ExodusFile<mode::Write> {
         // Create the variable if it doesn't exist
         if self.nc_file.variable(var_name).is_none() {
             // Verify dimension exists
-            self.nc_file.dimension(dim_name).ok_or_else(|| {
-                ExodusError::Other(format!("Dimension {} not found", dim_name))
-            })?;
+            self.nc_file
+                .dimension(dim_name)
+                .ok_or_else(|| ExodusError::Other(format!("Dimension {} not found", dim_name)))?;
 
             self.nc_file
                 .add_variable::<i64>(var_name, &[dim_name])
@@ -175,12 +170,12 @@ impl ExodusFile<mode::Write> {
         }
 
         // Write the order map
-        let mut var = self.nc_file.variable_mut(var_name).ok_or_else(|| {
-            ExodusError::VariableNotDefined(var_name.to_string())
-        })?;
+        let mut var = self
+            .nc_file
+            .variable_mut(var_name)
+            .ok_or_else(|| ExodusError::VariableNotDefined(var_name.to_string()))?;
 
-        var.put_values(order, ..)
-            .map_err(ExodusError::NetCdf)?;
+        var.put_values(order, ..).map_err(ExodusError::NetCdf)?;
 
         Ok(())
     }
@@ -213,14 +208,13 @@ impl ExodusFile<mode::Read> {
         let var_name = Self::id_map_var_name(entity_type)?;
 
         // Check if the variable exists
-        let var = self.nc_file.variable(var_name).ok_or_else(|| {
-            ExodusError::VariableNotDefined(var_name.to_string())
-        })?;
+        let var = self
+            .nc_file
+            .variable(var_name)
+            .ok_or_else(|| ExodusError::VariableNotDefined(var_name.to_string()))?;
 
         // Read the map
-        let map: Vec<i64> = var
-            .get_values(..)
-            .map_err(ExodusError::NetCdf)?;
+        let map: Vec<i64> = var.get_values(..).map_err(ExodusError::NetCdf)?;
 
         Ok(map)
     }
@@ -245,14 +239,13 @@ impl ExodusFile<mode::Read> {
         let var_name = "elem_order_map";
 
         // Check if the variable exists
-        let var = self.nc_file.variable(var_name).ok_or_else(|| {
-            ExodusError::VariableNotDefined(var_name.to_string())
-        })?;
+        let var = self
+            .nc_file
+            .variable(var_name)
+            .ok_or_else(|| ExodusError::VariableNotDefined(var_name.to_string()))?;
 
         // Read the order map
-        let order: Vec<i64> = var
-            .get_values(..)
-            .map_err(ExodusError::NetCdf)?;
+        let order: Vec<i64> = var.get_values(..).map_err(ExodusError::NetCdf)?;
 
         Ok(order)
     }
@@ -359,9 +352,7 @@ impl ExodusFile<mode::Write> {
                 let count = self
                     .nc_file
                     .dimension(dim_name)
-                    .ok_or_else(|| {
-                        ExodusError::Other(format!("Dimension {} not found", dim_name))
-                    })?
+                    .ok_or_else(|| ExodusError::Other(format!("Dimension {} not found", dim_name)))?
                     .len();
                 vec![String::new(); count]
             }
@@ -404,11 +395,7 @@ impl ExodusFile<mode::Write> {
     /// file.put_names(EntityType::ElemBlock, &["Block1", "Block2"])?;
     /// # Ok::<(), ExodusError>(())
     /// ```
-    pub fn put_names(
-        &mut self,
-        entity_type: EntityType,
-        names: &[impl AsRef<str>],
-    ) -> Result<()> {
+    pub fn put_names(&mut self, entity_type: EntityType, names: &[impl AsRef<str>]) -> Result<()> {
         const MAX_NAME_LENGTH: usize = 32;
 
         // Validate all names
@@ -429,9 +416,7 @@ impl ExodusFile<mode::Write> {
         let dim_size = self
             .nc_file
             .dimension(dim_name)
-            .ok_or_else(|| {
-                ExodusError::Other(format!("Dimension {} not found", dim_name))
-            })?
+            .ok_or_else(|| ExodusError::Other(format!("Dimension {} not found", dim_name)))?
             .len();
 
         if names.len() != dim_size {
@@ -451,12 +436,12 @@ impl ExodusFile<mode::Write> {
         // Create the variable if it doesn't exist
         if self.nc_file.variable(&var_name).is_none() {
             // Verify dimensions exist
-            self.nc_file.dimension(dim_name).ok_or_else(|| {
-                ExodusError::Other(format!("Dimension {} not found", dim_name))
-            })?;
-            self.nc_file.dimension("len_name").ok_or_else(|| {
-                ExodusError::Other("Dimension len_name not found".to_string())
-            })?;
+            self.nc_file
+                .dimension(dim_name)
+                .ok_or_else(|| ExodusError::Other(format!("Dimension {} not found", dim_name)))?;
+            self.nc_file
+                .dimension("len_name")
+                .ok_or_else(|| ExodusError::Other("Dimension len_name not found".to_string()))?;
 
             self.nc_file
                 .add_variable::<u8>(&var_name, &[dim_name, "len_name"])
@@ -473,9 +458,10 @@ impl ExodusFile<mode::Write> {
         }
 
         // Write the names
-        let mut var = self.nc_file.variable_mut(&var_name).ok_or_else(|| {
-            ExodusError::VariableNotDefined(var_name.clone())
-        })?;
+        let mut var = self
+            .nc_file
+            .variable_mut(&var_name)
+            .ok_or_else(|| ExodusError::VariableNotDefined(var_name.clone()))?;
 
         var.put_values(&name_bytes, ..)
             .map_err(ExodusError::NetCdf)?;
@@ -488,14 +474,13 @@ impl ExodusFile<mode::Write> {
         let var_name = Self::names_var_name(entity_type)?;
 
         // Check if the variable exists
-        let var = self.nc_file.variable(&var_name).ok_or_else(|| {
-            ExodusError::VariableNotDefined(var_name.clone())
-        })?;
+        let var = self
+            .nc_file
+            .variable(&var_name)
+            .ok_or_else(|| ExodusError::VariableNotDefined(var_name.clone()))?;
 
         // Read the raw bytes
-        let name_bytes: Vec<u8> = var
-            .get_values(..)
-            .map_err(ExodusError::NetCdf)?;
+        let name_bytes: Vec<u8> = var.get_values(..).map_err(ExodusError::NetCdf)?;
 
         const MAX_NAME_LENGTH: usize = 32;
         let num_names = name_bytes.len() / (MAX_NAME_LENGTH + 1);
@@ -506,7 +491,10 @@ impl ExodusFile<mode::Write> {
             let name_slice = &name_bytes[offset..offset + (MAX_NAME_LENGTH + 1)];
 
             // Find the null terminator or end of string
-            let end = name_slice.iter().position(|&b| b == 0).unwrap_or(name_slice.len());
+            let end = name_slice
+                .iter()
+                .position(|&b| b == 0)
+                .unwrap_or(name_slice.len());
             let name = String::from_utf8_lossy(&name_slice[..end]).to_string();
             names.push(name);
         }
@@ -539,13 +527,13 @@ impl ExodusFile<mode::Read> {
     pub fn name(&self, entity_type: EntityType, entity_index: usize) -> Result<String> {
         let names = self.names(entity_type)?;
 
-        names.get(entity_index)
-            .cloned()
-            .ok_or_else(|| ExodusError::Other(format!(
+        names.get(entity_index).cloned().ok_or_else(|| {
+            ExodusError::Other(format!(
                 "Entity index {} out of bounds (max {})",
                 entity_index,
                 names.len() - 1
-            )))
+            ))
+        })
     }
 
     /// Get all names for entity type
@@ -570,14 +558,13 @@ impl ExodusFile<mode::Read> {
         let var_name = Self::names_var_name(entity_type)?;
 
         // Check if the variable exists
-        let var = self.nc_file.variable(&var_name).ok_or_else(|| {
-            ExodusError::VariableNotDefined(var_name.clone())
-        })?;
+        let var = self
+            .nc_file
+            .variable(&var_name)
+            .ok_or_else(|| ExodusError::VariableNotDefined(var_name.clone()))?;
 
         // Read the raw bytes
-        let name_bytes: Vec<u8> = var
-            .get_values(..)
-            .map_err(ExodusError::NetCdf)?;
+        let name_bytes: Vec<u8> = var.get_values(..).map_err(ExodusError::NetCdf)?;
 
         const MAX_NAME_LENGTH: usize = 32;
         let num_names = name_bytes.len() / (MAX_NAME_LENGTH + 1);
@@ -588,7 +575,10 @@ impl ExodusFile<mode::Read> {
             let name_slice = &name_bytes[offset..offset + (MAX_NAME_LENGTH + 1)];
 
             // Find the null terminator or end of string
-            let end = name_slice.iter().position(|&b| b == 0).unwrap_or(name_slice.len());
+            let end = name_slice
+                .iter()
+                .position(|&b| b == 0)
+                .unwrap_or(name_slice.len());
             let name = String::from_utf8_lossy(&name_slice[..end]).to_string();
             names.push(name);
         }
@@ -643,9 +633,7 @@ impl ExodusFile<mode::Write> {
                 let count = self
                     .nc_file
                     .dimension(dim_name)
-                    .ok_or_else(|| {
-                        ExodusError::Other(format!("Dimension {} not found", dim_name))
-                    })?
+                    .ok_or_else(|| ExodusError::Other(format!("Dimension {} not found", dim_name)))?
                     .len();
                 vec![0; count]
             }
@@ -653,11 +641,12 @@ impl ExodusFile<mode::Write> {
 
         // Find the entity index from ID
         let ids = self.entity_ids_internal(entity_type)?;
-        let index = ids.iter().position(|&id| id == entity_id)
-            .ok_or_else(|| ExodusError::EntityNotFound {
+        let index = ids.iter().position(|&id| id == entity_id).ok_or_else(|| {
+            ExodusError::EntityNotFound {
                 entity_type: entity_type.to_string(),
                 id: entity_id,
-            })?;
+            }
+        })?;
 
         props[index] = value;
         self.put_property_array(entity_type, prop_name, &props)?;
@@ -699,9 +688,7 @@ impl ExodusFile<mode::Write> {
         let dim_size = self
             .nc_file
             .dimension(dim_name)
-            .ok_or_else(|| {
-                ExodusError::Other(format!("Dimension {} not found", dim_name))
-            })?
+            .ok_or_else(|| ExodusError::Other(format!("Dimension {} not found", dim_name)))?
             .len();
 
         if values.len() != dim_size {
@@ -714,11 +701,12 @@ impl ExodusFile<mode::Write> {
         // Create the variable if it doesn't exist
         if self.nc_file.variable(&var_name).is_none() {
             // Verify dimension exists
-            self.nc_file.dimension(dim_name).ok_or_else(|| {
-                ExodusError::Other(format!("Dimension {} not found", dim_name))
-            })?;
+            self.nc_file
+                .dimension(dim_name)
+                .ok_or_else(|| ExodusError::Other(format!("Dimension {} not found", dim_name)))?;
 
-            let mut var = self.nc_file
+            let mut var = self
+                .nc_file
                 .add_variable::<i64>(&var_name, &[dim_name])
                 .map_err(ExodusError::NetCdf)?;
 
@@ -728,12 +716,12 @@ impl ExodusFile<mode::Write> {
         }
 
         // Write the properties
-        let mut var = self.nc_file.variable_mut(&var_name).ok_or_else(|| {
-            ExodusError::VariableNotDefined(var_name.clone())
-        })?;
+        let mut var = self
+            .nc_file
+            .variable_mut(&var_name)
+            .ok_or_else(|| ExodusError::VariableNotDefined(var_name.clone()))?;
 
-        var.put_values(values, ..)
-            .map_err(ExodusError::NetCdf)?;
+        var.put_values(values, ..).map_err(ExodusError::NetCdf)?;
 
         Ok(())
     }
@@ -749,26 +737,35 @@ impl ExodusFile<mode::Write> {
             EntityType::ElemSet => "els_prop",
             EntityType::EdgeSet => "edges_prop",
             EntityType::FaceSet => "faces_prop",
-            _ => return Err(ExodusError::InvalidEntityType(format!(
-                "Entity type {:?} does not support properties",
-                entity_type
-            ))),
+            _ => {
+                return Err(ExodusError::InvalidEntityType(format!(
+                    "Entity type {:?} does not support properties",
+                    entity_type
+                )))
+            }
         };
 
-        Ok(format!("{}_{}", prefix, prop_name.to_lowercase().replace(' ', "_")))
+        Ok(format!(
+            "{}_{}",
+            prefix,
+            prop_name.to_lowercase().replace(' ', "_")
+        ))
     }
 
     /// Internal helper to read property array
-    fn property_array_internal(&self, entity_type: EntityType, prop_name: &str) -> Result<Vec<i64>> {
+    fn property_array_internal(
+        &self,
+        entity_type: EntityType,
+        prop_name: &str,
+    ) -> Result<Vec<i64>> {
         let var_name = self.property_var_name(entity_type, prop_name)?;
 
-        let var = self.nc_file.variable(&var_name).ok_or_else(|| {
-            ExodusError::VariableNotDefined(var_name.clone())
-        })?;
+        let var = self
+            .nc_file
+            .variable(&var_name)
+            .ok_or_else(|| ExodusError::VariableNotDefined(var_name.clone()))?;
 
-        let props: Vec<i64> = var
-            .get_values(..)
-            .map_err(ExodusError::NetCdf)?;
+        let props: Vec<i64> = var.get_values(..).map_err(ExodusError::NetCdf)?;
 
         Ok(props)
     }
@@ -784,16 +781,17 @@ impl ExodusFile<mode::Write> {
             EntityType::ElemSet => "els_prop1",
             EntityType::EdgeSet => "es_prop1",
             EntityType::FaceSet => "fs_prop1",
-            _ => return Err(ExodusError::InvalidEntityType(format!(
-                "Cannot get IDs for entity type {:?}",
-                entity_type
-            ))),
+            _ => {
+                return Err(ExodusError::InvalidEntityType(format!(
+                    "Cannot get IDs for entity type {:?}",
+                    entity_type
+                )))
+            }
         };
 
         // Try to get the variable
         if let Some(var) = self.nc_file.variable(var_name) {
-            let ids: Vec<i64> = var.get_values(..)
-                .map_err(ExodusError::NetCdf)?;
+            let ids: Vec<i64> = var.get_values(..).map_err(ExodusError::NetCdf)?;
             // Filter out zeros and NetCDF fill values
             Ok(ids.into_iter().filter(|&id| id > 0).collect())
         } else {
@@ -834,13 +832,15 @@ impl ExodusFile<mode::Read> {
 
         // Get entity IDs to find the index
         let ids = self.entity_ids_internal(entity_type)?;
-        let index = ids.iter().position(|&id| id == entity_id)
-            .ok_or_else(|| ExodusError::EntityNotFound {
+        let index = ids.iter().position(|&id| id == entity_id).ok_or_else(|| {
+            ExodusError::EntityNotFound {
                 entity_type: entity_type.to_string(),
                 id: entity_id,
-            })?;
+            }
+        })?;
 
-        props.get(index)
+        props
+            .get(index)
             .copied()
             .ok_or_else(|| ExodusError::EntityNotFound {
                 entity_type: entity_type.to_string(),
@@ -875,13 +875,12 @@ impl ExodusFile<mode::Read> {
         let prop_name = prop_name.as_ref();
         let var_name = self.property_var_name(entity_type, prop_name)?;
 
-        let var = self.nc_file.variable(&var_name).ok_or_else(|| {
-            ExodusError::VariableNotDefined(var_name.clone())
-        })?;
+        let var = self
+            .nc_file
+            .variable(&var_name)
+            .ok_or_else(|| ExodusError::VariableNotDefined(var_name.clone()))?;
 
-        let props: Vec<i64> = var
-            .get_values(..)
-            .map_err(ExodusError::NetCdf)?;
+        let props: Vec<i64> = var.get_values(..).map_err(ExodusError::NetCdf)?;
 
         Ok(props)
     }
@@ -914,10 +913,12 @@ impl ExodusFile<mode::Read> {
             EntityType::ElemSet => "els_prop",
             EntityType::EdgeSet => "edges_prop",
             EntityType::FaceSet => "faces_prop",
-            _ => return Err(ExodusError::InvalidEntityType(format!(
-                "Entity type {:?} does not support properties",
-                entity_type
-            ))),
+            _ => {
+                return Err(ExodusError::InvalidEntityType(format!(
+                    "Entity type {:?} does not support properties",
+                    entity_type
+                )))
+            }
         };
 
         // Find all variables with the matching prefix
@@ -945,13 +946,19 @@ impl ExodusFile<mode::Read> {
             EntityType::ElemSet => "els_prop",
             EntityType::EdgeSet => "edges_prop",
             EntityType::FaceSet => "faces_prop",
-            _ => return Err(ExodusError::InvalidEntityType(format!(
-                "Entity type {:?} does not support properties",
-                entity_type
-            ))),
+            _ => {
+                return Err(ExodusError::InvalidEntityType(format!(
+                    "Entity type {:?} does not support properties",
+                    entity_type
+                )))
+            }
         };
 
-        Ok(format!("{}_{}", prefix, prop_name.to_lowercase().replace(' ', "_")))
+        Ok(format!(
+            "{}_{}",
+            prefix,
+            prop_name.to_lowercase().replace(' ', "_")
+        ))
     }
 
     /// Internal helper to get entity IDs
@@ -965,16 +972,17 @@ impl ExodusFile<mode::Read> {
             EntityType::ElemSet => "els_prop1",
             EntityType::EdgeSet => "es_prop1",
             EntityType::FaceSet => "fs_prop1",
-            _ => return Err(ExodusError::InvalidEntityType(format!(
-                "Cannot get IDs for entity type {:?}",
-                entity_type
-            ))),
+            _ => {
+                return Err(ExodusError::InvalidEntityType(format!(
+                    "Cannot get IDs for entity type {:?}",
+                    entity_type
+                )))
+            }
         };
 
         // Try to get the variable
         if let Some(var) = self.nc_file.variable(var_name) {
-            let ids: Vec<i64> = var.get_values(..)
-                .map_err(ExodusError::NetCdf)?;
+            let ids: Vec<i64> = var.get_values(..).map_err(ExodusError::NetCdf)?;
             // Filter out zeros and NetCDF fill values
             Ok(ids.into_iter().filter(|&id| id > 0).collect())
         } else {
@@ -1135,7 +1143,9 @@ mod tests {
         // Read
         {
             let file = ExodusFile::<mode::Read>::open(tmp.path()).unwrap();
-            let props = file.property_array(EntityType::ElemBlock, "MATERIAL_ID").unwrap();
+            let props = file
+                .property_array(EntityType::ElemBlock, "MATERIAL_ID")
+                .unwrap();
             assert_eq!(props, vec![1, 2, 3]);
 
             let prop_names = file.property_names(EntityType::ElemBlock).unwrap();

@@ -74,8 +74,7 @@ fn test_file_creation_with_custom_cache() {
 fn test_file_creation_with_custom_preemption() {
     let tmp = NamedTempFile::new().unwrap();
 
-    let perf = PerformanceConfig::auto()
-        .with_preemption(0.3);
+    let perf = PerformanceConfig::auto().with_preemption(0.3);
 
     let options = CreateOptions {
         mode: CreateMode::Clobber,
@@ -199,8 +198,7 @@ fn test_chunk_config_fluent_api() {
 
 #[test]
 fn test_performance_config_summary() {
-    let perf = PerformanceConfig::auto()
-        .with_cache_mb(256);
+    let perf = PerformanceConfig::auto().with_cache_mb(256);
 
     let summary = perf.summary();
     assert!(summary.contains("256 MB"));
@@ -218,8 +216,7 @@ fn test_hdf5_env_vars_set() {
 
     let tmp = NamedTempFile::new().unwrap();
 
-    let perf = PerformanceConfig::auto()
-        .with_cache_mb(128);
+    let perf = PerformanceConfig::auto().with_cache_mb(128);
 
     let options = CreateOptions {
         mode: CreateMode::Clobber,
@@ -247,8 +244,7 @@ fn test_performance_config_respects_user_env_vars() {
 
     let tmp = NamedTempFile::new().unwrap();
 
-    let perf = PerformanceConfig::auto()
-        .with_cache_mb(128);
+    let perf = PerformanceConfig::auto().with_cache_mb(128);
 
     let options = CreateOptions {
         mode: CreateMode::Clobber,

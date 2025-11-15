@@ -112,12 +112,8 @@ impl MeshBuilder {
         date: impl Into<String>,
         time: impl Into<String>,
     ) -> Self {
-        self.qa_records.push((
-            code_name.into(),
-            version.into(),
-            date.into(),
-            time.into(),
-        ));
+        self.qa_records
+            .push((code_name.into(), version.into(), date.into(), time.into()));
         self
     }
 
@@ -152,19 +148,11 @@ impl MeshBuilder {
     /// Write the mesh with custom creation options
     ///
     /// Allows specifying file format, compression, etc.
-    pub fn write_with_options<P: AsRef<Path>>(
-        self,
-        path: P,
-        options: CreateOptions,
-    ) -> Result<()> {
+    pub fn write_with_options<P: AsRef<Path>>(self, path: P, options: CreateOptions) -> Result<()> {
         let mut file = ExodusFile::<mode::Write>::create(path, options)?;
 
         // Determine counts
-        let num_nodes = self
-            .coords
-            .as_ref()
-            .map(|(x, _, _)| x.len())
-            .unwrap_or(0);
+        let num_nodes = self.coords.as_ref().map(|(x, _, _)| x.len()).unwrap_or(0);
 
         let mut num_elems = 0;
         for block in &self.blocks {
@@ -376,11 +364,7 @@ mod tests {
         // Create a simple 2D quad mesh
         let result = MeshBuilder::new("Simple Quad")
             .dimensions(2)
-            .coordinates(
-                vec![0.0, 1.0, 1.0, 0.0],
-                vec![0.0, 0.0, 1.0, 1.0],
-                vec![],
-            )
+            .coordinates(vec![0.0, 1.0, 1.0, 0.0], vec![0.0, 0.0, 1.0, 1.0], vec![])
             .add_block(
                 BlockBuilder::new(1, "QUAD4")
                     .connectivity(vec![1, 2, 3, 4])
@@ -454,11 +438,7 @@ mod tests {
 
         let result = MeshBuilder::new("Block with Attributes")
             .dimensions(2)
-            .coordinates(
-                vec![0.0, 1.0, 1.0, 0.0],
-                vec![0.0, 0.0, 1.0, 1.0],
-                vec![],
-            )
+            .coordinates(vec![0.0, 1.0, 1.0, 0.0], vec![0.0, 0.0, 1.0, 1.0], vec![])
             .add_block(
                 BlockBuilder::new(1, "QUAD4")
                     .connectivity(vec![1, 2, 3, 4])
