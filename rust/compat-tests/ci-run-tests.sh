@@ -227,16 +227,21 @@ else
 
   # Use the SEACAS_ROOT as the install path for TPLs
   # This is where install-tpl.sh actually installs them
+  # Match the cmake-config script's approach
   if [ "$VERBOSE" = true ]; then
     cmake \
       -DCMAKE_INSTALL_PREFIX="$BUILD_DIR/install" \
       -DTPL_ENABLE_Netcdf=ON \
       -DTPL_ENABLE_HDF5=ON \
       -DNetCDF_ROOT="$SEACAS_ROOT" \
+      -DnetCDF_ROOT="$SEACAS_ROOT" \
       -DHDF5_ROOT="$SEACAS_ROOT" \
-      -DSEACASProj_ENABLE_ALL_PACKAGES=OFF \
-      -DSEACASProj_ENABLE_SEACASExodus=ON \
-      -DSEACASProj_ENABLE_TESTS=OFF \
+      -DHDF5_DIR="$SEACAS_ROOT" \
+      -DSeacas_ENABLE_ALL_PACKAGES=OFF \
+      -DSeacas_ENABLE_SEACASIoss=ON \
+      -DSeacas_ENABLE_SEACASExodus=ON \
+      -DSeacas_ENABLE_TESTS=OFF \
+      -DBUILD_SHARED_LIBS=ON \
       ..
   else
     cmake \
@@ -244,10 +249,14 @@ else
       -DTPL_ENABLE_Netcdf=ON \
       -DTPL_ENABLE_HDF5=ON \
       -DNetCDF_ROOT="$SEACAS_ROOT" \
+      -DnetCDF_ROOT="$SEACAS_ROOT" \
       -DHDF5_ROOT="$SEACAS_ROOT" \
-      -DSEACASProj_ENABLE_ALL_PACKAGES=OFF \
-      -DSEACASProj_ENABLE_SEACASExodus=ON \
-      -DSEACASProj_ENABLE_TESTS=OFF \
+      -DHDF5_DIR="$SEACAS_ROOT" \
+      -DSeacas_ENABLE_ALL_PACKAGES=OFF \
+      -DSeacas_ENABLE_SEACASIoss=ON \
+      -DSeacas_ENABLE_SEACASExodus=ON \
+      -DSeacas_ENABLE_TESTS=OFF \
+      -DBUILD_SHARED_LIBS=ON \
       .. > /tmp/cmake-config.log 2>&1 || {
       echo -e "${RED}CMake configuration failed${NC}"
       echo "Last 50 lines of log:"
