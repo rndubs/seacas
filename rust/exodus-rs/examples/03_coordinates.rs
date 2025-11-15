@@ -9,7 +9,7 @@
 
 #[cfg(feature = "netcdf4")]
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    use exodus_rs::{ExodusFile, mode};
+    use exodus_rs::{mode, ExodusFile};
 
     // Create a new Exodus file
     let mut file = ExodusFile::create_default("coordinates_example.exo")?;
@@ -53,7 +53,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         if coords.num_dim == 2 {
             println!("  Node {}: ({}, {})", i + 1, coord[0], coord[1]);
         } else {
-            println!("  Node {}: ({}, {}, {})", i + 1, coord[0], coord[1], coord[2]);
+            println!(
+                "  Node {}: ({}, {}, {})",
+                i + 1,
+                coord[0],
+                coord[1],
+                coord[2]
+            );
         }
     }
 
@@ -102,7 +108,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     println!("\n3D coordinates:");
     for (i, coord) in coords.iter().enumerate() {
-        println!("  Node {}: ({}, {}, {})", i + 1, coord[0], coord[1], coord[2]);
+        println!(
+            "  Node {}: ({}, {}, {})",
+            i + 1,
+            coord[0],
+            coord[1],
+            coord[2]
+        );
     }
 
     println!("\n=== Partial I/O Example ===\n");

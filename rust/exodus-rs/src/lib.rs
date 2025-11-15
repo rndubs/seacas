@@ -58,24 +58,24 @@
 #![warn(rust_2018_idioms)]
 
 // Public modules
-pub mod error;
-pub mod types;
-pub mod coord;
 pub mod builder;
+pub mod coord;
+pub mod error;
 pub mod performance;
+pub mod types;
 
 // Internal modules (will be implemented in phases)
+mod assembly;
+mod attribute;
+mod blob;
+mod block;
 mod file;
 mod init;
-mod block;
-mod set;
-mod variable;
-mod time;
-mod metadata;
 mod map;
-mod assembly;
-mod blob;
-mod attribute;
+mod metadata;
+mod set;
+mod time;
+mod variable;
 
 // Low-level API
 pub mod raw;
@@ -84,19 +84,18 @@ pub mod raw;
 mod utils;
 
 // Re-exports for convenience
+pub use attribute::AttributeData;
+pub use builder::{BlockBuilder, MeshBuilder};
+pub use coord::{CoordValue, Coordinates};
 pub use error::{ExodusError, Result};
 pub use file::ExodusFile;
-pub use types::{
-    Assembly, Attribute, AttributeType, Block, Blob, Compression, Connectivity,
-    ConnectivityIterator, CreateMode, CreateOptions, EntitySet, EntityType, FileFormat,
-    FloatSize, InfoRecord, InitParams, Int64Mode, NodeSet, QaRecord, Set, SideSet, Topology,
-    TruthTable,
-};
-pub use set::SetIterator;
-pub use coord::{CoordValue, Coordinates};
-pub use builder::{BlockBuilder, MeshBuilder};
-pub use attribute::AttributeData;
 pub use performance::{CacheConfig, ChunkConfig, NodeType, PerformanceConfig};
+pub use set::SetIterator;
+pub use types::{
+    Assembly, Attribute, AttributeType, Blob, Block, Compression, Connectivity,
+    ConnectivityIterator, CreateMode, CreateOptions, EntitySet, EntityType, FileFormat, FloatSize,
+    InfoRecord, InitParams, Int64Mode, NodeSet, QaRecord, Set, SideSet, Topology, TruthTable,
+};
 
 // File mode types
 /// Type-state pattern for file modes

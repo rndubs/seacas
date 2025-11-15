@@ -1,0 +1,78 @@
+name: Rust Tests
+
+on:
+  push:
+    branches: [ main, master, 'claude/**' ]
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+  HDF5_DISABLE_VERSION_CHECK: 2
+
+jobs:
+  test:
+    name: Run Rust Tests
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Install system dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y libhdf5-dev libnetcdf-dev pkg-config
+
+    - name: Install Rust toolchain
+      uses: dtolnay/rust-toolchain@stable
+
+    - name: Cache cargo registry
+      uses: actions/cache@v4
+      with:
+        path: ~/.cargo/registry
+        key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+        restore-keys: |
+          ${{ runner.os }}-cargo-registry-
+
+    - name: Cache cargo index
+      uses: actions/cache@v4
+      with:
+        path: ~/.cargo/git
+        key: ${{ runner.os }}-cargo-git-${{ hashFiles('**/Cargo.lock') }}
+        restore-keys: |
+          ${{ runner.os }}-cargo-git-
+
+    - name: Cache cargo build
+      uses: actions/cache@v4
+      with:
+        path: rust/exodus-rs/target
+        key: ${{ runner.os }}-cargo-test-${{ hashFiles('rust/exodus-rs/Cargo.lock') }}
+        restore-keys: |
+          ${{ runner.os }}-cargo-test-
+          ${{ runner.os }}-cargo-build-
+
+    - name: Run exodus-rs tests
+      env:
+        HDF5_DISABLE_VERSION_CHECK: 2
+      run: |
+        cd rust/exodus-rs
+        cargo test --features netcdf4 -- --nocapture
+
+    - name: Run exodus-rs tests (single-threaded to avoid file conflicts)
+      if: failure()
+      run: |
+        cd rust/exodus-rs
+        cargo test --features netcdf4 -- --test-threads=1 --nocapture
+
+    - name: Run exodus-rs doc tests
+      run: |
+        cd rust/exodus-rs
+        cargo test --doc --features netcdf4
+
+    - name: Run exodus-rs tests with all features
+      run: |
+        cd rust/exodus-rs
+        cargo test --all-features -- --test-threads=1

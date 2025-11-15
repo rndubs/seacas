@@ -52,7 +52,8 @@ mod set_tests {
                 nodes: vec![1, 3, 5, 7, 9],
                 dist_factors: vec![1.0, 1.5, 2.0, 2.5, 3.0],
             };
-            file.put_node_set(node_set.id, &node_set.nodes, Some(&node_set.dist_factors)).unwrap();
+            file.put_node_set(node_set.id, &node_set.nodes, Some(&node_set.dist_factors))
+                .unwrap();
         }
 
         let file = ExodusFile::<mode::Read>::open(path).unwrap();
@@ -90,7 +91,8 @@ mod set_tests {
                     nodes: vec![i, i + 3, i + 6],
                     dist_factors: vec![1.0, 2.0, 3.0],
                 };
-                file.put_node_set(node_set.id, &node_set.nodes, Some(&node_set.dist_factors)).unwrap();
+                file.put_node_set(node_set.id, &node_set.nodes, Some(&node_set.dist_factors))
+                    .unwrap();
             }
         }
 
@@ -126,7 +128,8 @@ mod set_tests {
                 nodes: vec![1, 2, 3, 4],
                 dist_factors: vec![],
             };
-            file.put_node_set(node_set.id, &node_set.nodes, None).unwrap();
+            file.put_node_set(node_set.id, &node_set.nodes, None)
+                .unwrap();
         }
 
         let file = ExodusFile::<mode::Read>::open(path).unwrap();
@@ -162,7 +165,8 @@ mod set_tests {
                 nodes,
                 dist_factors: df,
             };
-            file.put_node_set(node_set.id, &node_set.nodes, Some(&node_set.dist_factors)).unwrap();
+            file.put_node_set(node_set.id, &node_set.nodes, Some(&node_set.dist_factors))
+                .unwrap();
         }
 
         let file = ExodusFile::<mode::Read>::open(path).unwrap();
@@ -213,7 +217,8 @@ mod set_tests {
                 sides: vec![1, 2, 3],
                 dist_factors: vec![],
             };
-            file.put_side_set(side_set.id, &side_set.elements, &side_set.sides, None).unwrap();
+            file.put_side_set(side_set.id, &side_set.elements, &side_set.sides, None)
+                .unwrap();
         }
 
         let file = ExodusFile::<mode::Read>::open(path).unwrap();
@@ -263,7 +268,13 @@ mod set_tests {
                 sides: vec![1, 2],
                 dist_factors: vec![1.0, 1.0, 1.0, 1.0, 2.0, 2.0, 2.0, 2.0],
             };
-            file.put_side_set(side_set.id, &side_set.elements, &side_set.sides, Some(&side_set.dist_factors)).unwrap();
+            file.put_side_set(
+                side_set.id,
+                &side_set.elements,
+                &side_set.sides,
+                Some(&side_set.dist_factors),
+            )
+            .unwrap();
         }
 
         let file = ExodusFile::<mode::Read>::open(path).unwrap();
@@ -308,7 +319,8 @@ mod set_tests {
                 sides: vec![1, 1, 2],
                 dist_factors: vec![],
             };
-            file.put_side_set(side_set.id, &side_set.elements, &side_set.sides, None).unwrap();
+            file.put_side_set(side_set.id, &side_set.elements, &side_set.sides, None)
+                .unwrap();
         }
 
         let file = ExodusFile::<mode::Read>::open(path).unwrap();
@@ -359,7 +371,8 @@ mod set_tests {
                 num_dist_factors: 0,
             };
             file.put_set(&set).unwrap();
-            file.put_entity_set(EntityType::ElemSet, 1, &vec![1, 3]).unwrap();
+            file.put_entity_set(EntityType::ElemSet, 1, &vec![1, 3])
+                .unwrap();
         }
 
         let file = ExodusFile::<mode::Read>::open(path).unwrap();
@@ -409,7 +422,8 @@ mod set_tests {
                 num_dist_factors: 3,
             };
             file.put_set(&set).unwrap();
-            file.put_entity_set(EntityType::ElemSet, 50, &vec![1, 2, 3]).unwrap();
+            file.put_entity_set(EntityType::ElemSet, 50, &vec![1, 2, 3])
+                .unwrap();
             // Note: distribution factors not supported for entity sets in current API
         }
 
@@ -462,7 +476,8 @@ mod set_tests {
                 num_dist_factors: 0,
             };
             file.put_set(&set).unwrap();
-            file.put_entity_set(EntityType::EdgeSet, 1, &vec![1, 3, 5]).unwrap();
+            file.put_entity_set(EntityType::EdgeSet, 1, &vec![1, 3, 5])
+                .unwrap();
         }
 
         let file = ExodusFile::<mode::Read>::open(path).unwrap();
@@ -509,7 +524,8 @@ mod set_tests {
                 num_dist_factors: 0,
             };
             file.put_set(&set).unwrap();
-            file.put_entity_set(EntityType::EdgeSet, 10, &vec![2, 4]).unwrap();
+            file.put_entity_set(EntityType::EdgeSet, 10, &vec![2, 4])
+                .unwrap();
             // Note: distribution factors not supported for entity sets in current API
         }
 
@@ -561,7 +577,8 @@ mod set_tests {
                 num_dist_factors: 0,
             };
             file.put_set(&set).unwrap();
-            file.put_entity_set(EntityType::FaceSet, 1, &vec![1, 2]).unwrap();
+            file.put_entity_set(EntityType::FaceSet, 1, &vec![1, 2])
+                .unwrap();
         }
 
         let file = ExodusFile::<mode::Read>::open(path).unwrap();
@@ -607,7 +624,8 @@ mod set_tests {
                 num_dist_factors: 0,
             };
             file.put_set(&set).unwrap();
-            file.put_entity_set(EntityType::FaceSet, 20, &vec![1, 2, 3]).unwrap();
+            file.put_entity_set(EntityType::FaceSet, 20, &vec![1, 2, 3])
+                .unwrap();
             // Note: distribution factors not supported for entity sets in current API
         }
 
@@ -642,7 +660,8 @@ mod set_tests {
                 nodes: vec![],
                 dist_factors: vec![],
             };
-            file.put_node_set(node_set.id, &node_set.nodes, None).unwrap();
+            file.put_node_set(node_set.id, &node_set.nodes, None)
+                .unwrap();
         }
 
         let file = ExodusFile::<mode::Read>::open(path).unwrap();
@@ -687,7 +706,8 @@ mod set_tests {
                 sides: vec![],
                 dist_factors: vec![],
             };
-            file.put_side_set(side_set.id, &side_set.elements, &side_set.sides, None).unwrap();
+            file.put_side_set(side_set.id, &side_set.elements, &side_set.sides, None)
+                .unwrap();
         }
 
         let file = ExodusFile::<mode::Read>::open(path).unwrap();
@@ -734,7 +754,8 @@ mod set_tests {
                 num_dist_factors: 0,
             };
             file.put_set(&set).unwrap();
-            file.put_entity_set(EntityType::ElemSet, 1, &vec![]).unwrap();
+            file.put_entity_set(EntityType::ElemSet, 1, &vec![])
+                .unwrap();
         }
 
         let file = ExodusFile::<mode::Read>::open(path).unwrap();
@@ -769,7 +790,8 @@ mod set_tests {
                     nodes: vec![1, 2],
                     dist_factors: vec![],
                 };
-                file.put_node_set(node_set.id, &node_set.nodes, None).unwrap();
+                file.put_node_set(node_set.id, &node_set.nodes, None)
+                    .unwrap();
             }
         }
 
@@ -803,7 +825,8 @@ mod set_tests {
                     nodes: vec![i, i + 10],
                     dist_factors: vec![],
                 };
-                file.put_node_set(node_set.id, &node_set.nodes, None).unwrap();
+                file.put_node_set(node_set.id, &node_set.nodes, None)
+                    .unwrap();
             }
         }
 
@@ -869,7 +892,8 @@ mod set_tests {
                     sides: vec![1],
                     dist_factors: vec![],
                 };
-                file.put_side_set(ss.id, &ss.elements, &ss.sides, None).unwrap();
+                file.put_side_set(ss.id, &ss.elements, &ss.sides, None)
+                    .unwrap();
             }
 
             // Element sets
@@ -881,7 +905,8 @@ mod set_tests {
                     num_dist_factors: 0,
                 };
                 file.put_set(&set).unwrap();
-                file.put_entity_set(EntityType::ElemSet, i, &vec![i]).unwrap();
+                file.put_entity_set(EntityType::ElemSet, i, &vec![i])
+                    .unwrap();
             }
         }
 
@@ -961,7 +986,8 @@ mod set_tests {
                 nodes: vec![1, 2, 3],
                 dist_factors: vec![],
             };
-            file.put_node_set(node_set.id, &node_set.nodes, None).unwrap();
+            file.put_node_set(node_set.id, &node_set.nodes, None)
+                .unwrap();
 
             file.put_name(EntityType::NodeSet, 0, "BoundaryNodes")
                 .unwrap();

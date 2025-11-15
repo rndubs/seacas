@@ -4,8 +4,8 @@
 //! (e.g., assemblies, blocks, sets) rather than for individual entities within those objects.
 
 use approx::assert_abs_diff_eq;
-use exodus_rs::{CreateMode, CreateOptions, ExodusFile, InitParams, Set};
 use exodus_rs::types::{Assembly, Block, EntityType};
+use exodus_rs::{CreateMode, CreateOptions, ExodusFile, InitParams, Set};
 use tempfile::NamedTempFile;
 
 #[test]
@@ -22,7 +22,8 @@ fn test_assembly_reduction_variables() {
                 mode: CreateMode::Clobber,
                 ..Default::default()
             },
-        ).unwrap();
+        )
+        .unwrap();
 
         // Initialize with assemblies
         let params = InitParams {
@@ -37,8 +38,12 @@ fn test_assembly_reduction_variables() {
         file.init(&params).unwrap();
 
         // Put coords (required)
-        file.put_coords(&[0.0, 1.0, 2.0], Some(&[0.0, 0.0, 0.0]), Some(&[0.0, 0.0, 0.0]))
-            .unwrap();
+        file.put_coords(
+            &[0.0, 1.0, 2.0],
+            Some(&[0.0, 0.0, 0.0]),
+            Some(&[0.0, 0.0, 0.0]),
+        )
+        .unwrap();
 
         // Put element block (required)
         let block = Block {
@@ -52,8 +57,7 @@ fn test_assembly_reduction_variables() {
             num_attributes: 0,
         };
         file.put_block(&block).unwrap();
-        file.put_connectivity(10, &[1, 2, 3])
-            .unwrap();
+        file.put_connectivity(10, &[1, 2, 3]).unwrap();
 
         // Put assemblies
         let assembly1 = Assembly {
@@ -111,9 +115,7 @@ fn test_assembly_reduction_variables() {
         let file = ExodusFile::open(file_path).unwrap();
 
         // Read variable names
-        let names = file
-            .reduction_variable_names(EntityType::Assembly)
-            .unwrap();
+        let names = file.reduction_variable_names(EntityType::Assembly).unwrap();
         assert_eq!(names.len(), 4);
         assert_eq!(names[0], "Momentum_X");
         assert_eq!(names[1], "Momentum_Y");
@@ -156,7 +158,8 @@ fn test_element_block_reduction_variables() {
                 mode: CreateMode::Clobber,
                 ..Default::default()
             },
-        ).unwrap();
+        )
+        .unwrap();
 
         let params = InitParams {
             title: "Element Block Reduction Test".to_string(),
@@ -168,8 +171,12 @@ fn test_element_block_reduction_variables() {
         };
         file.init(&params).unwrap();
 
-        file.put_coords(&[0.0, 1.0, 2.0], Some(&[0.0, 0.0, 0.0]), Some(&[0.0, 0.0, 0.0]))
-            .unwrap();
+        file.put_coords(
+            &[0.0, 1.0, 2.0],
+            Some(&[0.0, 0.0, 0.0]),
+            Some(&[0.0, 0.0, 0.0]),
+        )
+        .unwrap();
 
         // Block 1: 2 triangles
         let block1 = Block {
@@ -183,8 +190,7 @@ fn test_element_block_reduction_variables() {
             num_attributes: 0,
         };
         file.put_block(&block1).unwrap();
-        file.put_connectivity(10, &[1, 2, 3, 2, 3, 1])
-            .unwrap();
+        file.put_connectivity(10, &[1, 2, 3, 2, 3, 1]).unwrap();
 
         // Block 2: 4 triangles
         let block2 = Block {
@@ -202,11 +208,8 @@ fn test_element_block_reduction_variables() {
             .unwrap();
 
         // Define reduction variables for element blocks
-        file.define_reduction_variables(
-            EntityType::ElemBlock,
-            &["AvgStrain", "MaxStress"],
-        )
-        .unwrap();
+        file.define_reduction_variables(EntityType::ElemBlock, &["AvgStrain", "MaxStress"])
+            .unwrap();
 
         // Write time step 0
         file.put_time(0, 0.0).unwrap();
@@ -252,7 +255,8 @@ fn test_node_set_reduction_variables() {
                 mode: CreateMode::Clobber,
                 ..Default::default()
             },
-        ).unwrap();
+        )
+        .unwrap();
 
         let params = InitParams {
             title: "Node Set Reduction Test".to_string(),
@@ -265,8 +269,12 @@ fn test_node_set_reduction_variables() {
         };
         file.init(&params).unwrap();
 
-        file.put_coords(&[0.0, 1.0, 2.0], Some(&[0.0, 0.0, 0.0]), Some(&[0.0, 0.0, 0.0]))
-            .unwrap();
+        file.put_coords(
+            &[0.0, 1.0, 2.0],
+            Some(&[0.0, 0.0, 0.0]),
+            Some(&[0.0, 0.0, 0.0]),
+        )
+        .unwrap();
 
         let block = Block {
             id: 10,
@@ -339,7 +347,8 @@ fn test_side_set_reduction_variables() {
                 mode: CreateMode::Clobber,
                 ..Default::default()
             },
-        ).unwrap();
+        )
+        .unwrap();
 
         let params = InitParams {
             title: "Side Set Reduction Test".to_string(),
@@ -352,8 +361,12 @@ fn test_side_set_reduction_variables() {
         };
         file.init(&params).unwrap();
 
-        file.put_coords(&[0.0, 1.0, 1.0, 0.0], Some(&[0.0, 0.0, 1.0, 1.0]), Some(&[0.0, 0.0, 0.0, 0.0]))
-            .unwrap();
+        file.put_coords(
+            &[0.0, 1.0, 1.0, 0.0],
+            Some(&[0.0, 0.0, 1.0, 1.0]),
+            Some(&[0.0, 0.0, 0.0, 0.0]),
+        )
+        .unwrap();
 
         let block = Block {
             id: 10,
@@ -366,8 +379,7 @@ fn test_side_set_reduction_variables() {
             num_attributes: 0,
         };
         file.put_block(&block).unwrap();
-        file.put_connectivity(10, &[1, 2, 3, 4])
-            .unwrap();
+        file.put_connectivity(10, &[1, 2, 3, 4]).unwrap();
 
         // Side set
         let side_set = Set {
@@ -414,7 +426,8 @@ fn test_multiple_timesteps_reduction_variables() {
                 mode: CreateMode::Clobber,
                 ..Default::default()
             },
-        ).unwrap();
+        )
+        .unwrap();
 
         let params = InitParams {
             title: "Multi-Timestep Reduction Test".to_string(),
@@ -427,8 +440,12 @@ fn test_multiple_timesteps_reduction_variables() {
         };
         file.init(&params).unwrap();
 
-        file.put_coords(&[0.0, 1.0, 2.0], Some(&[0.0, 0.0, 0.0]), Some(&[0.0, 0.0, 0.0]))
-            .unwrap();
+        file.put_coords(
+            &[0.0, 1.0, 2.0],
+            Some(&[0.0, 0.0, 0.0]),
+            Some(&[0.0, 0.0, 0.0]),
+        )
+        .unwrap();
 
         let block = Block {
             id: 10,
@@ -441,8 +458,7 @@ fn test_multiple_timesteps_reduction_variables() {
             num_attributes: 0,
         };
         file.put_block(&block).unwrap();
-        file.put_connectivity(10, &[1, 2, 3])
-            .unwrap();
+        file.put_connectivity(10, &[1, 2, 3]).unwrap();
 
         let assembly = Assembly {
             id: 100,
@@ -496,7 +512,8 @@ fn test_empty_reduction_variables() {
                 mode: CreateMode::Clobber,
                 ..Default::default()
             },
-        ).unwrap();
+        )
+        .unwrap();
         let params = InitParams {
             title: "Empty Reduction Test".to_string(),
             num_dim: 3,
@@ -506,8 +523,12 @@ fn test_empty_reduction_variables() {
         };
         file.init(&params).unwrap();
 
-        file.put_coords(&[0.0, 1.0, 2.0], Some(&[0.0, 0.0, 0.0]), Some(&[0.0, 0.0, 0.0]))
-            .unwrap();
+        file.put_coords(
+            &[0.0, 1.0, 2.0],
+            Some(&[0.0, 0.0, 0.0]),
+            Some(&[0.0, 0.0, 0.0]),
+        )
+        .unwrap();
 
         // Put assemblies without reduction variables
         let assembly = Assembly {
@@ -523,9 +544,7 @@ fn test_empty_reduction_variables() {
         let file = ExodusFile::open(file_path).unwrap();
 
         // Should return empty vector if no reduction variables defined
-        let names = file
-            .reduction_variable_names(EntityType::Assembly)
-            .unwrap();
+        let names = file.reduction_variable_names(EntityType::Assembly).unwrap();
         assert_eq!(names.len(), 0);
     }
 }

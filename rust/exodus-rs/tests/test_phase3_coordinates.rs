@@ -285,13 +285,15 @@ mod coordinate_tests {
             let x1 = vec![0.0_f64, 1.0, 2.0, 3.0, 4.0];
             let y1 = vec![0.0_f64; 5];
             let z1 = vec![0.0_f64; 5];
-            file.put_partial_coords(0, 5, &x1, Some(&y1), Some(&z1)).unwrap();
+            file.put_partial_coords(0, 5, &x1, Some(&y1), Some(&z1))
+                .unwrap();
 
             // Write next 5 nodes
             let x2 = vec![5.0_f64, 6.0, 7.0, 8.0, 9.0];
             let y2 = vec![1.0_f64; 5];
             let z2 = vec![2.0_f64; 5];
-            file.put_partial_coords(5, 5, &x2, Some(&y2), Some(&z2)).unwrap();
+            file.put_partial_coords(5, 5, &x2, Some(&y2), Some(&z2))
+                .unwrap();
         }
 
         let file = ExodusFile::<mode::Read>::open(path).unwrap();

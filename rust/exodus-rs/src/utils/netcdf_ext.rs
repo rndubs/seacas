@@ -149,15 +149,15 @@ pub fn attr_value_to_f64(value: &AttributeValue) -> Option<f64> {
 #[allow(dead_code)]
 #[cfg(feature = "netcdf4")]
 pub fn get_attr_i64(var: &Variable<'_>, attr_name: &str) -> Result<i64> {
-    let attr = var.attribute(attr_name).ok_or_else(|| ExodusError::Other(
-        format!("Attribute '{}' not found", attr_name)
-    ))?;
+    let attr = var
+        .attribute(attr_name)
+        .ok_or_else(|| ExodusError::Other(format!("Attribute '{}' not found", attr_name)))?;
 
-    let value = attr.value().map_err(|e| ExodusError::NetCdf(e))?;
+    let value = attr.value().map_err(ExodusError::NetCdf)?;
 
-    attr_value_to_i64(&value).ok_or_else(|| ExodusError::Other(
-        format!("Cannot convert attribute '{}' to i64", attr_name)
-    ))
+    attr_value_to_i64(&value).ok_or_else(|| {
+        ExodusError::Other(format!("Cannot convert attribute '{}' to i64", attr_name))
+    })
 }
 
 /// Get an attribute value from a variable and convert it to String
@@ -186,15 +186,18 @@ pub fn get_attr_i64(var: &Variable<'_>, attr_name: &str) -> Result<i64> {
 #[allow(dead_code)]
 #[cfg(feature = "netcdf4")]
 pub fn get_attr_string(var: &Variable<'_>, attr_name: &str) -> Result<String> {
-    let attr = var.attribute(attr_name).ok_or_else(|| ExodusError::Other(
-        format!("Attribute '{}' not found", attr_name)
-    ))?;
+    let attr = var
+        .attribute(attr_name)
+        .ok_or_else(|| ExodusError::Other(format!("Attribute '{}' not found", attr_name)))?;
 
-    let value = attr.value().map_err(|e| ExodusError::NetCdf(e))?;
+    let value = attr.value().map_err(ExodusError::NetCdf)?;
 
-    attr_value_to_string(&value).ok_or_else(|| ExodusError::Other(
-        format!("Cannot convert attribute '{}' to String", attr_name)
-    ))
+    attr_value_to_string(&value).ok_or_else(|| {
+        ExodusError::Other(format!(
+            "Cannot convert attribute '{}' to String",
+            attr_name
+        ))
+    })
 }
 
 /// Get an attribute value from a variable and convert it to f64
@@ -223,15 +226,15 @@ pub fn get_attr_string(var: &Variable<'_>, attr_name: &str) -> Result<String> {
 #[allow(dead_code)]
 #[cfg(feature = "netcdf4")]
 pub fn get_attr_f64(var: &Variable<'_>, attr_name: &str) -> Result<f64> {
-    let attr = var.attribute(attr_name).ok_or_else(|| ExodusError::Other(
-        format!("Attribute '{}' not found", attr_name)
-    ))?;
+    let attr = var
+        .attribute(attr_name)
+        .ok_or_else(|| ExodusError::Other(format!("Attribute '{}' not found", attr_name)))?;
 
-    let value = attr.value().map_err(|e| ExodusError::NetCdf(e))?;
+    let value = attr.value().map_err(ExodusError::NetCdf)?;
 
-    attr_value_to_f64(&value).ok_or_else(|| ExodusError::Other(
-        format!("Cannot convert attribute '{}' to f64", attr_name)
-    ))
+    attr_value_to_f64(&value).ok_or_else(|| {
+        ExodusError::Other(format!("Cannot convert attribute '{}' to f64", attr_name))
+    })
 }
 
 /// Try to get an attribute value from a variable and convert it to i64
@@ -339,14 +342,23 @@ mod tests {
     fn test_attr_value_to_i64() {
         assert_eq!(attr_value_to_i64(&AttributeValue::Short(42)), Some(42));
         assert_eq!(attr_value_to_i64(&AttributeValue::Int(100)), Some(100));
-        assert_eq!(attr_value_to_i64(&AttributeValue::Longlong(1000)), Some(1000));
-        assert_eq!(attr_value_to_i64(&AttributeValue::Ulonglong(2000)), Some(2000));
+        assert_eq!(
+            attr_value_to_i64(&AttributeValue::Longlong(1000)),
+            Some(1000)
+        );
+        assert_eq!(
+            attr_value_to_i64(&AttributeValue::Ulonglong(2000)),
+            Some(2000)
+        );
         assert_eq!(attr_value_to_i64(&AttributeValue::Float(3.14)), Some(3));
         assert_eq!(attr_value_to_i64(&AttributeValue::Double(2.71)), Some(2));
         assert_eq!(attr_value_to_i64(&AttributeValue::Uchar(255)), Some(255));
         assert_eq!(attr_value_to_i64(&AttributeValue::Ushort(500)), Some(500));
         assert_eq!(attr_value_to_i64(&AttributeValue::Uint(1000)), Some(1000));
-        assert_eq!(attr_value_to_i64(&AttributeValue::Str("test".to_string())), None);
+        assert_eq!(
+            attr_value_to_i64(&AttributeValue::Str("test".to_string())),
+            None
+        );
     }
 
     #[test]
@@ -363,13 +375,22 @@ mod tests {
     fn test_attr_value_to_f64() {
         assert_eq!(attr_value_to_f64(&AttributeValue::Short(42)), Some(42.0));
         assert_eq!(attr_value_to_f64(&AttributeValue::Int(100)), Some(100.0));
-        assert_eq!(attr_value_to_f64(&AttributeValue::Longlong(1000)), Some(1000.0));
+        assert_eq!(
+            attr_value_to_f64(&AttributeValue::Longlong(1000)),
+            Some(1000.0)
+        );
         // Note: Float (f32) values lose precision when converted to f64
         let float_result = attr_value_to_f64(&AttributeValue::Float(3.14_f32));
         assert!(float_result.is_some());
         assert!((float_result.unwrap() - 3.14).abs() < 0.01); // Allow small epsilon for f32->f64 conversion
-        assert_eq!(attr_value_to_f64(&AttributeValue::Double(2.718281828)), Some(2.718281828));
-        assert_eq!(attr_value_to_f64(&AttributeValue::Str("test".to_string())), None);
+        assert_eq!(
+            attr_value_to_f64(&AttributeValue::Double(2.718281828)),
+            Some(2.718281828)
+        );
+        assert_eq!(
+            attr_value_to_f64(&AttributeValue::Str("test".to_string())),
+            None
+        );
     }
 
     #[test]
@@ -380,10 +401,16 @@ mod tests {
 
         // Test negative values
         assert_eq!(attr_value_to_i64(&AttributeValue::Int(-42)), Some(-42));
-        assert_eq!(attr_value_to_f64(&AttributeValue::Double(-3.14)), Some(-3.14));
+        assert_eq!(
+            attr_value_to_f64(&AttributeValue::Double(-3.14)),
+            Some(-3.14)
+        );
 
         // Test max values
-        assert_eq!(attr_value_to_i64(&AttributeValue::Longlong(i64::MAX)), Some(i64::MAX));
+        assert_eq!(
+            attr_value_to_i64(&AttributeValue::Longlong(i64::MAX)),
+            Some(i64::MAX)
+        );
 
         // Test empty string
         assert_eq!(

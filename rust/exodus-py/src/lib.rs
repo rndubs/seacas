@@ -22,13 +22,12 @@ mod performance;
 
 // Re-exports
 use types::*;
-use error::*;
 use file::*;
 use builder::*;
 
 /// Python module for exodus-py
 #[pymodule]
-fn exodus(py: Python, m: &PyModule) -> PyResult<()> {
+fn exodus(m: &Bound<'_, PyModule>) -> PyResult<()> {
     // Add version info
     m.add("__version__", env!("CARGO_PKG_VERSION"))?;
     m.add("__doc__", "Python bindings for exodus-rs - Pure Rust Exodus II implementation")?;

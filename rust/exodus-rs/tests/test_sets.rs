@@ -97,8 +97,7 @@ fn test_node_set_with_dist_factors() {
         // Write node set data with distribution factors
         let nodes = vec![2, 4, 6];
         let dist_factors = vec![1.0, 2.0, 3.0];
-        file.put_node_set(200, &nodes, Some(&dist_factors))
-            .unwrap();
+        file.put_node_set(200, &nodes, Some(&dist_factors)).unwrap();
     }
 
     // Read

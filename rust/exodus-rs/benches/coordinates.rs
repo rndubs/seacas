@@ -16,7 +16,12 @@ fn benchmark_write_coords(c: &mut Criterion) {
 
                 b.iter(|| {
                     let temp = NamedTempFile::new().unwrap();
-                    let mut file = ExodusFile::create(temp.path(), { let mut opts = CreateOptions::default(); opts.mode = CreateMode::Clobber; opts }).unwrap();
+                    let mut file = ExodusFile::create(temp.path(), {
+                        let mut opts = CreateOptions::default();
+                        opts.mode = CreateMode::Clobber;
+                        opts
+                    })
+                    .unwrap();
 
                     let params = InitParams {
                         title: "Benchmark".to_string(),
@@ -42,7 +47,12 @@ fn benchmark_read_coords(c: &mut Criterion) {
         // Setup: create a file with coordinates
         let temp = NamedTempFile::new().unwrap();
         {
-            let mut file = ExodusFile::create(temp.path(), { let mut opts = CreateOptions::default(); opts.mode = CreateMode::Clobber; opts }).unwrap();
+            let mut file = ExodusFile::create(temp.path(), {
+                let mut opts = CreateOptions::default();
+                opts.mode = CreateMode::Clobber;
+                opts
+            })
+            .unwrap();
             let params = InitParams {
                 title: "Benchmark".to_string(),
                 num_dim: 3,
@@ -82,7 +92,12 @@ fn benchmark_coords_f32_f64_conversion(c: &mut Criterion) {
     group.bench_function("write_f32_read_f64", |b| {
         b.iter(|| {
             let temp = NamedTempFile::new().unwrap();
-            let mut file = ExodusFile::create(temp.path(), { let mut opts = CreateOptions::default(); opts.mode = CreateMode::Clobber; opts }).unwrap();
+            let mut file = ExodusFile::create(temp.path(), {
+                let mut opts = CreateOptions::default();
+                opts.mode = CreateMode::Clobber;
+                opts
+            })
+            .unwrap();
 
             let params = InitParams {
                 title: "Benchmark".to_string(),
@@ -107,5 +122,10 @@ fn benchmark_coords_f32_f64_conversion(c: &mut Criterion) {
     group.finish();
 }
 
-criterion_group!(benches, benchmark_write_coords, benchmark_read_coords, benchmark_coords_f32_f64_conversion);
+criterion_group!(
+    benches,
+    benchmark_write_coords,
+    benchmark_read_coords,
+    benchmark_coords_f32_f64_conversion
+);
 criterion_main!(benches);

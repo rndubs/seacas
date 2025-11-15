@@ -7,7 +7,7 @@ use crate::types::QaRecord;
 use crate::{mode, ExodusFile};
 
 // Maximum string lengths as defined by Exodus II format
-const MAX_STR_LENGTH: usize = 32;  // Maximum length for QA record fields
+const MAX_STR_LENGTH: usize = 32; // Maximum length for QA record fields
 const MAX_LINE_LENGTH: usize = 80; // Maximum length for info record lines
 
 #[cfg(feature = "netcdf4")]
@@ -49,7 +49,7 @@ impl ExodusFile<mode::Write> {
         let num_qa = qa_records.len();
 
         // Validate field lengths
-        for (_i, qa) in qa_records.iter().enumerate() {
+        for qa in qa_records.iter() {
             if qa.code_name.len() > MAX_STR_LENGTH {
                 return Err(ExodusError::StringTooLong {
                     max: MAX_STR_LENGTH,
@@ -88,21 +88,14 @@ impl ExodusFile<mode::Write> {
         }
 
         // Create QA records variable: qa_records(num_qa_rec, num_qa_dim, len_string)
-        self.nc_file.add_variable::<u8>(
-            "qa_records",
-            &["num_qa_rec", "num_qa_dim", "len_string"],
-        )?;
+        self.nc_file
+            .add_variable::<u8>("qa_records", &["num_qa_rec", "num_qa_dim", "len_string"])?;
 
         // Write each QA record
         if let Some(mut var) = self.nc_file.variable_mut("qa_records") {
             for (qa_idx, qa) in qa_records.iter().enumerate() {
                 // Write each of the 4 fields
-                let fields = [
-                    &qa.code_name,
-                    &qa.code_version,
-                    &qa.date,
-                    &qa.time,
-                ];
+                let fields = [&qa.code_name, &qa.code_version, &qa.date, &qa.time];
 
                 for (field_idx, field) in fields.iter().enumerate() {
                     let mut buf = vec![0u8; MAX_STR_LENGTH];
@@ -152,7 +145,7 @@ impl ExodusFile<mode::Write> {
         let num_info = info_records.len();
 
         // Validate line lengths
-        for (_i, line) in info_records.iter().enumerate() {
+        for line in info_records.iter() {
             if line.len() > MAX_LINE_LENGTH {
                 return Err(ExodusError::StringTooLong {
                     max: MAX_LINE_LENGTH,

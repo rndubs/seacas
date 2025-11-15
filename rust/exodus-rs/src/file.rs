@@ -10,8 +10,6 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
 #[cfg(feature = "netcdf4")]
-use netcdf;
-
 /// NetCDF define mode state
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum DefineMode {
@@ -34,8 +32,6 @@ pub(crate) struct FileMetadata {
     pub dim_cache: HashMap<String, usize>,
     /// Current NetCDF define/data mode (only tracked for Write/Append modes)
     pub define_mode: DefineMode,
-    /// Performance configuration (if specified)
-    pub performance: Option<crate::performance::PerformanceConfig>,
 }
 
 impl FileMetadata {
@@ -47,19 +43,6 @@ impl FileMetadata {
             num_dim: None,
             dim_cache: HashMap::new(),
             define_mode: DefineMode::Define,
-            performance: None,
-        }
-    }
-
-    /// Create metadata with performance config
-    fn with_performance(perf: Option<crate::performance::PerformanceConfig>) -> Self {
-        Self {
-            initialized: false,
-            title: None,
-            num_dim: None,
-            dim_cache: HashMap::new(),
-            define_mode: DefineMode::Define,
-            performance: perf,
         }
     }
 }
@@ -148,7 +131,7 @@ impl ExodusFile<mode::Write> {
         Ok(Self {
             nc_file,
             path: path.to_path_buf(),
-            metadata: FileMetadata::with_performance(perf_config),
+            metadata: FileMetadata::new(),
             _mode: std::marker::PhantomData,
         })
     }
@@ -201,10 +184,7 @@ impl ExodusFile<mode::Write> {
         }
 
         if env::var("HDF5_CHUNK_CACHE_W0").is_err() {
-            env::set_var(
-                "HDF5_CHUNK_CACHE_W0",
-                config.cache.preemption.to_string(),
-            );
+            env::set_var("HDF5_CHUNK_CACHE_W0", config.cache.preemption.to_string());
         }
 
         // Calculate or use provided num_slots
@@ -539,7 +519,9 @@ impl ExodusFile<mode::Append> {
 
             // Load dimension cache
             if let Some(nodes_dim) = nc_file.dimension("num_nodes") {
-                metadata.dim_cache.insert("num_nodes".to_string(), nodes_dim.len());
+                metadata
+                    .dim_cache
+                    .insert("num_nodes".to_string(), nodes_dim.len());
             }
         }
 
@@ -582,16 +564,6 @@ impl ExodusFile<mode::Append> {
     /// See [`ExodusFile::<mode::Write>::is_define_mode()`] for details.
     pub fn is_define_mode(&self) -> bool {
         self.metadata.define_mode == DefineMode::Define
-    }
-
-    /// Ensure the file is in define mode, transitioning if necessary
-    ///
-    /// See [`ExodusFile::<mode::Write>::ensure_define_mode()`] for details.
-    pub(crate) fn ensure_define_mode(&mut self) -> Result<()> {
-        if self.metadata.define_mode == DefineMode::Data {
-            self.reenter_define()?;
-        }
-        Ok(())
     }
 
     /// Ensure the file is in data mode, transitioning if necessary

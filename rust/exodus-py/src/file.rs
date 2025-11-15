@@ -2,7 +2,6 @@
 
 use pyo3::prelude::*;
 use exodus_rs::{ExodusFile as RustExodusFile, mode};
-use std::path::PathBuf;
 
 use crate::error::IntoPyResult;
 use crate::types::{CreateOptions, InitParams};
@@ -93,9 +92,9 @@ impl ExodusReader {
     /// Exit context manager
     fn __exit__(
         &mut self,
-        _exc_type: Option<&PyAny>,
-        _exc_value: Option<&PyAny>,
-        _traceback: Option<&PyAny>,
+        _exc_type: Option<&Bound<'_, PyAny>>,
+        _exc_value: Option<&Bound<'_, PyAny>>,
+        _traceback: Option<&Bound<'_, PyAny>>,
     ) -> PyResult<bool> {
         // File will be closed when dropped
         Ok(false)
@@ -214,9 +213,9 @@ impl ExodusWriter {
     /// Exit context manager
     fn __exit__(
         &mut self,
-        _exc_type: Option<&PyAny>,
-        _exc_value: Option<&PyAny>,
-        _traceback: Option<&PyAny>,
+        _exc_type: Option<&Bound<'_, PyAny>>,
+        _exc_value: Option<&Bound<'_, PyAny>>,
+        _traceback: Option<&Bound<'_, PyAny>>,
     ) -> PyResult<bool> {
         self.close()?;
         Ok(false)
@@ -292,9 +291,9 @@ impl ExodusAppender {
     /// Exit context manager
     fn __exit__(
         &mut self,
-        _exc_type: Option<&PyAny>,
-        _exc_value: Option<&PyAny>,
-        _traceback: Option<&PyAny>,
+        _exc_type: Option<&Bound<'_, PyAny>>,
+        _exc_value: Option<&Bound<'_, PyAny>>,
+        _traceback: Option<&Bound<'_, PyAny>>,
     ) -> PyResult<bool> {
         self.close()?;
         Ok(false)

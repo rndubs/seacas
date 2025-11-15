@@ -19,17 +19,26 @@ fn main() -> Result<()> {
     match node_type {
         NodeType::Compute => {
             println!("   ✓ Running on compute node - using aggressive settings");
-            println!("     - Cache: {} MB", node_type.default_cache_size() / (1024 * 1024));
+            println!(
+                "     - Cache: {} MB",
+                node_type.default_cache_size() / (1024 * 1024)
+            );
             println!("     - Chunk: {} nodes", node_type.default_chunk_nodes());
         }
         NodeType::Login => {
             println!("   ✓ Running on login node - using conservative settings");
-            println!("     - Cache: {} MB", node_type.default_cache_size() / (1024 * 1024));
+            println!(
+                "     - Cache: {} MB",
+                node_type.default_cache_size() / (1024 * 1024)
+            );
             println!("     - Chunk: {} nodes", node_type.default_chunk_nodes());
         }
         NodeType::Unknown => {
             println!("   ⚠ Running on unknown node - using moderate defaults");
-            println!("     - Cache: {} MB", node_type.default_cache_size() / (1024 * 1024));
+            println!(
+                "     - Cache: {} MB",
+                node_type.default_cache_size() / (1024 * 1024)
+            );
             println!("     - Chunk: {} nodes", node_type.default_chunk_nodes());
         }
     }
@@ -45,7 +54,7 @@ fn main() -> Result<()> {
         ..Default::default()
     };
 
-    let mut file1 = ExodusFile::create("example_auto_perf.exo", options)?;
+    let _file1 = ExodusFile::create("example_auto_perf.exo", options)?;
     println!("   ✓ File created with auto-detected settings");
     println!();
 
@@ -62,7 +71,7 @@ fn main() -> Result<()> {
         ..Default::default()
     };
 
-    let mut file2 = ExodusFile::create("example_conservative.exo", options)?;
+    let _file2 = ExodusFile::create("example_conservative.exo", options)?;
     println!("   ✓ File created with conservative settings");
     println!();
 
@@ -79,7 +88,7 @@ fn main() -> Result<()> {
         ..Default::default()
     };
 
-    let mut file3 = ExodusFile::create("example_aggressive.exo", options)?;
+    let _file3 = ExodusFile::create("example_aggressive.exo", options)?;
     println!("   ✓ File created with aggressive settings");
     println!();
 
@@ -88,9 +97,9 @@ fn main() -> Result<()> {
     println!("   Creating file with custom settings for large mesh...");
 
     let custom = PerformanceConfig::auto()
-        .with_cache_mb(256)           // 256 MB cache (large node)
-        .with_node_chunk_size(20_000)  // 20k nodes per chunk
-        .with_preemption(0.5);         // Balanced write/read
+        .with_cache_mb(256) // 256 MB cache (large node)
+        .with_node_chunk_size(20_000) // 20k nodes per chunk
+        .with_preemption(0.5); // Balanced write/read
 
     println!("   {}", custom.summary());
 
@@ -111,7 +120,7 @@ fn main() -> Result<()> {
     let params = InitParams {
         title: "Performance Tuning Example".to_string(),
         num_dim: 3,
-        num_nodes: 100_000,  // Large mesh
+        num_nodes: 100_000, // Large mesh
         num_elems: 90_000,
         num_elem_blocks: 1,
         ..Default::default()
@@ -143,16 +152,22 @@ fn main() -> Result<()> {
 
     // Check if any env vars are set
     if env::var("HDF5_CHUNK_CACHE_NBYTES").is_ok() {
-        println!("   ✓ HDF5_CHUNK_CACHE_NBYTES is set: {}",
-                 env::var("HDF5_CHUNK_CACHE_NBYTES").unwrap());
+        println!(
+            "   ✓ HDF5_CHUNK_CACHE_NBYTES is set: {}",
+            env::var("HDF5_CHUNK_CACHE_NBYTES").unwrap()
+        );
     }
     if env::var("HDF5_CHUNK_CACHE_NSLOTS").is_ok() {
-        println!("   ✓ HDF5_CHUNK_CACHE_NSLOTS is set: {}",
-                 env::var("HDF5_CHUNK_CACHE_NSLOTS").unwrap());
+        println!(
+            "   ✓ HDF5_CHUNK_CACHE_NSLOTS is set: {}",
+            env::var("HDF5_CHUNK_CACHE_NSLOTS").unwrap()
+        );
     }
     if env::var("HDF5_CHUNK_CACHE_W0").is_ok() {
-        println!("   ✓ HDF5_CHUNK_CACHE_W0 is set: {}",
-                 env::var("HDF5_CHUNK_CACHE_W0").unwrap());
+        println!(
+            "   ✓ HDF5_CHUNK_CACHE_W0 is set: {}",
+            env::var("HDF5_CHUNK_CACHE_W0").unwrap()
+        );
     }
     println!();
 

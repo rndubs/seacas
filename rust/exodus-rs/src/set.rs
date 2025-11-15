@@ -89,13 +89,13 @@ impl<M: FileMode> ExodusFile<M> {
     pub fn set(&self, entity_type: EntityType, set_id: EntityId) -> Result<Set> {
         // Find the index of this set
         let ids = self.set_ids(entity_type)?;
-        let index = ids
-            .iter()
-            .position(|&id| id == set_id)
-            .ok_or_else(|| ExodusError::EntityNotFound {
-                entity_type: entity_type.to_string(),
-                id: set_id,
-            })?;
+        let index =
+            ids.iter()
+                .position(|&id| id == set_id)
+                .ok_or_else(|| ExodusError::EntityNotFound {
+                    entity_type: entity_type.to_string(),
+                    id: set_id,
+                })?;
 
         // Get dimension name for number of entries
         let dim_name = match entity_type {
@@ -306,7 +306,11 @@ impl ExodusFile<mode::Write> {
                 // Count dimensions directly to get the actual index
                 // (set_ids() filters fill values, so its length doesn't match the array index)
                 let mut count: usize = 0;
-                while self.nc_file.dimension(&format!("num_nod_ns{}", count + 1)).is_some() {
+                while self
+                    .nc_file
+                    .dimension(&format!("num_nod_ns{}", count + 1))
+                    .is_some()
+                {
                     count += 1;
                 }
                 count.saturating_sub(1)
@@ -386,7 +390,11 @@ impl ExodusFile<mode::Write> {
                 // Count dimensions directly to get the actual index
                 // (set_ids() filters fill values, so its length doesn't match the array index)
                 let mut count: usize = 0;
-                while self.nc_file.dimension(&format!("num_side_ss{}", count + 1)).is_some() {
+                while self
+                    .nc_file
+                    .dimension(&format!("num_side_ss{}", count + 1))
+                    .is_some()
+                {
                     count += 1;
                 }
                 count.saturating_sub(1)
@@ -459,13 +467,13 @@ impl ExodusFile<mode::Write> {
 
         // Find the set index
         let ids = self.set_ids(entity_type)?;
-        let index = ids
-            .iter()
-            .position(|&id| id == set_id)
-            .ok_or_else(|| ExodusError::EntityNotFound {
-                entity_type: entity_type.to_string(),
-                id: set_id,
-            })?;
+        let index =
+            ids.iter()
+                .position(|&id| id == set_id)
+                .ok_or_else(|| ExodusError::EntityNotFound {
+                    entity_type: entity_type.to_string(),
+                    id: set_id,
+                })?;
 
         // Get the set parameters to validate
         let set = self.set(entity_type, set_id)?;
@@ -482,9 +490,18 @@ impl ExodusFile<mode::Write> {
         if !entities.is_empty() {
             // Create and write entity variable
             let (var_name, dim_name) = match entity_type {
-                EntityType::EdgeSet => (format!("edge_es{}", index + 1), format!("num_edge_es{}", index + 1)),
-                EntityType::FaceSet => (format!("face_fs{}", index + 1), format!("num_face_fs{}", index + 1)),
-                EntityType::ElemSet => (format!("elem_els{}", index + 1), format!("num_ele_els{}", index + 1)),
+                EntityType::EdgeSet => (
+                    format!("edge_es{}", index + 1),
+                    format!("num_edge_es{}", index + 1),
+                ),
+                EntityType::FaceSet => (
+                    format!("face_fs{}", index + 1),
+                    format!("num_face_fs{}", index + 1),
+                ),
+                EntityType::ElemSet => (
+                    format!("elem_els{}", index + 1),
+                    format!("num_ele_els{}", index + 1),
+                ),
                 _ => unreachable!(),
             };
 
@@ -519,13 +536,13 @@ impl ExodusFile<mode::Read> {
     pub fn node_set(&self, set_id: EntityId) -> Result<NodeSet> {
         // Find the set index
         let ids = self.set_ids(EntityType::NodeSet)?;
-        let index = ids
-            .iter()
-            .position(|&id| id == set_id)
-            .ok_or_else(|| ExodusError::EntityNotFound {
-                entity_type: EntityType::NodeSet.to_string(),
-                id: set_id,
-            })?;
+        let index =
+            ids.iter()
+                .position(|&id| id == set_id)
+                .ok_or_else(|| ExodusError::EntityNotFound {
+                    entity_type: EntityType::NodeSet.to_string(),
+                    id: set_id,
+                })?;
 
         // Get the set parameters
         let _set = self.set(EntityType::NodeSet, set_id)?;
@@ -569,13 +586,13 @@ impl ExodusFile<mode::Read> {
     pub fn side_set(&self, set_id: EntityId) -> Result<SideSet> {
         // Find the set index
         let ids = self.set_ids(EntityType::SideSet)?;
-        let index = ids
-            .iter()
-            .position(|&id| id == set_id)
-            .ok_or_else(|| ExodusError::EntityNotFound {
-                entity_type: EntityType::SideSet.to_string(),
-                id: set_id,
-            })?;
+        let index =
+            ids.iter()
+                .position(|&id| id == set_id)
+                .ok_or_else(|| ExodusError::EntityNotFound {
+                    entity_type: EntityType::SideSet.to_string(),
+                    id: set_id,
+                })?;
 
         // Get the set parameters
         let _set = self.set(EntityType::SideSet, set_id)?;
@@ -640,13 +657,13 @@ impl ExodusFile<mode::Read> {
 
         // Find the set index
         let ids = self.set_ids(entity_type)?;
-        let index = ids
-            .iter()
-            .position(|&id| id == set_id)
-            .ok_or_else(|| ExodusError::EntityNotFound {
-                entity_type: entity_type.to_string(),
-                id: set_id,
-            })?;
+        let index =
+            ids.iter()
+                .position(|&id| id == set_id)
+                .ok_or_else(|| ExodusError::EntityNotFound {
+                    entity_type: entity_type.to_string(),
+                    id: set_id,
+                })?;
 
         // Read entity IDs (empty if variable doesn't exist for empty sets)
         let var_name = match entity_type {
@@ -701,10 +718,7 @@ impl<M: FileMode> ExodusFile<M> {
     /// ```
     pub fn sets(&self, entity_type: EntityType) -> Result<SetIterator> {
         let ids = self.set_ids(entity_type)?;
-        Ok(SetIterator {
-            ids,
-            index: 0,
-        })
+        Ok(SetIterator { ids, index: 0 })
     }
 }
 

@@ -8,9 +8,7 @@
 //! - Iterating over sets
 //! - Reading set information
 
-use exodus_rs::{
-    mode, EntityType, ExodusFile, InitParams, Set,
-};
+use exodus_rs::{mode, EntityType, ExodusFile, InitParams, Set};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("=== Exodus Sets Example ===\n");
@@ -117,7 +115,7 @@ fn create_side_sets() -> Result<(), Box<dyn std::error::Error>> {
     file.put_coords(&x, Some(&y), None)?;
 
     // Create element block
-    use exodus_rs::{Block, Topology};
+    use exodus_rs::Block;
     let block = Block {
         id: 1,
         entity_type: EntityType::ElemBlock,
@@ -293,7 +291,12 @@ fn distribution_factors_example() -> Result<(), Box<dyn std::error::Error>> {
     let total_force = 100.0;
     let sum_factors: f64 = node_set.dist_factors.iter().sum();
 
-    for (i, (&node, &factor)) in node_set.nodes.iter().zip(&node_set.dist_factors).enumerate() {
+    for (_i, (&node, &factor)) in node_set
+        .nodes
+        .iter()
+        .zip(&node_set.dist_factors)
+        .enumerate()
+    {
         let node_force = total_force * factor / sum_factors;
         println!("    Node {}: Force = {:.2}", node, node_force);
     }

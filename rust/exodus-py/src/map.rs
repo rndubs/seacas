@@ -52,10 +52,11 @@ impl ExodusWriter {
     /// Args:
     ///     entity_type (str): Type of entity
     ///     names (list[str]): Array of names (max 32 characters each)
-    fn put_names(&mut self, entity_type: &str, names: Vec<&str>) -> PyResult<()> {
+    fn put_names(&mut self, entity_type: &str, names: Vec<String>) -> PyResult<()> {
         let entity_type = parse_entity_type(entity_type)?;
         let file = self.file.as_mut().ok_or_else(|| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>("File has been closed"))?;
-        file.put_names(entity_type, &names).into_py()
+        let names_refs: Vec<&str> = names.iter().map(|s| s.as_str()).collect();
+        file.put_names(entity_type, &names_refs).into_py()
     }
 
     /// Set property value for a single entity

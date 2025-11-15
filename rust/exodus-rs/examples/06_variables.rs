@@ -8,9 +8,7 @@
 //! - Reading variable data
 //! - Time step management
 
-use exodus_rs::{
-    mode, Block, EntityType, ExodusFile, InitParams, TruthTable,
-};
+use exodus_rs::{mode, Block, EntityType, ExodusFile, InitParams, TruthTable};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("=== Exodus Variables and Time Steps Example ===\n");
@@ -169,10 +167,7 @@ fn create_element_variables() -> Result<(), Box<dyn std::error::Error>> {
         num_attributes: 0,
     };
     file.put_block(&block1)?;
-    file.put_connectivity(
-        100,
-        &vec![1, 2, 5, 4, 2, 3, 6, 5, 4, 5, 8, 7, 5, 6, 9, 8],
-    )?;
+    file.put_connectivity(100, &vec![1, 2, 5, 4, 2, 3, 6, 5, 4, 5, 8, 7, 5, 6, 9, 8])?;
 
     // Element block 2: 2 QUAD4 elements
     let block2 = Block {
@@ -297,7 +292,12 @@ fn read_variables() -> Result<(), Box<dyn std::error::Error>> {
         for time_step in 0..num_time_steps {
             let time = file.time(time_step)?;
             let energy = file.var(time_step, EntityType::Global, 0, 1)?; // total_energy
-            println!("      Step {}: t={:.2}, energy={:.2}", time_step + 1, time, energy[0]);
+            println!(
+                "      Step {}: t={:.2}, energy={:.2}",
+                time_step + 1,
+                time,
+                energy[0]
+            );
         }
     }
 
@@ -311,7 +311,8 @@ fn read_variables() -> Result<(), Box<dyn std::error::Error>> {
         let time_step = 1;
         let temp = file.var(time_step, EntityType::Nodal, 0, 0)?; // temperature
         println!("\n    Temperature at step {} (9 nodes):", time_step + 1);
-        println!("      Min: {:.1}°C, Max: {:.1}°C, Avg: {:.1}°C",
+        println!(
+            "      Min: {:.1}°C, Max: {:.1}°C, Avg: {:.1}°C",
             temp.iter().fold(f64::INFINITY, |a, &b| a.min(b)),
             temp.iter().fold(f64::NEG_INFINITY, |a, &b| a.max(b)),
             temp.iter().sum::<f64>() / temp.len() as f64
@@ -349,14 +350,23 @@ fn read_variables() -> Result<(), Box<dyn std::error::Error>> {
         let file = ExodusFile::<mode::Read>::open("time_series.exo")?;
         let all_times = file.times()?;
         println!("    Total time steps: {}", all_times.len());
-        println!("    Time range: {:.2}s to {:.2}s", all_times[0], all_times[all_times.len() - 1]);
+        println!(
+            "    Time range: {:.2}s to {:.2}s",
+            all_times[0],
+            all_times[all_times.len() - 1]
+        );
 
         // Sample times at steps 1, 5, 10
         for &step in &[0, 4, 9] {
             let time = file.time(step)?;
             let pressure = file.var(step, EntityType::Nodal, 0, 0)?;
             let max_pressure = pressure.iter().fold(f64::NEG_INFINITY, |a, &b| a.max(b));
-            println!("      Step {}: t={:.1}s, max_pressure={:.1}", step + 1, time, max_pressure);
+            println!(
+                "      Step {}: t={:.1}s, max_pressure={:.1}",
+                step + 1,
+                time,
+                max_pressure
+            );
         }
     }
 

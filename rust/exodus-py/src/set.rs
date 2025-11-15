@@ -2,7 +2,7 @@
 
 use pyo3::prelude::*;
 use crate::error::IntoPyResult;
-use crate::file::{ExodusWriter, ExodusAppender, ExodusReader};
+use crate::file::{ExodusWriter, ExodusReader};
 use crate::types::{NodeSet, SideSet, EntitySet, EntityType};
 
 #[pymethods]
@@ -50,6 +50,7 @@ impl ExodusWriter {
     ///     >>> exo.put_set(EntityType.NODE_SET, 10, 5, 0)
     ///     >>> # Write the node set data
     ///     >>> exo.put_node_set(10, [1, 2, 3, 4, 5], None)
+    #[pyo3(signature = (set_id, nodes, dist_factors=None))]
     fn put_node_set(
         &mut self,
         set_id: i64,
@@ -76,6 +77,7 @@ impl ExodusWriter {
     ///     >>> exo.put_set(EntityType.SIDE_SET, 100, 2, 0)
     ///     >>> # Write the side set data
     ///     >>> exo.put_side_set(100, [1, 2], [3, 4], None)
+    #[pyo3(signature = (set_id, elements, sides, dist_factors=None))]
     fn put_side_set(
         &mut self,
         set_id: i64,

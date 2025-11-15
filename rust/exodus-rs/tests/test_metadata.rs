@@ -315,7 +315,8 @@ fn test_info_records_max_length() {
         .unwrap();
 
         // 80 characters exactly (max allowed)
-        let max_line = "12345678901234567890123456789012345678901234567890123456789012345678901234567890";
+        let max_line =
+            "12345678901234567890123456789012345678901234567890123456789012345678901234567890";
         assert_eq!(max_line.len(), 80);
 
         let info_records = vec![max_line.to_string()];
@@ -354,7 +355,8 @@ fn test_info_records_too_long() {
     .unwrap();
 
     // 81 characters (one too many)
-    let too_long = "123456789012345678901234567890123456789012345678901234567890123456789012345678901";
+    let too_long =
+        "123456789012345678901234567890123456789012345678901234567890123456789012345678901";
     assert_eq!(too_long.len(), 81);
 
     let info_records = vec![too_long.to_string()];

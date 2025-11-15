@@ -10,24 +10,20 @@ use std::fs;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("=== Phase 9 High-Level Builder API Verification ===\n");
-    
+
     // Test 1: Simple 2D mesh
     println!("Test 1: Creating 2D quad mesh...");
     MeshBuilder::new("Phase 9 Verification - 2D Quad")
         .dimensions(2)
-        .coordinates(
-            vec![0.0, 1.0, 1.0, 0.0],
-            vec![0.0, 0.0, 1.0, 1.0],
-            vec![],
-        )
+        .coordinates(vec![0.0, 1.0, 1.0, 0.0], vec![0.0, 0.0, 1.0, 1.0], vec![])
         .add_block(
             BlockBuilder::new(1, "QUAD4")
                 .connectivity(vec![1, 2, 3, 4])
-                .build()
+                .build(),
         )
         .write("/tmp/phase9_verify_2d.exo")?;
     println!("  ✓ Created /tmp/phase9_verify_2d.exo");
-    
+
     // Test 2: 3D hex mesh with metadata
     println!("\nTest 2: Creating 3D hex mesh with QA/info records...");
     MeshBuilder::new("Phase 9 Verification - 3D Hex")
@@ -40,13 +36,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .add_block(
             BlockBuilder::new(100, "HEX8")
                 .connectivity(vec![1, 2, 3, 4, 5, 6, 7, 8])
-                .build()
+                .build(),
         )
         .qa_record("exodus-rs", "0.1.0", "2025-11-10", "12:00:00")
         .info("Phase 9 comprehensive verification test")
         .write("/tmp/phase9_verify_3d.exo")?;
     println!("  ✓ Created /tmp/phase9_verify_3d.exo");
-    
+
     // Test 3: Multi-block mesh with attributes
     println!("\nTest 3: Creating multi-block mesh with attributes...");
     MeshBuilder::new("Phase 9 Verification - Multi-Block")
@@ -61,35 +57,35 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .connectivity(vec![1, 2, 3, 4, 5, 6, 7, 8])
                 .attributes(vec![1.0])
                 .attribute_names(vec!["MaterialID"])
-                .build()
+                .build(),
         )
         .add_block(
             BlockBuilder::new(2, "TRI3")
                 .connectivity(vec![2, 9, 10])
                 .attributes(vec![2.0])
                 .attribute_names(vec!["MaterialID"])
-                .build()
+                .build(),
         )
         .write("/tmp/phase9_verify_multi.exo")?;
     println!("  ✓ Created /tmp/phase9_verify_multi.exo");
-    
+
     // Verify files
     println!("\nTest 4: Verifying created files...");
     let files = vec![
         "/tmp/phase9_verify_2d.exo",
-        "/tmp/phase9_verify_3d.exo", 
-        "/tmp/phase9_verify_multi.exo"
+        "/tmp/phase9_verify_3d.exo",
+        "/tmp/phase9_verify_multi.exo",
     ];
-    
+
     for file in &files {
         let metadata = fs::metadata(file)?;
         println!("  ✓ {} ({} bytes)", file, metadata.len());
     }
-    
+
     println!("\n========================================");
     println!("✅ Phase 9 High-Level Builder API: COMPLETE");
     println!("========================================\n");
-    
+
     println!("Summary of Phase 9 Implementation:");
     println!("  • MeshBuilder with fluent API");
     println!("  • BlockBuilder with automatic topology detection");
@@ -98,6 +94,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("  • Multi-block mesh support");
     println!("  • Element attributes and attribute names");
     println!("  • All tests passing");
-    
+
     Ok(())
 }
