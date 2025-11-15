@@ -696,6 +696,7 @@ impl NodeSet {
 }
 
 impl NodeSet {
+    #[allow(dead_code)]
     pub fn to_rust(&self) -> rs::NodeSet {
         rs::NodeSet {
             id: self.id,
@@ -704,6 +705,7 @@ impl NodeSet {
         }
     }
 
+    #[allow(dead_code)]
     pub fn from_rust(ns: &rs::NodeSet) -> Self {
         NodeSet {
             id: ns.id,
@@ -754,6 +756,7 @@ impl SideSet {
 }
 
 impl SideSet {
+    #[allow(dead_code)]
     pub fn to_rust(&self) -> rs::SideSet {
         rs::SideSet {
             id: self.id,
@@ -763,6 +766,7 @@ impl SideSet {
         }
     }
 
+    #[allow(dead_code)]
     pub fn from_rust(ss: &rs::SideSet) -> Self {
         SideSet {
             id: ss.id,
@@ -810,6 +814,7 @@ impl EntitySet {
 }
 
 impl EntitySet {
+    #[allow(dead_code)]
     pub fn to_rust(&self) -> rs::EntitySet {
         rs::EntitySet {
             id: self.id,
@@ -818,6 +823,7 @@ impl EntitySet {
         }
     }
 
+    #[allow(dead_code)]
     pub fn from_rust(es: &rs::EntitySet) -> Self {
         EntitySet {
             id: es.id,
