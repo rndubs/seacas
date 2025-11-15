@@ -60,13 +60,14 @@ jobs:
     - name: Install Python dependencies and build package
       run: |
         cd rust/exodus-py
+        set -e  # Ensure script failures are caught
         ./install_and_test.sh
 
     - name: Run type checking with mypy
       run: |
         cd rust/exodus-py
-        uv pip install mypy
-        mypy python/exodus --strict --ignore-missing-imports || echo "Type checking completed with warnings"
+        source test-venv/bin/activate
+        mypy python/exodus --strict --ignore-missing-imports
 
     - name: Upload coverage reports
       if: matrix.python-version == '3.11'
