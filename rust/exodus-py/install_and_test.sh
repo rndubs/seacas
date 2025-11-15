@@ -320,6 +320,17 @@ test_wheel() {
         pytest "$SCRIPT_DIR/tests" -v || log_warning "Some tests failed"
     fi
 
+    # Run mypy type checking
+    log_info "Installing mypy for type checking..."
+    uv pip install mypy
+
+    log_info "Running mypy type checker on package..."
+    if mypy "$SCRIPT_DIR/python/exodus" --show-error-codes --pretty; then
+        log_success "Type checking passed with no errors"
+    else
+        log_warning "Type checking found issues"
+    fi
+
     # Run example if available
     if [ -d "$SCRIPT_DIR/examples" ]; then
         local example_file=$(find "$SCRIPT_DIR/examples" -name "*.py" -type f | head -n 1)
