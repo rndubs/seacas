@@ -69,21 +69,10 @@ jobs:
         restore-keys: |
           ${{ runner.os }}-compat-build-
 
-    - name: Setup C Exodus library and verification tools
-      run: |
-        cd rust/compat-tests
-        # Clean build if TPL exists but is incomplete
-        if [ -d "../../TPL" ] && [ ! -f "../../TPL/hdf5-1.14.6/lib/libhdf5.a" ]; then
-          echo "TPL directory exists but appears incomplete, cleaning..."
-          rm -rf ../../TPL ../../build-compat
-        fi
-        ./setup-environment.sh
-
     - name: Run compatibility tests
       run: |
         cd rust/compat-tests
-        source ./env-compat.sh
-        ./run-compat-tests.sh
+        ./ci-run-tests.sh
 
     - name: Upload test results
       if: always()
