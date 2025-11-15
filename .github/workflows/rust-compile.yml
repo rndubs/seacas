@@ -93,3 +93,4 @@ jobs:
         cd rust/exodus-py
         pip install maturin
         maturin build --release
+
