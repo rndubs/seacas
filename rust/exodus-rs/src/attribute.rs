@@ -364,8 +364,8 @@ impl ExodusFile<mode::Read> {
                 // Extract the attribute name from variable metadata
                 if let Some(var) = self.nc_file.variable(&var_name) {
                     if let Some(name_attr) = var.attribute("attr_name") {
-                        if let Ok(name_value) = name_attr.value() {
-                            if let netcdf::AttributeValue::Str(s) = name_value { names.push(s) }
+                        if let Ok(netcdf::AttributeValue::Str(s)) = name_attr.value() {
+                            names.push(s)
                         }
                     }
                 }

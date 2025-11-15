@@ -96,7 +96,7 @@ impl ExodusFile<mode::Write> {
         }
 
         // Validate topology
-        let topology = Topology::from_str(&block.topology);
+        let topology = Topology::from_string(&block.topology);
         if let Some(expected) = topology.expected_nodes() {
             if expected != block.num_nodes_per_entry {
                 return Err(ExodusError::InvalidTopology(format!(
@@ -412,7 +412,7 @@ impl ExodusFile<mode::Read> {
 
         Ok(Connectivity {
             block_id,
-            topology: Topology::from_str(&block.topology),
+            topology: Topology::from_string(&block.topology),
             data,
             num_entries: block.num_entries,
             nodes_per_entry: block.num_nodes_per_entry,
@@ -753,10 +753,10 @@ mod tests {
 
     #[test]
     fn test_topology_parsing() {
-        assert_eq!(Topology::from_str("HEX8"), Topology::Hex8);
-        assert_eq!(Topology::from_str("hex"), Topology::Hex8);
-        assert_eq!(Topology::from_str("QUAD4"), Topology::Quad4);
-        assert_eq!(Topology::from_str("TET10"), Topology::Tet10);
+        assert_eq!(Topology::from_string("HEX8"), Topology::Hex8);
+        assert_eq!(Topology::from_string("hex"), Topology::Hex8);
+        assert_eq!(Topology::from_string("QUAD4"), Topology::Quad4);
+        assert_eq!(Topology::from_string("TET10"), Topology::Tet10);
 
         assert_eq!(Topology::Hex8.expected_nodes(), Some(8));
         assert_eq!(Topology::Quad4.expected_nodes(), Some(4));

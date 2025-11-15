@@ -450,7 +450,7 @@ pub enum Topology {
 
 impl Topology {
     /// Parse topology from string
-    pub fn from_str(s: &str) -> Self {
+    pub fn from_string(s: &str) -> Self {
         match s.to_uppercase().as_str() {
             "SPHERE" => Self::Sphere,
             "BAR2" | "TRUSS2" | "BEAM2" => Self::Bar2,
