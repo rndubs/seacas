@@ -2,12 +2,14 @@ name: Rust Python Documentation
 
 on:
   push:
-    branches: [ main, master, exodus-rust-lib ]
+    branches: [ main, master, exodus-rust-lib, 'claude/**' ]
     paths:
       - 'rust/exodus-py/docs/**'
       - 'rust/exodus-py/python/**'
       - 'rust/exodus-py/src/**'
       - '.github/workflows/rust-python-docs.yml'
+  pull_request:
+    branches: [ main, master, exodus-rust-lib ]
   workflow_dispatch:
 
 # Sets permissions of the GITHUB_TOKEN to allow deployment to GitHub Pages
