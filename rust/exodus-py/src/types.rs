@@ -303,7 +303,7 @@ impl InitParams {
         num_nodes: usize,
         num_elems: usize,
         num_elem_blocks: usize,
-        kwargs: Option<&PyDict>,
+        kwargs: Option<&Bound<'_, PyDict>>,
     ) -> PyResult<Self> {
         let mut params = InitParams {
             title: title.to_string(),

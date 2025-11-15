@@ -3,11 +3,6 @@
 //! This module provides Python bindings for the exodus-rs library,
 //! exposing the high-level builder API and core file operations.
 
-// Suppress non-local definitions warning from PyO3 0.20.3 macros
-// This is a known issue with PyO3 < 0.21 and newer Rust compilers
-// Upgrading to PyO3 0.21+ requires significant API changes (bound API)
-#![allow(non_local_definitions)]
-
 use pyo3::prelude::*;
 
 // Module declarations
@@ -32,7 +27,7 @@ use builder::*;
 
 /// Python module for exodus-py
 #[pymodule]
-fn exodus(_py: Python, m: &PyModule) -> PyResult<()> {
+fn exodus(m: &Bound<'_, PyModule>) -> PyResult<()> {
     // Add version info
     m.add("__version__", env!("CARGO_PKG_VERSION"))?;
     m.add("__doc__", "Python bindings for exodus-rs - Pure Rust Exodus II implementation")?;
