@@ -1,6 +1,7 @@
 name: Rust Compile
 
 
+
 on:
   push:
     branches: [ main, master, 'claude/**' ]
