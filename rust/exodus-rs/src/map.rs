@@ -104,7 +104,7 @@ impl ExodusFile<mode::Write> {
 
             self.nc_file
                 .add_variable::<i64>(var_name, &[dim_name])
-                .map_err(|e| ExodusError::NetCdf(e))?;
+                .map_err(ExodusError::NetCdf)?;
         }
 
         // Write the map
@@ -113,7 +113,7 @@ impl ExodusFile<mode::Write> {
         })?;
 
         var.put_values(map, ..)
-            .map_err(|e| ExodusError::NetCdf(e))?;
+            .map_err(ExodusError::NetCdf)?;
 
         Ok(())
     }
@@ -171,7 +171,7 @@ impl ExodusFile<mode::Write> {
 
             self.nc_file
                 .add_variable::<i64>(var_name, &[dim_name])
-                .map_err(|e| ExodusError::NetCdf(e))?;
+                .map_err(ExodusError::NetCdf)?;
         }
 
         // Write the order map
@@ -180,7 +180,7 @@ impl ExodusFile<mode::Write> {
         })?;
 
         var.put_values(order, ..)
-            .map_err(|e| ExodusError::NetCdf(e))?;
+            .map_err(ExodusError::NetCdf)?;
 
         Ok(())
     }
@@ -220,7 +220,7 @@ impl ExodusFile<mode::Read> {
         // Read the map
         let map: Vec<i64> = var
             .get_values(..)
-            .map_err(|e| ExodusError::NetCdf(e))?;
+            .map_err(ExodusError::NetCdf)?;
 
         Ok(map)
     }
@@ -252,7 +252,7 @@ impl ExodusFile<mode::Read> {
         // Read the order map
         let order: Vec<i64> = var
             .get_values(..)
-            .map_err(|e| ExodusError::NetCdf(e))?;
+            .map_err(ExodusError::NetCdf)?;
 
         Ok(order)
     }
@@ -445,7 +445,7 @@ impl ExodusFile<mode::Write> {
         if self.nc_file.dimension("len_name").is_none() {
             self.nc_file
                 .add_dimension("len_name", MAX_NAME_LENGTH + 1)
-                .map_err(|e| ExodusError::NetCdf(e))?;
+                .map_err(ExodusError::NetCdf)?;
         }
 
         // Create the variable if it doesn't exist
@@ -460,7 +460,7 @@ impl ExodusFile<mode::Write> {
 
             self.nc_file
                 .add_variable::<u8>(&var_name, &[dim_name, "len_name"])
-                .map_err(|e| ExodusError::NetCdf(e))?;
+                .map_err(ExodusError::NetCdf)?;
         }
 
         // Convert names to fixed-length byte arrays
@@ -478,7 +478,7 @@ impl ExodusFile<mode::Write> {
         })?;
 
         var.put_values(&name_bytes, ..)
-            .map_err(|e| ExodusError::NetCdf(e))?;
+            .map_err(ExodusError::NetCdf)?;
 
         Ok(())
     }
@@ -495,7 +495,7 @@ impl ExodusFile<mode::Write> {
         // Read the raw bytes
         let name_bytes: Vec<u8> = var
             .get_values(..)
-            .map_err(|e| ExodusError::NetCdf(e))?;
+            .map_err(ExodusError::NetCdf)?;
 
         const MAX_NAME_LENGTH: usize = 32;
         let num_names = name_bytes.len() / (MAX_NAME_LENGTH + 1);
@@ -577,7 +577,7 @@ impl ExodusFile<mode::Read> {
         // Read the raw bytes
         let name_bytes: Vec<u8> = var
             .get_values(..)
-            .map_err(|e| ExodusError::NetCdf(e))?;
+            .map_err(ExodusError::NetCdf)?;
 
         const MAX_NAME_LENGTH: usize = 32;
         let num_names = name_bytes.len() / (MAX_NAME_LENGTH + 1);
@@ -720,11 +720,11 @@ impl ExodusFile<mode::Write> {
 
             let mut var = self.nc_file
                 .add_variable::<i64>(&var_name, &[dim_name])
-                .map_err(|e| ExodusError::NetCdf(e))?;
+                .map_err(ExodusError::NetCdf)?;
 
             // Set the name attribute
             var.put_attribute("name", prop_name)
-                .map_err(|e| ExodusError::NetCdf(e))?;
+                .map_err(ExodusError::NetCdf)?;
         }
 
         // Write the properties
@@ -733,7 +733,7 @@ impl ExodusFile<mode::Write> {
         })?;
 
         var.put_values(values, ..)
-            .map_err(|e| ExodusError::NetCdf(e))?;
+            .map_err(ExodusError::NetCdf)?;
 
         Ok(())
     }
@@ -768,7 +768,7 @@ impl ExodusFile<mode::Write> {
 
         let props: Vec<i64> = var
             .get_values(..)
-            .map_err(|e| ExodusError::NetCdf(e))?;
+            .map_err(ExodusError::NetCdf)?;
 
         Ok(props)
     }
@@ -793,7 +793,7 @@ impl ExodusFile<mode::Write> {
         // Try to get the variable
         if let Some(var) = self.nc_file.variable(var_name) {
             let ids: Vec<i64> = var.get_values(..)
-                .map_err(|e| ExodusError::NetCdf(e))?;
+                .map_err(ExodusError::NetCdf)?;
             // Filter out zeros and NetCDF fill values
             Ok(ids.into_iter().filter(|&id| id > 0).collect())
         } else {
@@ -881,7 +881,7 @@ impl ExodusFile<mode::Read> {
 
         let props: Vec<i64> = var
             .get_values(..)
-            .map_err(|e| ExodusError::NetCdf(e))?;
+            .map_err(ExodusError::NetCdf)?;
 
         Ok(props)
     }
@@ -974,7 +974,7 @@ impl ExodusFile<mode::Read> {
         // Try to get the variable
         if let Some(var) = self.nc_file.variable(var_name) {
             let ids: Vec<i64> = var.get_values(..)
-                .map_err(|e| ExodusError::NetCdf(e))?;
+                .map_err(ExodusError::NetCdf)?;
             // Filter out zeros and NetCDF fill values
             Ok(ids.into_iter().filter(|&id| id > 0).collect())
         } else {

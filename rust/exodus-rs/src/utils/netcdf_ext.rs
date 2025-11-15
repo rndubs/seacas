@@ -153,7 +153,7 @@ pub fn get_attr_i64(var: &Variable<'_>, attr_name: &str) -> Result<i64> {
         format!("Attribute '{}' not found", attr_name)
     ))?;
 
-    let value = attr.value().map_err(|e| ExodusError::NetCdf(e))?;
+    let value = attr.value().map_err(ExodusError::NetCdf)?;
 
     attr_value_to_i64(&value).ok_or_else(|| ExodusError::Other(
         format!("Cannot convert attribute '{}' to i64", attr_name)
@@ -190,7 +190,7 @@ pub fn get_attr_string(var: &Variable<'_>, attr_name: &str) -> Result<String> {
         format!("Attribute '{}' not found", attr_name)
     ))?;
 
-    let value = attr.value().map_err(|e| ExodusError::NetCdf(e))?;
+    let value = attr.value().map_err(ExodusError::NetCdf)?;
 
     attr_value_to_string(&value).ok_or_else(|| ExodusError::Other(
         format!("Cannot convert attribute '{}' to String", attr_name)
@@ -227,7 +227,7 @@ pub fn get_attr_f64(var: &Variable<'_>, attr_name: &str) -> Result<f64> {
         format!("Attribute '{}' not found", attr_name)
     ))?;
 
-    let value = attr.value().map_err(|e| ExodusError::NetCdf(e))?;
+    let value = attr.value().map_err(ExodusError::NetCdf)?;
 
     attr_value_to_f64(&value).ok_or_else(|| ExodusError::Other(
         format!("Cannot convert attribute '{}' to f64", attr_name)

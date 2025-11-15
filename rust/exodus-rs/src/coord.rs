@@ -499,7 +499,7 @@ impl ExodusFile<mode::Write> {
         }
 
         // Validate name lengths
-        for (_i, name) in names.iter().enumerate() {
+        for name in names.iter() {
             if name.len() > MAX_NAME_LENGTH {
                 return Err(ExodusError::StringTooLong {
                     max: MAX_NAME_LENGTH,

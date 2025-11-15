@@ -8,13 +8,9 @@ use crate::types::Blob;
 use crate::{mode, ExodusFile};
 
 #[cfg(feature = "netcdf4")]
-use netcdf;
-
 // ============================================================================
 // Write Operations
 // ============================================================================
-
-#[cfg(feature = "netcdf4")]
 impl ExodusFile<mode::Write> {
     /// Store a blob with binary data
     ///
@@ -67,28 +63,28 @@ impl ExodusFile<mode::Write> {
         let data_dim_name = format!("num_bytes_blob{}", blob_index + 1);
         self.nc_file
             .add_dimension(&data_dim_name, data.len())
-            .map_err(|e| ExodusError::NetCdf(e))?;
+            .map_err(ExodusError::NetCdf)?;
 
         // Create variable for blob data
         let data_var_name = format!("blob{}_data", blob_index + 1);
         let mut data_var = self
             .nc_file
             .add_variable::<u8>(&data_var_name, &[&data_dim_name])
-            .map_err(|e| ExodusError::NetCdf(e))?;
+            .map_err(ExodusError::NetCdf)?;
 
         // Write blob data
         data_var
             .put_values(data, ..)
-            .map_err(|e| ExodusError::NetCdf(e))?;
+            .map_err(ExodusError::NetCdf)?;
 
         // Store blob metadata as attributes
         data_var
             .put_attribute("id", blob.id)
-            .map_err(|e| ExodusError::NetCdf(e))?;
+            .map_err(ExodusError::NetCdf)?;
 
         data_var
             .put_attribute("name", blob.name.as_str())
-            .map_err(|e| ExodusError::NetCdf(e))?;
+            .map_err(ExodusError::NetCdf)?;
 
         Ok(())
     }
@@ -216,7 +212,7 @@ impl ExodusFile<mode::Read> {
 
                             let data: Vec<u8> = var
                                 .get_values(..)
-                                .map_err(|e| ExodusError::NetCdf(e))?;
+                                .map_err(ExodusError::NetCdf)?;
 
                             return Ok((
                                 Blob {

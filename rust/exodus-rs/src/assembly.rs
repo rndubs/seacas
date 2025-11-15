@@ -8,13 +8,9 @@ use crate::types::{Assembly, EntityType};
 use crate::{mode, ExodusFile};
 
 #[cfg(feature = "netcdf4")]
-use netcdf;
-
 // ============================================================================
 // Write Operations
 // ============================================================================
-
-#[cfg(feature = "netcdf4")]
 impl ExodusFile<mode::Write> {
     /// Define an assembly
     ///
@@ -69,32 +65,32 @@ impl ExodusFile<mode::Write> {
         let entity_dim_name = format!("num_entity_assembly{}", assembly_index + 1);
         self.nc_file
             .add_dimension(&entity_dim_name, assembly.entity_list.len())
-            .map_err(|e| ExodusError::NetCdf(e))?;
+            .map_err(ExodusError::NetCdf)?;
 
         // Create variable for entity list
         let entity_var_name = format!("assembly{}_entity_list", assembly_index + 1);
         let mut entity_var = self
             .nc_file
             .add_variable::<i64>(&entity_var_name, &[&entity_dim_name])
-            .map_err(|e| ExodusError::NetCdf(e))?;
+            .map_err(ExodusError::NetCdf)?;
 
         // Write entity list
         entity_var
             .put_values(&assembly.entity_list, ..)
-            .map_err(|e| ExodusError::NetCdf(e))?;
+            .map_err(ExodusError::NetCdf)?;
 
         // Store assembly metadata as attributes
         entity_var
             .put_attribute("id", assembly.id)
-            .map_err(|e| ExodusError::NetCdf(e))?;
+            .map_err(ExodusError::NetCdf)?;
 
         entity_var
             .put_attribute("name", assembly.name.as_str())
-            .map_err(|e| ExodusError::NetCdf(e))?;
+            .map_err(ExodusError::NetCdf)?;
 
         entity_var
             .put_attribute("entity_type", assembly.entity_type.to_string().as_str())
-            .map_err(|e| ExodusError::NetCdf(e))?;
+            .map_err(ExodusError::NetCdf)?;
 
         Ok(())
     }
@@ -242,7 +238,7 @@ impl ExodusFile<mode::Read> {
 
                             let entity_list: Vec<i64> = var
                                 .get_values(..)
-                                .map_err(|e| ExodusError::NetCdf(e))?;
+                                .map_err(ExodusError::NetCdf)?;
 
                             return Ok(Assembly {
                                 id: assembly_id,

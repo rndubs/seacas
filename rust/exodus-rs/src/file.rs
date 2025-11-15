@@ -10,8 +10,6 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
 #[cfg(feature = "netcdf4")]
-use netcdf;
-
 /// NetCDF define mode state
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum DefineMode {
@@ -35,6 +33,7 @@ pub(crate) struct FileMetadata {
     /// Current NetCDF define/data mode (only tracked for Write/Append modes)
     pub define_mode: DefineMode,
     /// Performance configuration (if specified)
+    #[allow(dead_code)]
     pub performance: Option<crate::performance::PerformanceConfig>,
 }
 
@@ -587,6 +586,7 @@ impl ExodusFile<mode::Append> {
     /// Ensure the file is in define mode, transitioning if necessary
     ///
     /// See [`ExodusFile::<mode::Write>::ensure_define_mode()`] for details.
+    #[allow(dead_code)]
     pub(crate) fn ensure_define_mode(&mut self) -> Result<()> {
         if self.metadata.define_mode == DefineMode::Data {
             self.reenter_define()?;

@@ -8,8 +8,6 @@ use crate::types::InitParams;
 use crate::{mode, ExodusFile};
 
 #[cfg(feature = "netcdf4")]
-use netcdf;
-
 /// Builder for fluent initialization API
 ///
 /// This provides a convenient way to initialize an Exodus file with
@@ -289,7 +287,7 @@ impl ExodusFile<mode::Write> {
         // Always create num_dim dimension
         self.nc_file
             .add_dimension("num_dim", params.num_dim)
-            .map_err(|e| ExodusError::NetCdf(e))?;
+            .map_err(ExodusError::NetCdf)?;
         self.metadata
             .dim_cache
             .insert("num_dim".to_string(), params.num_dim);
@@ -297,13 +295,13 @@ impl ExodusFile<mode::Write> {
         // Create time dimension (unlimited)
         self.nc_file
             .add_unlimited_dimension("time_step")
-            .map_err(|e| ExodusError::NetCdf(e))?;
+            .map_err(ExodusError::NetCdf)?;
 
         // Create node-related dimensions
         if params.num_nodes > 0 {
             self.nc_file
                 .add_dimension("num_nodes", params.num_nodes)
-                .map_err(|e| ExodusError::NetCdf(e))?;
+                .map_err(ExodusError::NetCdf)?;
             self.metadata
                 .dim_cache
                 .insert("num_nodes".to_string(), params.num_nodes);
@@ -313,7 +311,7 @@ impl ExodusFile<mode::Write> {
         if params.num_elems > 0 {
             self.nc_file
                 .add_dimension("num_elem", params.num_elems)
-                .map_err(|e| ExodusError::NetCdf(e))?;
+                .map_err(ExodusError::NetCdf)?;
             self.metadata
                 .dim_cache
                 .insert("num_elem".to_string(), params.num_elems);
@@ -322,7 +320,7 @@ impl ExodusFile<mode::Write> {
         if params.num_elem_blocks > 0 {
             self.nc_file
                 .add_dimension("num_el_blk", params.num_elem_blocks)
-                .map_err(|e| ExodusError::NetCdf(e))?;
+                .map_err(ExodusError::NetCdf)?;
             self.metadata
                 .dim_cache
                 .insert("num_el_blk".to_string(), params.num_elem_blocks);
@@ -332,7 +330,7 @@ impl ExodusFile<mode::Write> {
         if params.num_edges > 0 {
             self.nc_file
                 .add_dimension("num_edge", params.num_edges)
-                .map_err(|e| ExodusError::NetCdf(e))?;
+                .map_err(ExodusError::NetCdf)?;
             self.metadata
                 .dim_cache
                 .insert("num_edge".to_string(), params.num_edges);
@@ -341,7 +339,7 @@ impl ExodusFile<mode::Write> {
         if params.num_edge_blocks > 0 {
             self.nc_file
                 .add_dimension("num_ed_blk", params.num_edge_blocks)
-                .map_err(|e| ExodusError::NetCdf(e))?;
+                .map_err(ExodusError::NetCdf)?;
             self.metadata
                 .dim_cache
                 .insert("num_ed_blk".to_string(), params.num_edge_blocks);
@@ -351,7 +349,7 @@ impl ExodusFile<mode::Write> {
         if params.num_faces > 0 {
             self.nc_file
                 .add_dimension("num_face", params.num_faces)
-                .map_err(|e| ExodusError::NetCdf(e))?;
+                .map_err(ExodusError::NetCdf)?;
             self.metadata
                 .dim_cache
                 .insert("num_face".to_string(), params.num_faces);
@@ -360,7 +358,7 @@ impl ExodusFile<mode::Write> {
         if params.num_face_blocks > 0 {
             self.nc_file
                 .add_dimension("num_fa_blk", params.num_face_blocks)
-                .map_err(|e| ExodusError::NetCdf(e))?;
+                .map_err(ExodusError::NetCdf)?;
             self.metadata
                 .dim_cache
                 .insert("num_fa_blk".to_string(), params.num_face_blocks);
@@ -370,7 +368,7 @@ impl ExodusFile<mode::Write> {
         if params.num_node_sets > 0 {
             self.nc_file
                 .add_dimension("num_node_sets", params.num_node_sets)
-                .map_err(|e| ExodusError::NetCdf(e))?;
+                .map_err(ExodusError::NetCdf)?;
             self.metadata
                 .dim_cache
                 .insert("num_node_sets".to_string(), params.num_node_sets);
@@ -379,7 +377,7 @@ impl ExodusFile<mode::Write> {
         if params.num_side_sets > 0 {
             self.nc_file
                 .add_dimension("num_side_sets", params.num_side_sets)
-                .map_err(|e| ExodusError::NetCdf(e))?;
+                .map_err(ExodusError::NetCdf)?;
             self.metadata
                 .dim_cache
                 .insert("num_side_sets".to_string(), params.num_side_sets);
@@ -388,7 +386,7 @@ impl ExodusFile<mode::Write> {
         if params.num_edge_sets > 0 {
             self.nc_file
                 .add_dimension("num_edge_sets", params.num_edge_sets)
-                .map_err(|e| ExodusError::NetCdf(e))?;
+                .map_err(ExodusError::NetCdf)?;
             self.metadata
                 .dim_cache
                 .insert("num_edge_sets".to_string(), params.num_edge_sets);
@@ -397,7 +395,7 @@ impl ExodusFile<mode::Write> {
         if params.num_face_sets > 0 {
             self.nc_file
                 .add_dimension("num_face_sets", params.num_face_sets)
-                .map_err(|e| ExodusError::NetCdf(e))?;
+                .map_err(ExodusError::NetCdf)?;
             self.metadata
                 .dim_cache
                 .insert("num_face_sets".to_string(), params.num_face_sets);
@@ -406,7 +404,7 @@ impl ExodusFile<mode::Write> {
         if params.num_elem_sets > 0 {
             self.nc_file
                 .add_dimension("num_elem_sets", params.num_elem_sets)
-                .map_err(|e| ExodusError::NetCdf(e))?;
+                .map_err(ExodusError::NetCdf)?;
             self.metadata
                 .dim_cache
                 .insert("num_elem_sets".to_string(), params.num_elem_sets);
@@ -416,7 +414,7 @@ impl ExodusFile<mode::Write> {
         if params.num_node_maps > 0 {
             self.nc_file
                 .add_dimension("num_node_maps", params.num_node_maps)
-                .map_err(|e| ExodusError::NetCdf(e))?;
+                .map_err(ExodusError::NetCdf)?;
             self.metadata
                 .dim_cache
                 .insert("num_node_maps".to_string(), params.num_node_maps);
@@ -425,7 +423,7 @@ impl ExodusFile<mode::Write> {
         if params.num_elem_maps > 0 {
             self.nc_file
                 .add_dimension("num_elem_maps", params.num_elem_maps)
-                .map_err(|e| ExodusError::NetCdf(e))?;
+                .map_err(ExodusError::NetCdf)?;
             self.metadata
                 .dim_cache
                 .insert("num_elem_maps".to_string(), params.num_elem_maps);
@@ -434,7 +432,7 @@ impl ExodusFile<mode::Write> {
         if params.num_edge_maps > 0 {
             self.nc_file
                 .add_dimension("num_edge_maps", params.num_edge_maps)
-                .map_err(|e| ExodusError::NetCdf(e))?;
+                .map_err(ExodusError::NetCdf)?;
             self.metadata
                 .dim_cache
                 .insert("num_edge_maps".to_string(), params.num_edge_maps);
@@ -443,7 +441,7 @@ impl ExodusFile<mode::Write> {
         if params.num_face_maps > 0 {
             self.nc_file
                 .add_dimension("num_face_maps", params.num_face_maps)
-                .map_err(|e| ExodusError::NetCdf(e))?;
+                .map_err(ExodusError::NetCdf)?;
             self.metadata
                 .dim_cache
                 .insert("num_face_maps".to_string(), params.num_face_maps);
@@ -453,7 +451,7 @@ impl ExodusFile<mode::Write> {
         if params.num_assemblies > 0 {
             self.nc_file
                 .add_dimension("num_assembly", params.num_assemblies)
-                .map_err(|e| ExodusError::NetCdf(e))?;
+                .map_err(ExodusError::NetCdf)?;
             self.metadata
                 .dim_cache
                 .insert("num_assembly".to_string(), params.num_assemblies);
@@ -462,7 +460,7 @@ impl ExodusFile<mode::Write> {
         if params.num_blobs > 0 {
             self.nc_file
                 .add_dimension("num_blob", params.num_blobs)
-                .map_err(|e| ExodusError::NetCdf(e))?;
+                .map_err(ExodusError::NetCdf)?;
             self.metadata
                 .dim_cache
                 .insert("num_blob".to_string(), params.num_blobs);
@@ -492,17 +490,17 @@ impl ExodusFile<mode::Write> {
         // Create coordx variable
         self.nc_file
             .add_variable::<f64>("coordx", &["num_nodes"])
-            .map_err(|e| ExodusError::NetCdf(e))?;
+            .map_err(ExodusError::NetCdf)?;
 
         // Create coordy variable
         self.nc_file
             .add_variable::<f64>("coordy", &["num_nodes"])
-            .map_err(|e| ExodusError::NetCdf(e))?;
+            .map_err(ExodusError::NetCdf)?;
 
         // Create coordz variable
         self.nc_file
             .add_variable::<f64>("coordz", &["num_nodes"])
-            .map_err(|e| ExodusError::NetCdf(e))?;
+            .map_err(ExodusError::NetCdf)?;
 
         Ok(())
     }
@@ -512,11 +510,11 @@ impl ExodusFile<mode::Write> {
         let mut var = self
             .nc_file
             .add_variable::<i64>(var_name, &[dim_name])
-            .map_err(|e| ExodusError::NetCdf(e))?;
+            .map_err(ExodusError::NetCdf)?;
 
         // Add attribute to identify this as a property variable
         var.put_attribute("name", "ID")
-            .map_err(|e| ExodusError::NetCdf(e))?;
+            .map_err(ExodusError::NetCdf)?;
 
         Ok(())
     }

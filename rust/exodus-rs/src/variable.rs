@@ -1187,12 +1187,11 @@ impl ExodusFile<mode::Write> {
 
         // For global reduction variables, create the storage variable now
         // For other types, storage is created per-entity in put_reduction_vars()
-        if var_type == EntityType::Global {
-            if self.nc_file.variable("vals_glo_var").is_none() {
+        if var_type == EntityType::Global
+            && self.nc_file.variable("vals_glo_var").is_none() {
                 self.nc_file
                     .add_variable::<f64>("vals_glo_var", &["time_step", num_var_dim])?;
             }
-        }
 
         // Write the variable names
         let actual_len_string = self.nc_file.dimension("len_string")

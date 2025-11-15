@@ -11,8 +11,6 @@ use crate::types::{AttributeType, EntityType};
 use crate::{mode, ExodusFile};
 
 #[cfg(feature = "netcdf4")]
-use netcdf;
-
 /// Attribute value data
 #[derive(Debug, Clone, PartialEq)]
 pub enum AttributeData {
@@ -123,7 +121,7 @@ impl ExodusFile<mode::Write> {
         };
 
         // Sanitize attribute name for use in variable name (replace spaces/special chars)
-        let safe_name = name.replace(' ', "_").replace('-', "_");
+        let safe_name = name.replace([' ', '-'], "_");
         let var_name = format!("{}_{}_{}_attr", entity_type_str, entity_id, safe_name);
 
         // Store based on data type
@@ -133,50 +131,50 @@ impl ExodusFile<mode::Write> {
                 let dim_name = format!("{}_len", var_name);
                 self.nc_file
                     .add_dimension(&dim_name, values.len())
-                    .map_err(|e| ExodusError::NetCdf(e))?;
+                    .map_err(ExodusError::NetCdf)?;
 
                 // Create variable
                 let mut var = self
                     .nc_file
                     .add_variable::<i64>(&var_name, &[&dim_name])
-                    .map_err(|e| ExodusError::NetCdf(e))?;
+                    .map_err(ExodusError::NetCdf)?;
 
                 // Write values
                 var.put_values(&values, ..)
-                    .map_err(|e| ExodusError::NetCdf(e))?;
+                    .map_err(ExodusError::NetCdf)?;
 
                 // Store metadata
                 var.put_attribute("entity_id", entity_id)
-                    .map_err(|e| ExodusError::NetCdf(e))?;
+                    .map_err(ExodusError::NetCdf)?;
                 var.put_attribute("attr_name", name)
-                    .map_err(|e| ExodusError::NetCdf(e))?;
+                    .map_err(ExodusError::NetCdf)?;
                 var.put_attribute("attr_type", "integer")
-                    .map_err(|e| ExodusError::NetCdf(e))?;
+                    .map_err(ExodusError::NetCdf)?;
             }
             AttributeData::Double(values) => {
                 // Create dimension for values
                 let dim_name = format!("{}_len", var_name);
                 self.nc_file
                     .add_dimension(&dim_name, values.len())
-                    .map_err(|e| ExodusError::NetCdf(e))?;
+                    .map_err(ExodusError::NetCdf)?;
 
                 // Create variable
                 let mut var = self
                     .nc_file
                     .add_variable::<f64>(&var_name, &[&dim_name])
-                    .map_err(|e| ExodusError::NetCdf(e))?;
+                    .map_err(ExodusError::NetCdf)?;
 
                 // Write values
                 var.put_values(&values, ..)
-                    .map_err(|e| ExodusError::NetCdf(e))?;
+                    .map_err(ExodusError::NetCdf)?;
 
                 // Store metadata
                 var.put_attribute("entity_id", entity_id)
-                    .map_err(|e| ExodusError::NetCdf(e))?;
+                    .map_err(ExodusError::NetCdf)?;
                 var.put_attribute("attr_name", name)
-                    .map_err(|e| ExodusError::NetCdf(e))?;
+                    .map_err(ExodusError::NetCdf)?;
                 var.put_attribute("attr_type", "double")
-                    .map_err(|e| ExodusError::NetCdf(e))?;
+                    .map_err(ExodusError::NetCdf)?;
             }
             AttributeData::Char(text) => {
                 // For character attributes, store as a char array
@@ -184,25 +182,25 @@ impl ExodusFile<mode::Write> {
                 let dim_name = format!("{}_len", var_name);
                 self.nc_file
                     .add_dimension(&dim_name, chars.len())
-                    .map_err(|e| ExodusError::NetCdf(e))?;
+                    .map_err(ExodusError::NetCdf)?;
 
                 // Create variable as u8 (char)
                 let mut var = self
                     .nc_file
                     .add_variable::<u8>(&var_name, &[&dim_name])
-                    .map_err(|e| ExodusError::NetCdf(e))?;
+                    .map_err(ExodusError::NetCdf)?;
 
                 // Write character data
                 var.put_values(&chars, ..)
-                    .map_err(|e| ExodusError::NetCdf(e))?;
+                    .map_err(ExodusError::NetCdf)?;
 
                 // Store metadata
                 var.put_attribute("entity_id", entity_id)
-                    .map_err(|e| ExodusError::NetCdf(e))?;
+                    .map_err(ExodusError::NetCdf)?;
                 var.put_attribute("attr_name", name)
-                    .map_err(|e| ExodusError::NetCdf(e))?;
+                    .map_err(ExodusError::NetCdf)?;
                 var.put_attribute("attr_type", "char")
-                    .map_err(|e| ExodusError::NetCdf(e))?;
+                    .map_err(ExodusError::NetCdf)?;
             }
         }
 
@@ -262,7 +260,7 @@ impl ExodusFile<mode::Read> {
             _ => "entity",
         };
 
-        let safe_name = name.replace(' ', "_").replace('-', "_");
+        let safe_name = name.replace([' ', '-'], "_");
         let var_name = format!("{}_{}_{}_attr", entity_type_str, entity_id, safe_name);
 
         // Try to find the attribute variable
@@ -292,19 +290,19 @@ impl ExodusFile<mode::Read> {
                 "integer" => {
                     let values: Vec<i64> = var
                         .get_values(..)
-                        .map_err(|e| ExodusError::NetCdf(e))?;
+                        .map_err(ExodusError::NetCdf)?;
                     Ok(AttributeData::Integer(values))
                 }
                 "double" => {
                     let values: Vec<f64> = var
                         .get_values(..)
-                        .map_err(|e| ExodusError::NetCdf(e))?;
+                        .map_err(ExodusError::NetCdf)?;
                     Ok(AttributeData::Double(values))
                 }
                 "char" => {
                     let bytes: Vec<u8> = var
                         .get_values(..)
-                        .map_err(|e| ExodusError::NetCdf(e))?;
+                        .map_err(ExodusError::NetCdf)?;
                     let text = String::from_utf8(bytes)
                         .map_err(|_| ExodusError::Other(
                             format!("Invalid UTF-8 in char attribute '{}'", name)
@@ -367,10 +365,7 @@ impl ExodusFile<mode::Read> {
                 if let Some(var) = self.nc_file.variable(&var_name) {
                     if let Some(name_attr) = var.attribute("attr_name") {
                         if let Ok(name_value) = name_attr.value() {
-                            match name_value {
-                                netcdf::AttributeValue::Str(s) => names.push(s),
-                                _ => {}
-                            }
+                            if let netcdf::AttributeValue::Str(s) = name_value { names.push(s) }
                         }
                     }
                 }
