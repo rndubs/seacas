@@ -3,14 +3,8 @@ name: Rust-C Compatibility Tests
 on:
   push:
     branches: [ main, master, 'claude/**' ]
-    paths:
-      - 'rust/**'
-      - '.github/workflows/rust-compat-tests.yml'
   pull_request:
     branches: [ main, master ]
-    paths:
-      - 'rust/**'
-      - '.github/workflows/rust-compat-tests.yml'
   workflow_dispatch:
 
 env:

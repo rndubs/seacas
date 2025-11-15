@@ -3,16 +3,8 @@ name: Rust Python Bindings
 on:
   push:
     branches: [ main, master, 'claude/**' ]
-    paths:
-      - 'rust/exodus-py/**'
-      - 'rust/exodus-rs/**'
-      - '.github/workflows/rust-python.yml'
   pull_request:
     branches: [ main, master ]
-    paths:
-      - 'rust/exodus-py/**'
-      - 'rust/exodus-rs/**'
-      - '.github/workflows/rust-python.yml'
   workflow_dispatch:
 
 env:

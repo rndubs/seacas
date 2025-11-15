@@ -3,14 +3,8 @@ name: Rust Compile
 on:
   push:
     branches: [ main, master, 'claude/**' ]
-    paths:
-      - 'rust/**'
-      - '.github/workflows/rust-compile.yml'
   pull_request:
     branches: [ main, master ]
-    paths:
-      - 'rust/**'
-      - '.github/workflows/rust-compile.yml'
   workflow_dispatch:
 
 env:

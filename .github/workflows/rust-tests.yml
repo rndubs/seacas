@@ -3,14 +3,8 @@ name: Rust Tests
 on:
   push:
     branches: [ main, master, 'claude/**' ]
-    paths:
-      - 'rust/**'
-      - '.github/workflows/rust-tests.yml'
   pull_request:
     branches: [ main, master ]
-    paths:
-      - 'rust/**'
-      - '.github/workflows/rust-tests.yml'
   workflow_dispatch:
 
 env:
