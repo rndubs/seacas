@@ -29,6 +29,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             int64_mode: Int64Mode::Int64,
             compression: None,
             parallel: false,
+            performance: None,
         };
 
         let file = ExodusFile::create("example_custom.exo", options)?;

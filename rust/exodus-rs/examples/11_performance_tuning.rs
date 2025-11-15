@@ -45,7 +45,7 @@ fn main() -> Result<()> {
         ..Default::default()
     };
 
-    let mut file1 = ExodusFile::create("example_auto_perf.exo", options)?;
+    let _file1 = ExodusFile::create("example_auto_perf.exo", options)?;
     println!("   ✓ File created with auto-detected settings");
     println!();
 
@@ -62,7 +62,7 @@ fn main() -> Result<()> {
         ..Default::default()
     };
 
-    let mut file2 = ExodusFile::create("example_conservative.exo", options)?;
+    let _file2 = ExodusFile::create("example_conservative.exo", options)?;
     println!("   ✓ File created with conservative settings");
     println!();
 
@@ -79,7 +79,7 @@ fn main() -> Result<()> {
         ..Default::default()
     };
 
-    let mut file3 = ExodusFile::create("example_aggressive.exo", options)?;
+    let _file3 = ExodusFile::create("example_aggressive.exo", options)?;
     println!("   ✓ File created with aggressive settings");
     println!();
 
