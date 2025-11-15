@@ -14,6 +14,10 @@ categories = ["science", "api-bindings"]
 name = "exodus"
 crate-type = ["cdylib"]
 
+# NOTE: PyO3 extension modules with the "extension-module" feature cannot run
+# Rust unit tests (cargo test) because they don't link against libpython.
+# All tests are Python integration tests in tests/ - run with: pytest tests/
+
 [dependencies]
 # PyO3 for Python bindings
 pyo3 = { version = "0.27", features = ["extension-module", "multiple-pymethods"] }

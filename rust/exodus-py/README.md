@@ -127,6 +127,33 @@ For detailed documentation, see:
 - [User Guide](docs/user_guide.md)
 - [Examples](examples/)
 
+## Testing
+
+exodus-py uses Python integration tests via pytest. The test suite validates the Python bindings and integration with the Rust library.
+
+### Running Tests
+
+```bash
+# Install test dependencies
+pip install pytest numpy
+
+# Build the extension in development mode
+maturin develop
+
+# Run all tests
+pytest tests/
+
+# Run with verbose output
+pytest tests/ -v
+
+# Run specific test file
+pytest tests/test_file_operations.py
+```
+
+### Note on `cargo test`
+
+PyO3 extension modules with the `extension-module` feature cannot run Rust unit tests (`cargo test`) because they don't link against libpython. This is expected behavior. All tests are implemented as Python integration tests.
+
 ## Requirements
 
 - Python 3.8+
