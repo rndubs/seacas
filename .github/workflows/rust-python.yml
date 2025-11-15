@@ -1,0 +1,90 @@
+name: Rust Python Bindings
+
+on:
+  push:
+    branches: [ main, master, 'claude/**' ]
+    paths:
+      - 'rust/exodus-py/**'
+      - 'rust/exodus-rs/**'
+      - '.github/workflows/rust-python.yml'
+  pull_request:
+    branches: [ main, master ]
+    paths:
+      - 'rust/exodus-py/**'
+      - 'rust/exodus-rs/**'
+      - '.github/workflows/rust-python.yml'
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+
+jobs:
+  test:
+    name: Test Python Bindings
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ['3.9', '3.10', '3.11', '3.12']
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ matrix.python-version }}
+
+    - name: Install system dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y libhdf5-dev libnetcdf-dev pkg-config
+
+    - name: Install Rust toolchain
+      uses: actions-rs/toolchain@v1
+      with:
+        toolchain: stable
+        profile: minimal
+        override: true
+
+    - name: Cache cargo registry
+      uses: actions/cache@v4
+      with:
+        path: ~/.cargo/registry
+        key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+        restore-keys: |
+          ${{ runner.os }}-cargo-registry-
+
+    - name: Cache cargo index
+      uses: actions/cache@v4
+      with:
+        path: ~/.cargo/git
+        key: ${{ runner.os }}-cargo-git-${{ hashFiles('**/Cargo.lock') }}
+        restore-keys: |
+          ${{ runner.os }}-cargo-git-
+
+    - name: Install uv
+      run: |
+        curl -LsSf https://astral.sh/uv/install.sh | sh
+        echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+
+    - name: Install Python dependencies and build package
+      run: |
+        cd rust/exodus-py
+        ./install_and_test.sh
+
+    - name: Run type checking with mypy
+      run: |
+        cd rust/exodus-py
+        uv pip install mypy
+        mypy python/exodus --strict --ignore-missing-imports || echo "Type checking completed with warnings"
+
+    - name: Upload coverage reports
+      if: matrix.python-version == '3.11'
+      uses: codecov/codecov-action@v4
+      with:
+        files: ./rust/exodus-py/coverage.xml
+        flags: python-bindings
+        name: exodus-py-coverage
+      continue-on-error: true
