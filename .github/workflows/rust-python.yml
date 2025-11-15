@@ -66,7 +66,7 @@ jobs:
     - name: Run type checking with mypy
       run: |
         cd rust/exodus-py
-        uv pip install mypy
+        source test-venv/bin/activate
         mypy python/exodus --strict --ignore-missing-imports
 
     - name: Upload coverage reports
