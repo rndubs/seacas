@@ -67,21 +67,28 @@ jobs:
         restore-keys: |
           ${{ runner.os }}-cargo-git-
 
-    - name: Install maturin
-      run: pip install maturin
+    - name: Create virtual environment and install dependencies
+      run: |
+        python -m venv docs-venv
+        source docs-venv/bin/activate
+        pip install --upgrade pip
+        pip install maturin
 
     - name: Build exodus-py package
       run: |
+        source docs-venv/bin/activate
         cd rust/exodus-py
         maturin develop
 
     - name: Install documentation dependencies
       run: |
+        source docs-venv/bin/activate
         cd rust/exodus-py
         pip install -r docs/requirements.txt
 
     - name: Build documentation
       run: |
+        source docs-venv/bin/activate
         cd rust/exodus-py
         python -m sphinx -b html -W --keep-going -j auto docs docs/_build/html
 
