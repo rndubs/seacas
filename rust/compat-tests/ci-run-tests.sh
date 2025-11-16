@@ -400,10 +400,16 @@ for test_entry in "${TEST_FILES[@]}"; do
   fi
 
   # Run C verification
+  echo "DEBUG: About to run verify on $test_file" >&2
+  echo "DEBUG: Current directory: $(pwd)" >&2
+  echo "DEBUG: LD_LIBRARY_PATH=$LD_LIBRARY_PATH" >&2
+
   # Use a temp file to avoid command substitution issues
   temp_output=$(mktemp)
-  ./verify "$test_file" > "$temp_output" 2>&1 || true
+  echo "DEBUG: Running ./verify..." >&2
+  timeout 10 ./verify "$test_file" > "$temp_output" 2>&1 || true
   exit_code=$?
+  echo "DEBUG: Verify completed with exit code $exit_code" >&2
   output=$(cat "$temp_output")
   rm -f "$temp_output"
 
