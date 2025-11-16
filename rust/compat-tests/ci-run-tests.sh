@@ -265,11 +265,16 @@ export EXODUS_DIR="$EXODUS_INSTALL"
 export TPL_DIR="$TPL_INSTALL"
 export LD_LIBRARY_PATH="$EXODUS_INSTALL/lib:$TPL_INSTALL/lib:$LD_LIBRARY_PATH"
 export PATH="$EXODUS_INSTALL/bin:$PATH"
+export PKG_CONFIG_PATH="$TPL_INSTALL/lib/pkgconfig:$PKG_CONFIG_PATH"
+export HDF5_DIR="$TPL_INSTALL"
+export NETCDF_DIR="$TPL_INSTALL"
 
 echo "Environment configured:"
 echo "  EXODUS_DIR: $EXODUS_DIR"
 echo "  TPL_DIR: $TPL_DIR"
-echo "  LD_LIBRARY_PATH: $LD_LIBRARY_PATH"
+echo "  HDF5_DIR: $HDF5_DIR"
+echo "  NETCDF_DIR: $NETCDF_DIR"
+echo "  PKG_CONFIG_PATH: $PKG_CONFIG_PATH"
 echo ""
 
 # ==========================================
@@ -328,10 +333,10 @@ for test_entry in "${TEST_FILES[@]}"; do
 
   if [ "$VERBOSE" = true ]; then
     echo ""
-    cargo run --features netcdf4 -- "$command"
+    cargo run -- "$command"
     echo ""
   else
-    cargo run --features netcdf4 -- "$command" &> /dev/null
+    cargo run -- "$command" &> /dev/null
   fi
 
   if [ -f "$OUTPUT_DIR/${filename}.exo" ]; then
