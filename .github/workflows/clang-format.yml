@@ -1,5 +1,9 @@
-# NOTE: This action requires write permissions to be set in your GitHub
-#       repo/fork for it to be able to commit changes.
+# NOTE: This workflow is currently DISABLED due to repository action restrictions.
+# The required actions (DoozyX/clang-format-lint-action and EndBug/add-and-commit)
+# are not allowed in this repository.
+#
+# This action requires write permissions to be set in your GitHub
+# repo/fork for it to be able to commit changes.
 #
 # This is currently enabled via:
 #
@@ -8,11 +12,10 @@
 # which you will need to set to "Read and write permissions"
 #
 
-name: Clang Format Commit Changes
+name: Clang Format Commit Changes (DISABLED)
 
-on: 
+on:
   workflow_dispatch:
-  push:
 
 concurrency:  
   group: ${{ github.workflow}}-${{ github.head_ref }}  
@@ -29,25 +32,27 @@ jobs:
     permissions:
         contents: write # In order to allow EndBug/add-and-commit to commit changes
     steps:
-    - name: Harden Runner
-      uses: step-security/harden-runner@f4a75cfd619ee5ce8d5b864b0d183aff3c69b55a # v2.13.1
-      with:
-        egress-policy: audit
-
     - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
 
-    - name: Fix C++ and C formatting issues detected by clang-format
-      uses: DoozyX/clang-format-lint-action@v0.20
-      with:
-        source: 'packages/seacas'
-        exclude: 'packages/seacas/doc-source'
-        extensions: 'c,C,cc,h,cpp,hpp'
-        clangFormatVersion: 18
-        inplace: True
-        style: file
+    # DISABLED: The following actions are not allowed in this repository
+    # - name: Fix C++ and C formatting issues detected by clang-format
+    #   uses: DoozyX/clang-format-lint-action@v0.20
+    #   with:
+    #     source: 'packages/seacas'
+    #     exclude: 'packages/seacas/doc-source'
+    #     extensions: 'c,C,cc,h,cpp,hpp'
+    #     clangFormatVersion: 18
+    #     inplace: True
+    #     style: file
+    #
+    # - uses: EndBug/add-and-commit@a94899bca583c204427a224a7af87c02f9b325d5 # v9.1.4
+    #   with:
+    #       author_name: github-actions
+    #       author_email: 41898282+github-actions[bot]@users.noreply.github.com
+    #       message: 'Committing clang-format changes'
 
-    - uses: EndBug/add-and-commit@a94899bca583c204427a224a7af87c02f9b325d5 # v9.1.4
-      with:
-          author_name: github-actions
-          author_email: 41898282+github-actions[bot]@users.noreply.github.com
-          message: 'Committing clang-format changes'
+    - name: Workflow disabled
+      run: |
+        echo "This workflow is disabled due to repository action restrictions."
+        echo "The required actions are not in the allowed list."
+        exit 0
