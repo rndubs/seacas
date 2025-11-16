@@ -120,6 +120,7 @@ fi
 echo "Compiling verify.c..."
 gcc verify.c \
   -I"$EXODUS_INSTALL/include" \
+  -I"$TPL_INSTALL/include" \
   -L"$EXODUS_INSTALL/lib" \
   -L"$TPL_INSTALL/lib" \
   -lexodus \

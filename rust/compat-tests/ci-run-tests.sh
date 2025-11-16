@@ -236,11 +236,12 @@ else
   export LD_LIBRARY_PATH="$EXODUS_INSTALL/lib:$TPL_INSTALL/lib:$LD_LIBRARY_PATH"
 
   echo "Compiling verify.c..."
-  echo "  Include path: $EXODUS_INSTALL/include"
+  echo "  Include paths: $EXODUS_INSTALL/include, $TPL_INSTALL/include"
   echo "  Library paths: $EXODUS_INSTALL/lib, $TPL_INSTALL/lib"
 
   gcc verify.c \
     -I"$EXODUS_INSTALL/include" \
+    -I"$TPL_INSTALL/include" \
     -L"$EXODUS_INSTALL/lib" \
     -L"$TPL_INSTALL/lib" \
     -lexodus \
