@@ -383,38 +383,23 @@ for test_entry in "${TEST_FILES[@]}"; do
   IFS=':' read -r command filename expected_tests <<< "$test_entry"
   test_file="$OUTPUT_DIR/${filename}.exo"
 
-  echo "DEBUG: Processing $test_entry" >&2
-  echo "  command=$command, filename=$filename, expected_tests=$expected_tests" >&2
-  echo "  test_file=$test_file" >&2
-
-  echo "DEBUG: About to increment TOTAL_FILES (currently $TOTAL_FILES)" >&2
-  ((TOTAL_FILES++)) || { echo "ERROR: Failed to increment TOTAL_FILES" >&2; exit 1; }
-  echo "DEBUG: TOTAL_FILES is now $TOTAL_FILES" >&2
-
-  echo "DEBUG: About to add $expected_tests to TOTAL_TESTS (currently $TOTAL_TESTS)" >&2
-  ((TOTAL_TESTS += expected_tests)) || { echo "ERROR: Failed to add to TOTAL_TESTS" >&2; exit 1; }
-  echo "DEBUG: TOTAL_TESTS is now $TOTAL_TESTS" >&2
+  ((++TOTAL_FILES))
+  ((TOTAL_TESTS += expected_tests))
 
   echo -e "${BLUE}Testing ${filename}.exo${NC}"
 
   if [ ! -f "$test_file" ]; then
     echo -e "  ${RED}✗ File not found${NC}"
-    ((FAILED_FILES++))
-    ((FAILED_TESTS += expected_tests))
+    ((++FAILED_FILES))
+    FAILED_TESTS=$((FAILED_TESTS + expected_tests))
     continue
   fi
 
   # Run C verification
-  echo "DEBUG: About to run verify on $test_file" >&2
-  echo "DEBUG: Current directory: $(pwd)" >&2
-  echo "DEBUG: LD_LIBRARY_PATH=$LD_LIBRARY_PATH" >&2
-
   # Use a temp file to avoid command substitution issues
   temp_output=$(mktemp)
-  echo "DEBUG: Running ./verify..." >&2
   timeout 10 ./verify "$test_file" > "$temp_output" 2>&1 || true
   exit_code=$?
-  echo "DEBUG: Verify completed with exit code $exit_code" >&2
   output=$(cat "$temp_output")
   rm -f "$temp_output"
 
@@ -424,15 +409,15 @@ for test_entry in "${TEST_FILES[@]}"; do
   # Look for "FAIL" or "✗" for failed tests
   failed=$(echo "$output" | grep -c "FAIL\|✗" || true)
 
-  ((PASSED_TESTS += passed))
-  ((FAILED_TESTS += failed))
+  PASSED_TESTS=$((PASSED_TESTS + passed))
+  FAILED_TESTS=$((FAILED_TESTS + failed))
 
   if [ "$failed" -eq 0 ] && [ "$passed" -gt 0 ]; then
     echo -e "  ${GREEN}✓ All $passed tests passed${NC}"
-    ((PASSED_FILES++))
+    ((++PASSED_FILES))
   else
     echo -e "  ${RED}✗ Tests failed (exit code: $exit_code, passed: $passed, failed: $failed)${NC}"
-    ((FAILED_FILES++))
+    ((++FAILED_FILES))
 
     # Show full output when tests fail
     echo "  Output from verify:"
