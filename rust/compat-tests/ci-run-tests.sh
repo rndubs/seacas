@@ -352,6 +352,33 @@ echo ""
 echo -e "${BLUE}Verifying files with C Exodus library...${NC}"
 echo ""
 
+# Test that verify tool can find its libraries
+echo "Testing C verification tool..."
+if command -v ldd &> /dev/null; then
+  echo "Checking library dependencies:"
+  ldd ./verify | grep -E "exodus|netcdf|hdf5" || true
+  echo ""
+
+  # Check for any missing libraries
+  if ldd ./verify | grep -q "not found"; then
+    echo -e "${RED}Error: verify tool has missing library dependencies:${NC}"
+    ldd ./verify | grep "not found"
+    echo ""
+    echo "LD_LIBRARY_PATH: $LD_LIBRARY_PATH"
+    exit 1
+  fi
+fi
+
+# Quick sanity test - verify should print usage when run without args
+verify_output=$(./verify 2>&1 || true)
+if echo "$verify_output" | grep -q "Usage"; then
+  echo -e "${GREEN}✓ Verification tool is working${NC}"
+else
+  echo -e "${YELLOW}Warning: Unexpected output from verify tool:${NC}"
+  echo "$verify_output" | head -5
+fi
+echo ""
+
 for test_entry in "${TEST_FILES[@]}"; do
   IFS=':' read -r command filename expected_tests <<< "$test_entry"
   test_file="$OUTPUT_DIR/${filename}.exo"
@@ -374,6 +401,10 @@ for test_entry in "${TEST_FILES[@]}"; do
     echo "$output"
   else
     output=$("./verify" "$test_file" 2>&1 || true)
+    # Show errors even in non-verbose mode
+    if [[ "$output" == *"error"* ]] || [[ "$output" == *"Error"* ]] || [[ "$output" == *"cannot"* ]]; then
+      echo "$output"
+    fi
   fi
 
   # Count passed/failed tests
