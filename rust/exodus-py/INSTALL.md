@@ -41,7 +41,7 @@ This is the recommended method for development and testing.
 
 1. **Clone the repository** (if not already done):
 ```bash
-git clone https://github.com/sandialabs/seacas
+git clone https://github.com/rndubs/seacas
 cd seacas/rust/exodus-py
 ```
 
@@ -190,6 +190,6 @@ pip uninstall exodus-py
 
 If you encounter issues:
 
-1. Check the [SEACAS documentation](https://sandialabs.github.io/seacas-docs/)
+1. Check the [SEACAS documentation](https://rndubs.github.io/seacas-docs/)
 2. Review the [examples](examples/) directory
-3. File an issue on [GitHub](https://github.com/sandialabs/seacas/issues)
+3. File an issue on [GitHub](https://github.com/rndubs/seacas/issues)

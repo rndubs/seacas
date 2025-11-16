@@ -6,7 +6,7 @@ rust-version = "1.74"
 authors = ["SEACAS Development Team"]
 license = "BSD-3-Clause"
 description = "Python bindings for exodus-rs - Pure Rust implementation of Exodus II"
-repository = "https://github.com/sandialabs/seacas"
+repository = "https://github.com/rndubs/seacas"
 keywords = ["exodus", "finite-element", "mesh", "python", "bindings"]
 categories = ["science", "api-bindings"]
 

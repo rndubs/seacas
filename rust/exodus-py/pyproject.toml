@@ -41,10 +41,10 @@ dev = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/sandialabs/seacas"
-Documentation = "https://sandialabs.github.io/seacas-docs/"
-Repository = "https://github.com/sandialabs/seacas"
-Issues = "https://github.com/sandialabs/seacas/issues"
+Homepage = "https://github.com/rndubs/seacas"
+Documentation = "https://rndubs.github.io/seacas-docs/"
+Repository = "https://github.com/rndubs/seacas"
+Issues = "https://github.com/rndubs/seacas/issues"
 
 [tool.maturin]
 features = ["pyo3/extension-module"]
