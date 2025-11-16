@@ -1,13 +1,18 @@
 # Dependency Review Action
 #
+# NOTE: This workflow is DISABLED because it requires GitHub Advanced Security
+# to be enabled, which is not available on this repository.
+#
 # This Action will scan dependency manifest files that change as part of a Pull Request,
 # surfacing known-vulnerable versions of the packages declared or updated in the PR.
 # Once installed, if the workflow run is marked as required,
 # PRs introducing known-vulnerable packages will be blocked from merging.
 #
+# To enable: Enable "Dependency graph" and "GitHub Advanced Security" in repository settings
 # Source repository: https://github.com/actions/dependency-review-action
-name: 'Dependency Review'
-on: [pull_request]
+name: 'Dependency Review (DISABLED)'
+on:
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -18,5 +23,13 @@ jobs:
     steps:
       - name: 'Checkout Repository'
         uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
-      - name: 'Dependency Review'
-        uses: actions/dependency-review-action@40c09b7dc99638e5ddb0bfd91c1673effc064d8a # v4.8.1
+
+      - name: Workflow disabled
+        run: |
+          echo "This workflow is disabled because it requires GitHub Advanced Security."
+          echo "GitHub Advanced Security is not enabled on this repository."
+          exit 0
+
+      # DISABLED: Requires GitHub Advanced Security
+      # - name: 'Dependency Review'
+      #   uses: actions/dependency-review-action@40c09b7dc99638e5ddb0bfd91c1673effc064d8a # v4.8.1
