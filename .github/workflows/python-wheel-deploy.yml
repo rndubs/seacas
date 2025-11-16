@@ -1,0 +1,91 @@
+name: Deploy Python Wheel
+
+on:
+  push:
+    branches: [ main, master, exodus-rust-lib ]
+    paths:
+      - 'rust/exodus-py/**'
+      - '.github/workflows/python-wheel-deploy.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+  id-token: write
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build-and-deploy:
+    name: Build and Deploy Linux Wheel
+    runs-on: ubuntu-latest
+    # Only deploy on pushes to main branches (not PRs)
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+
+    - name: Install system dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y libhdf5-dev libnetcdf-dev pkg-config
+
+    - name: Install Rust toolchain
+      uses: dtolnay/rust-toolchain@stable
+
+    - name: Cache cargo registry
+      uses: actions/cache@v4
+      with:
+        path: ~/.cargo/registry
+        key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+        restore-keys: |
+          ${{ runner.os }}-cargo-registry-
+
+    - name: Cache cargo index
+      uses: actions/cache@v4
+      with:
+        path: ~/.cargo/git
+        key: ${{ runner.os }}-cargo-git-${{ hashFiles('**/Cargo.lock') }}
+        restore-keys: |
+          ${{ runner.os }}-cargo-git-
+
+    - name: Install maturin
+      run: |
+        pip install --upgrade pip
+        pip install maturin[patchelf]
+
+    - name: Build wheel
+      run: |
+        cd rust/exodus-py
+        maturin build --release --out dist
+
+    - name: Publish to GitHub Packages
+      run: |
+        cd rust/exodus-py
+        pip install twine
+
+        # Upload to GitHub Packages PyPI registry
+        # Format: https://upload.pypi.org/legacy/ for PyPI
+        # Format: https://pypi.pkg.github.com/<owner>/ for GitHub Packages
+        python -m twine upload \
+          --repository-url https://pypi.pkg.github.com/${{ github.repository_owner }}/ \
+          --username __token__ \
+          --password ${{ secrets.GITHUB_TOKEN }} \
+          --skip-existing \
+          --verbose \
+          dist/*
+      continue-on-error: true
+
+    - name: Upload wheel as artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: exodus-py-wheel-linux
+        path: rust/exodus-py/dist/*.whl
+        retention-days: 30
