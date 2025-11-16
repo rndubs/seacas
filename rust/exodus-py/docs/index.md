@@ -28,19 +28,21 @@ exodus-py is a Python interface to the exodus-rs Rust library, enabling efficien
 ```python
 from exodus import MeshBuilder, BlockBuilder
 
-(MeshBuilder("My Mesh")
-    .dimensions(2)
-    .coordinates(
-        x=[0.0, 1.0, 1.0, 0.0],
-        y=[0.0, 0.0, 1.0, 1.0],
-        z=[]
-    )
-    .add_block(
-        BlockBuilder(1, "QUAD4")
-            .connectivity([1, 2, 3, 4])
-            .build()
-    )
-    .write("/tmp/index_mesh.exo"))
+# Create mesh builder
+builder = MeshBuilder("My Mesh")
+builder.dimensions(2)
+builder.coordinates(
+    x=[0.0, 1.0, 1.0, 0.0],
+    y=[0.0, 0.0, 1.0, 1.0],
+    z=[]
+)
+
+# Add element block
+block = BlockBuilder(1, "QUAD4")
+block.connectivity([1, 2, 3, 4])
+
+builder.add_block(block.build())
+builder.write("/tmp/index_mesh.exo")
 ```
 
 ### Reading an Existing Mesh
@@ -50,7 +52,6 @@ from exodus import ExodusReader
 
 with ExodusReader.open("mesh.exo") as reader:
     params = reader.init_params()
-    print(f"Mesh has {params.num_nodes} nodes")
     x, y, z = reader.get_coords()
 ```
 

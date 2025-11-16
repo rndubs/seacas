@@ -71,7 +71,6 @@ from exodus import ExodusAppender
 with ExodusAppender.append("mesh.exo") as appender:
     # Can read existing data
     params = appender.init_params()
-    print(f"File has {params.num_nodes} nodes and {params.num_elems} elements")
 
     # Appender provides read-only access to the file
     # For writing new data, use ExodusWriter to create a new file
@@ -118,19 +117,18 @@ The builder API provides a fluent interface for creating meshes:
 from exodus import MeshBuilder, BlockBuilder
 
 # Simple 2D quadrilateral mesh
-(MeshBuilder("2D Mesh")
-    .dimensions(2)
-    .coordinates(
-        x=[0.0, 1.0, 2.0, 0.0, 1.0, 2.0],
-        y=[0.0, 0.0, 0.0, 1.0, 1.0, 1.0],
-        z=[]
-    )
-    .add_block(
-        BlockBuilder(1, "QUAD4")
-            .connectivity([1, 2, 5, 4, 2, 3, 6, 5])
-            .build()
-    )
-    .write("builder_mesh.exo"))
+builder = MeshBuilder("2D Mesh")
+builder.dimensions(2)
+builder.coordinates(
+    x=[0.0, 1.0, 2.0, 0.0, 1.0, 2.0],
+    y=[0.0, 0.0, 0.0, 1.0, 1.0, 1.0],
+    z=[]
+)
+
+block = BlockBuilder(1, "QUAD4")
+block.connectivity([1, 2, 5, 4, 2, 3, 6, 5])
+builder.add_block(block.build())
+builder.write("builder_mesh.exo")
 ```
 
 ### Using Low-Level Writer API
@@ -183,13 +181,13 @@ Get basic mesh information:
 with ExodusReader.open("mesh.exo") as reader:
     params = reader.init_params()
 
-    print(f"Title: {params.title}")
-    print(f"Dimensions: {params.num_dim}")
-    print(f"Nodes: {params.num_nodes}")
-    print(f"Elements: {params.num_elems}")
-    print(f"Element Blocks: {params.num_elem_blocks}")
-    print(f"Node Sets: {params.num_node_sets}")
-    print(f"Side Sets: {params.num_side_sets}")
+    title = params.title
+    num_dim = params.num_dim
+    num_nodes = params.num_nodes
+    num_elems = params.num_elems
+    num_elem_blocks = params.num_elem_blocks
+    num_node_sets = params.num_node_sets
+    num_side_sets = params.num_side_sets
 ```
 
 ### Coordinates
@@ -200,19 +198,18 @@ Read nodal coordinates:
 from exodus import ExodusReader, ExodusWriter, InitParams, MeshBuilder, BlockBuilder
 
 # First create a sample mesh
-(MeshBuilder("Sample Mesh")
-    .dimensions(3)
-    .coordinates(
-        x=[0.0, 1.0, 1.0, 0.0, 0.0, 1.0, 1.0, 0.0],
-        y=[0.0, 0.0, 1.0, 1.0, 0.0, 0.0, 1.0, 1.0],
-        z=[0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0]
-    )
-    .add_block(
-        BlockBuilder(1, "HEX8")
-            .connectivity([1, 2, 3, 4, 5, 6, 7, 8])
-            .build()
-    )
-    .write("/tmp/ug_coords_mesh.exo"))
+builder = MeshBuilder("Sample Mesh")
+builder.dimensions(3)
+builder.coordinates(
+    x=[0.0, 1.0, 1.0, 0.0, 0.0, 1.0, 1.0, 0.0],
+    y=[0.0, 0.0, 1.0, 1.0, 0.0, 0.0, 1.0, 1.0],
+    z=[0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0]
+)
+
+block = BlockBuilder(1, "HEX8")
+block.connectivity([1, 2, 3, 4, 5, 6, 7, 8])
+builder.add_block(block.build())
+builder.write("/tmp/ug_coords_mesh.exo")
 
 with ExodusReader.open("/tmp/ug_coords_mesh.exo") as reader:
     # Get all coordinates
@@ -236,19 +233,18 @@ Work with element blocks:
 from exodus import ExodusReader, ExodusWriter, InitParams, Block, EntityType, MeshBuilder, BlockBuilder
 
 # First create a sample mesh to read from
-(MeshBuilder("Block Example Mesh")
-    .dimensions(3)
-    .coordinates(
-        x=[0.0, 1.0, 1.0, 0.0, 0.0, 1.0, 1.0, 0.0],
-        y=[0.0, 0.0, 1.0, 1.0, 0.0, 0.0, 1.0, 1.0],
-        z=[0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0]
-    )
-    .add_block(
-        BlockBuilder(1, "HEX8")
-            .connectivity([1, 2, 3, 4, 5, 6, 7, 8])
-            .build()
-    )
-    .write("/tmp/ug_blocks_mesh.exo"))
+builder = MeshBuilder("Block Example Mesh")
+builder.dimensions(3)
+builder.coordinates(
+    x=[0.0, 1.0, 1.0, 0.0, 0.0, 1.0, 1.0, 0.0],
+    y=[0.0, 0.0, 1.0, 1.0, 0.0, 0.0, 1.0, 1.0],
+    z=[0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0]
+)
+
+block = BlockBuilder(1, "HEX8")
+block.connectivity([1, 2, 3, 4, 5, 6, 7, 8])
+builder.add_block(block.build())
+builder.write("/tmp/ug_blocks_mesh.exo")
 
 with ExodusReader.open("/tmp/ug_blocks_mesh.exo") as reader:
     # Get all block IDs
@@ -256,9 +252,9 @@ with ExodusReader.open("/tmp/ug_blocks_mesh.exo") as reader:
 
     # Get a specific block
     block = reader.get_block(block_ids[0])
-    print(f"Topology: {block.topology}")
-    print(f"Elements: {block.num_entries}")
-    print(f"Nodes/Element: {block.num_nodes_per_entry}")
+    topology = block.topology
+    num_entries = block.num_entries
+    nodes_per_entry = block.num_nodes_per_entry
 
     # Get connectivity
     conn = reader.get_connectivity(block_ids[0])
@@ -472,8 +468,8 @@ with ExodusReader.open("/tmp/ug_nodesets_example.exo") as reader:
     node_set_ids = reader.get_node_set_ids()
     if len(node_set_ids) > 0:
         node_set = reader.get_node_set(node_set_ids[0])
-        print(f"Nodes: {node_set.nodes}")
-        print(f"Distribution factors: {node_set.dist_factors}")
+        nodes = node_set.nodes
+        dist_factors = node_set.dist_factors
         # Not yet implemented:
         # name = reader.get_node_set_name(node_set_ids[0])
 ```
@@ -502,8 +498,8 @@ with ExodusReader.open("/tmp/ug_sidesets_example.exo") as reader:
     side_set_ids = reader.get_side_set_ids()
     if len(side_set_ids) > 0:
         side_set = reader.get_side_set(side_set_ids[0])
-        print(f"Elements: {side_set.elements}")
-        print(f"Sides: {side_set.sides}")
+        elements = side_set.elements
+        sides = side_set.sides
 ```
 
 **Side Numbering:**
@@ -597,21 +593,20 @@ Element blocks can have attributes (per-element scalar values):
 from exodus import BlockBuilder, ExodusReader, ExodusWriter, InitParams, Block, EntityType, MeshBuilder
 
 # First create a sample mesh to read from
-(MeshBuilder("Attributes Mesh")
-    .dimensions(3)
-    .coordinates(
-        x=[0.0, 1.0, 1.0, 0.0, 0.0, 1.0, 1.0, 0.0, 2.0, 3.0],
-        y=[0.0, 0.0, 1.0, 1.0, 0.0, 0.0, 1.0, 1.0, 0.0, 0.0],
-        z=[0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0, 0.0, 0.0]
-    )
-    .add_block(
-        BlockBuilder(1, "HEX8")
-            .connectivity([1, 2, 3, 4, 5, 6, 7, 8, 2, 3, 4, 5, 6, 7, 8, 9, 3, 4, 5, 6, 7, 8, 9, 10])
-            .attributes([100.0, 200.0, 150.0])
-            .attribute_names(["MaterialID"])
-            .build()
-    )
-    .write("/tmp/ug_attrs_mesh.exo"))
+builder = MeshBuilder("Attributes Mesh")
+builder.dimensions(3)
+builder.coordinates(
+    x=[0.0, 1.0, 1.0, 0.0, 0.0, 1.0, 1.0, 0.0, 2.0, 3.0],
+    y=[0.0, 0.0, 1.0, 1.0, 0.0, 0.0, 1.0, 1.0, 0.0, 0.0],
+    z=[0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0, 0.0, 0.0]
+)
+
+block = BlockBuilder(1, "HEX8")
+block.connectivity([1, 2, 3, 4, 5, 6, 7, 8, 2, 3, 4, 5, 6, 7, 8, 9, 3, 4, 5, 6, 7, 8, 9, 10])
+block.attributes([100.0, 200.0, 150.0])
+block.attribute_names(["MaterialID"])
+builder.add_block(block.build())
+builder.write("/tmp/ug_attrs_mesh.exo")
 
 # Reading block attributes
 with ExodusReader.open("/tmp/ug_attrs_mesh.exo") as reader:
@@ -648,16 +643,15 @@ Quality assurance records track software that created/modified the file:
 from exodus import QaRecord, MeshBuilder, ExodusWriter, ExodusReader, InitParams, BlockBuilder
 
 # Writing QA records (with builder)
-(MeshBuilder("Test Mesh")
-    .dimensions(2)
-    .coordinates(x=[0.0, 1.0], y=[0.0, 0.0], z=[])
-    .add_block(
-        BlockBuilder(1, "BAR2")
-            .connectivity([1, 2])
-            .build()
-    )
-    .qa_record("MyCode", "1.0.0", "2025-01-15", "14:30:00")
-    .write("/tmp/ug_qa_builder.exo"))
+builder = MeshBuilder("Test Mesh")
+builder.dimensions(2)
+builder.coordinates(x=[0.0, 1.0], y=[0.0, 0.0], z=[])
+
+block = BlockBuilder(1, "BAR2")
+block.connectivity([1, 2])
+builder.add_block(block.build())
+builder.qa_record("MyCode", "1.0.0", "2025-01-15", "14:30:00")
+builder.write("/tmp/ug_qa_builder.exo")
 
 # Writing QA records (with writer)
 with ExodusWriter.create("/tmp/ug_qa_records_example.exo", CreateOptions(mode=CreateMode.Clobber)) as writer:
@@ -676,7 +670,10 @@ with ExodusWriter.create("/tmp/ug_qa_records_example.exo", CreateOptions(mode=Cr
 with ExodusReader.open("/tmp/ug_qa_builder.exo") as reader:
     qa_records = reader.get_qa_records()
     for qa in qa_records:
-        print(f"{qa.code_name} v{qa.code_version} ({qa.date} {qa.time})")
+        code_name = qa.code_name
+        code_version = qa.code_version
+        date = qa.date
+        time = qa.time
 ```
 
 ### Info Records
@@ -700,8 +697,6 @@ with ExodusWriter.create("/tmp/ug_info_records_example.exo", CreateOptions(mode=
 # Reading
 with ExodusReader.open("/tmp/ug_info_records_example.exo") as reader:
     info = reader.get_info_records()
-    for line in info:
-        print(line)
 ```
 
 ### File Metadata
@@ -711,11 +706,9 @@ Query file format and version information:
 ```python
 # Get Exodus format version
 major, minor = reader.version()
-print(f"Exodus version: {major}.{minor}")
 
 # Get NetCDF file format
 format_str = reader.format()
-print(f"File format: {format_str}")
 
 # Get file path
 path = reader.path()
@@ -815,9 +808,9 @@ try:
     params = reader.init_params()
     reader.close()
 except FileNotFoundError:
-    print("File not found")
+    pass  # Handle file not found error
 except RuntimeError as e:
-    print(f"Exodus error: {e}")
+    pass  # Handle Exodus error
 ```
 
 ### Resource Management
