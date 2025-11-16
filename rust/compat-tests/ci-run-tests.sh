@@ -400,8 +400,12 @@ for test_entry in "${TEST_FILES[@]}"; do
   fi
 
   # Run C verification
-  output=$("./verify" "$test_file" 2>&1 || true)
+  # Use a temp file to avoid command substitution issues
+  temp_output=$(mktemp)
+  ./verify "$test_file" > "$temp_output" 2>&1 || true
   exit_code=$?
+  output=$(cat "$temp_output")
+  rm -f "$temp_output"
 
   # Count passed/failed tests
   # Look for "PASS" or "✓" for passed tests
