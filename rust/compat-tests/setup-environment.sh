@@ -3,9 +3,12 @@
 # Setup script for C compatibility testing environment
 #
 # This script:
-# 1. Installs third-party libraries (HDF5, NetCDF) via install-tpl.sh
-# 2. Builds the SEACAS C Exodus library
+# 1. Builds third-party libraries (HDF5, NetCDF) locally
+# 2. Builds the Exodus C library locally
 # 3. Compiles the C verification tool
+#
+# All builds are self-contained within ./rust/compat-tests/
+# No modifications to root SEACAS files are required
 #
 # Usage:
 #   ./setup-environment.sh [--jobs N] [--clean]
@@ -52,112 +55,87 @@ echo -e "${BLUE}C Compatibility Test Environment Setup${NC}"
 echo -e "${BLUE}========================================${NC}"
 echo ""
 
-# Get script directory and SEACAS root
+# Get script directory
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
-SEACAS_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 
-echo -e "${GREEN}SEACAS root:${NC} $SEACAS_ROOT"
+echo -e "${GREEN}Working directory:${NC} $SCRIPT_DIR"
 echo -e "${GREEN}Build jobs:${NC} $JOBS"
 echo ""
 
-# Step 1: Install TPLs
-echo -e "${YELLOW}Step 1: Installing Third-Party Libraries (TPLs)${NC}"
-echo "Building HDF5, NetCDF, and other dependencies..."
-echo ""
-
-cd "$SEACAS_ROOT"
-
-if [ "$CLEAN_BUILD" = true ]; then
-  echo "Cleaning TPL build artifacts..."
-  # Remove built artifacts but keep source files (*.sh, *.patch)
-  find TPL -mindepth 2 -maxdepth 2 -type d -exec rm -rf {} + 2>/dev/null || true
-  rm -rf lib include bin
-fi
-
-# Set environment variables for TPL build
-export CGNS=NO
-export MATIO=NO
+# Set environment for build scripts
 export JOBS=$JOBS
 
-# Run TPL installer
-if [ ! -d "TPL" ]; then
-  echo "Running install-tpl.sh..."
-  bash ./install-tpl.sh
-  echo ""
-else
-  echo "TPL directory already exists, skipping TPL build."
-  echo "Use --clean to rebuild TPLs."
-  echo ""
-fi
-
-# Step 2: Build SEACAS C Exodus library
-echo -e "${YELLOW}Step 2: Building SEACAS C Exodus Library${NC}"
+# Step 1: Build TPL libraries (HDF5, NetCDF)
+echo -e "${YELLOW}Step 1: Building Third-Party Libraries (TPLs)${NC}"
 echo ""
 
-BUILD_DIR="$SEACAS_ROOT/build-compat"
+TPL_SCRIPT="$SCRIPT_DIR/build-tpls.sh"
+
+if [ ! -f "$TPL_SCRIPT" ]; then
+  echo -e "${RED}✗ TPL build script not found: $TPL_SCRIPT${NC}"
+  exit 1
+fi
 
 if [ "$CLEAN_BUILD" = true ]; then
-  echo "Cleaning build directory..."
-  rm -rf "$BUILD_DIR"
-fi
-
-mkdir -p "$BUILD_DIR"
-cd "$BUILD_DIR"
-
-# Configure with CMake
-if [ ! -f "CMakeCache.txt" ]; then
-  echo "Configuring SEACAS build..."
-  # Note: install-tpl.sh installs to $SEACAS_ROOT/lib and $SEACAS_ROOT/include
-  # not to TPL/hdf5-1.14.6 or TPL/netcdf-4.9.2
-  cmake \
-    -DCMAKE_INSTALL_PREFIX="$BUILD_DIR/install" \
-    -DTPL_ENABLE_Netcdf=ON \
-    -DTPL_ENABLE_HDF5=ON \
-    -DNetCDF_ROOT="$SEACAS_ROOT" \
-    -DHDF5_ROOT="$SEACAS_ROOT" \
-    -DSEACASProj_ENABLE_ALL_PACKAGES=OFF \
-    -DSEACASProj_ENABLE_SEACASExodus=ON \
-    -DSEACASProj_ENABLE_TESTS=OFF \
-    ..
-  echo ""
+  "$TPL_SCRIPT" --jobs "$JOBS" --clean
 else
-  echo "CMake cache exists, skipping configuration."
-  echo "Use --clean to reconfigure."
-  echo ""
+  "$TPL_SCRIPT" --jobs "$JOBS"
 fi
 
-# Build
-echo "Building Exodus library..."
-make -j"$JOBS"
+# Step 2: Build Exodus C library
+echo -e "${YELLOW}Step 2: Building Exodus C Library${NC}"
 echo ""
 
-# Install
-echo "Installing Exodus library..."
-make install
-echo ""
+EXODUS_SCRIPT="$SCRIPT_DIR/build-exodus.sh"
+
+if [ ! -f "$EXODUS_SCRIPT" ]; then
+  echo -e "${RED}✗ Exodus build script not found: $EXODUS_SCRIPT${NC}"
+  exit 1
+fi
+
+if [ "$CLEAN_BUILD" = true ]; then
+  "$EXODUS_SCRIPT" --jobs "$JOBS" --clean
+else
+  "$EXODUS_SCRIPT" --jobs "$JOBS"
+fi
 
 # Step 3: Compile C verification tool
 echo -e "${YELLOW}Step 3: Compiling C Verification Tool${NC}"
 echo ""
 
 VERIFY_DIR="$SCRIPT_DIR/rust-to-c"
+TPL_INSTALL="$SCRIPT_DIR/tpl-install"
+EXODUS_INSTALL="$SCRIPT_DIR/exodus-install"
+
 cd "$VERIFY_DIR"
 
 # Set library paths for compilation
-export EXODUS_DIR="$BUILD_DIR/install"
-export LD_LIBRARY_PATH="$EXODUS_DIR/lib:$SEACAS_ROOT/lib:$LD_LIBRARY_PATH"
+export LD_LIBRARY_PATH="$EXODUS_INSTALL/lib:$TPL_INSTALL/lib:$LD_LIBRARY_PATH"
+
+if [ -f "verify" ]; then
+  echo -e "${GREEN}Verification tool already exists, recompiling...${NC}"
+  rm -f verify
+fi
 
 echo "Compiling verify.c..."
 gcc verify.c \
-  -I"$EXODUS_DIR/include" \
-  -L"$EXODUS_DIR/lib" \
-  -L"$SEACAS_ROOT/lib" \
+  -I"$EXODUS_INSTALL/include" \
+  -I"$TPL_INSTALL/include" \
+  -L"$EXODUS_INSTALL/lib" \
+  -L"$TPL_INSTALL/lib" \
   -lexodus \
   -lnetcdf \
   -lhdf5 \
+  -lhdf5_hl \
   -lm \
   -o verify
 
+if [ ! -f "verify" ]; then
+  echo -e "${RED}✗ Failed to compile verification tool${NC}"
+  exit 1
+fi
+
+echo -e "${GREEN}✓ Verification tool compiled${NC}"
 echo ""
 
 # Step 4: Create environment setup file
@@ -172,12 +150,17 @@ cat > "$ENV_FILE" << EOF
 #   source ./env-compat.sh
 #
 
-export EXODUS_DIR="$BUILD_DIR/install"
-export LD_LIBRARY_PATH="$EXODUS_DIR/lib:$SEACAS_ROOT/lib:\$LD_LIBRARY_PATH"
-export PATH="$EXODUS_DIR/bin:\$PATH"
+export EXODUS_DIR="$EXODUS_INSTALL"
+export TPL_DIR="$TPL_INSTALL"
+export LD_LIBRARY_PATH="$EXODUS_INSTALL/lib:$TPL_INSTALL/lib:\$LD_LIBRARY_PATH"
+export PATH="$EXODUS_INSTALL/bin:\$PATH"
+export PKG_CONFIG_PATH="$TPL_INSTALL/lib/pkgconfig:\$PKG_CONFIG_PATH"
+export HDF5_DIR="$TPL_INSTALL"
+export NETCDF_DIR="$TPL_INSTALL"
 
 echo "C compatibility test environment configured"
 echo "  Exodus library: \$EXODUS_DIR"
+echo "  TPL libraries:  \$TPL_DIR"
 EOF
 
 chmod +x "$ENV_FILE"
@@ -191,12 +174,13 @@ echo -e "${GREEN}Setup Complete!${NC}"
 echo -e "${GREEN}========================================${NC}"
 echo ""
 echo "TPL libraries (HDF5, NetCDF) installed in:"
-echo "  $SEACAS_ROOT/lib/"
-echo "  $SEACAS_ROOT/include/"
+echo "  $TPL_INSTALL"
 echo ""
-echo "SEACAS C Exodus library installed in: $EXODUS_DIR"
+echo "Exodus C library installed in:"
+echo "  $EXODUS_INSTALL"
 echo ""
-echo "C verification tool compiled: $VERIFY_DIR/verify"
+echo "C verification tool compiled:"
+echo "  $VERIFY_DIR/verify"
 echo ""
 echo -e "${YELLOW}Next steps:${NC}"
 echo "  1. Source the environment file:"

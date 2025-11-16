@@ -3,12 +3,22 @@ output/
 *.exo
 *.e
 
+# Local build directories (self-contained builds)
+tpl-build/
+tpl-install/
+exodus-build/
+exodus-install/
+
+# Environment configuration (generated)
+env-compat.sh
+
 # C build artifacts
 rust-to-c/verify
 c-to-rust/writer
 *.o
 *.so
 *.a
+*.dylib
 
 # Rust build artifacts
 target/
