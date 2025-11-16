@@ -511,9 +511,10 @@ Side numbering depends on element topology. Generally:
 
 For 3D meshes, you can also define edge and face blocks:
 
-```text
-# Note: Edge and face blocks may have special dimension requirements in NetCDF
-# Example (may require additional configuration):
+**Note:** Edge and face blocks may have special dimension requirements in NetCDF and may require additional configuration.
+
+```python
+from exodus import ExodusWriter, InitParams, Block, EntityType, CreateOptions, CreateMode
 
 with ExodusWriter.create("/tmp/ug_edgeface_example.exo", CreateOptions(mode=CreateMode.Clobber)) as writer:
     params = InitParams(title="Test", num_dim=3, num_nodes=20, num_elems=1, num_elem_blocks=1, num_edge_blocks=1, num_face_blocks=1)
@@ -546,44 +547,33 @@ with ExodusWriter.create("/tmp/ug_edgeface_example.exo", CreateOptions(mode=Crea
 
 ## Entity Sets
 
-Entity sets provide a unified interface for working with different set types:
+Entity sets provide a unified interface for working with different set types. In exodus-py, use the specialized `put_node_set` and `put_side_set` methods for working with sets:
 
-```text
-# Entity sets may have a different API - use node_set/side_set methods instead
-# Example (check actual API documentation for EntitySet usage):
+```python
+from exodus import ExodusWriter, ExodusReader, InitParams, CreateOptions, CreateMode
 
-from exodus import EntitySet, EntityType
+# Writing sets
+with ExodusWriter.create("/tmp/ug_entity_sets_example.exo", CreateOptions(mode=CreateMode.Clobber)) as writer:
+    params = InitParams(title="Test", num_dim=3, num_nodes=20, num_elems=5, num_elem_blocks=1, num_node_sets=1, num_side_sets=1)
+    writer.put_init_params(params)
 
-# For node sets, use put_node_set instead:
-writer.put_node_set(set_id=1, nodes=[1, 2, 3, 4], dist_factors=[1.0, 1.0, 0.5, 0.5])
+    # For node sets, use put_node_set:
+    writer.put_node_set(set_id=1, nodes=[1, 2, 3, 4], dist_factors=[1.0, 1.0, 0.5, 0.5])
 
-# For side sets, use put_side_set instead:
-writer.put_side_set(set_id=1, elements=[1, 2], sides=[1, 2], dist_factors=None)
+    # For side sets, use put_side_set:
+    writer.put_side_set(set_id=1, elements=[1, 2], sides=[1, 2], dist_factors=None)
 
 # Reading works through get_node_set and get_side_set:
-node_set = reader.get_node_set(1)
-side_set = reader.get_side_set(1)
+with ExodusReader.open("/tmp/ug_entity_sets_example.exo") as reader:
+    node_set = reader.get_node_set(1)
+    side_set = reader.get_side_set(1)
 ```
 
 ## Assemblies
 
-Assemblies provide hierarchical organization of entities:
+Assemblies provide hierarchical organization of entities, allowing you to group related blocks and sets together.
 
-```text
-# Assembly API may vary - check documentation for exact usage
-# Example (conceptual):
-
-from exodus import Assembly, EntityType
-
-# Assemblies group related blocks/sets together
-# The exact constructor and methods may differ from this example
-# Refer to the API documentation for current implementation
-
-# Typical usage might look like:
-# assembly = Assembly(...)
-# writer.put_assembly(assembly)
-# assemblies = reader.get_assemblies()
-```
+**Note:** The assembly API is not yet fully implemented in exodus-py. Check the API documentation for current implementation status. When available, assemblies will allow you to organize mesh entities into logical groups for better data organization.
 
 ## Attributes
 
@@ -716,85 +706,58 @@ path = reader.path()
 
 ## Maps
 
-Maps provide alternative numbering schemes for nodes and elements:
+Maps provide alternative numbering schemes for nodes and elements.
 
-```text
-# Note: Map write methods are not yet implemented
-# Example (for reference):
+**Note:** Most map write methods are not yet implemented. Element order maps can be written, but element number maps and node number maps cannot be written yet.
 
-from exodus import ExodusWriter, ExodusReader, InitParams
+```python
+from exodus import ExodusWriter, ExodusReader, InitParams, CreateOptions, CreateMode
 
-# Element number map (local to global ID mapping)
+# Writing element order map (processing order)
 with ExodusWriter.create("/tmp/ug_maps_example.exo", CreateOptions(mode=CreateMode.Clobber)) as writer:
     params = InitParams(title="Test", num_dim=3, num_nodes=10, num_elems=5, num_elem_blocks=1)
     writer.put_init_params(params)
 
-    # Not yet implemented:
-    # writer.put_elem_num_map([100, 101, 102, 103, 104])
-
-    # Node number map (not yet implemented)
-    # writer.put_node_num_map([1000, 1001, 1002, 1003, 1004, 1005, 1006, 1007, 1008, 1009])
-
-    # Element order map (processing order)
+    # Element order map (processing order) - this works
     writer.put_elem_order_map([0, 1, 2, 3, 4])
 
-# Reading maps
+    # Element number map (local to global ID mapping) - not yet implemented
+    # writer.put_elem_num_map([100, 101, 102, 103, 104])
+
+    # Node number map - not yet implemented
+    # writer.put_node_num_map([1000, 1001, 1002, 1003, 1004, 1005, 1006, 1007, 1008, 1009])
+
+# Reading maps (works for existing files with maps)
 with ExodusReader.open("/tmp/ug_maps_example.exo") as reader:
-    elem_map = reader.get_elem_num_map()
-    node_map = reader.get_node_num_map()
     elem_order = reader.get_elem_order_map()
+    # elem_map = reader.get_elem_num_map()  # May return None if not present
+    # node_map = reader.get_node_num_map()  # May return None if not present
 ```
 
 ## Blobs
 
-Blobs store arbitrary binary data:
+Blobs allow storing arbitrary binary data within an Exodus II file.
 
-```text
-# Blob API may vary - check documentation for exact usage
-# Example (conceptual):
-
-from exodus import Blob
-
-# Blobs may not be supported or may have a different API
-# Check the current implementation for blob support
-
-# Typical usage might look like:
-# blob = Blob(...)
-# writer.put_blob(blob)
-# blob = reader.get_blob(id)
-```
+**Note:** The blob API is not yet implemented in exodus-py. Check the API documentation for current implementation status.
 
 ## Reduction Variables
 
-Reduction variables store aggregate values for entire objects:
+Reduction variables store aggregate values for entire objects (e.g., total mass for an assembly).
 
-```text
-# Reduction variables may not be fully implemented
-# Check the API documentation for current status
-
-# Conceptual usage:
-# writer.define_reduction_variables(EntityType.Assembly, ["TotalMass"])
-# writer.put_reduction_vars(step=0, var_type=EntityType.Assembly, entity_id=1, values=[1000.0])
-# values = reader.get_reduction_vars(0, EntityType.Assembly, 1)
-```
+**Note:** Reduction variables are not yet fully implemented in exodus-py. Check the API documentation for current implementation status. When available, reduction variables will allow you to store summary statistics and aggregate values at various entity levels.
 
 ## Performance Optimization
 
 ### Chunking and Caching
 
-For large files, configure chunking and caching:
+**Note:** Advanced performance configuration API (chunking, caching) is not yet available in exodus-py. The underlying NetCDF library handles file I/O operations.
 
-```text
-# Performance configuration API is not yet available in exodus-py
-# The underlying NetCDF library is used for file I/O
+For optimal performance with the current implementation:
+- Use context managers to ensure files are properly closed
+- Read variables one at a time instead of loading all into memory
+- Use appropriate data types (`Int64Mode`, `FloatSize`)
 
-# For optimal performance:
-# - Use context managers to ensure files are properly closed
-# - Read variables one at a time instead of loading all into memory
-# - Use appropriate data types (Int64Mode, FloatSize)
-
-# Advanced chunking/caching may be added in future releases
-```
+Advanced chunking and caching controls may be added in future releases.
 
 ## Best Practices
 
