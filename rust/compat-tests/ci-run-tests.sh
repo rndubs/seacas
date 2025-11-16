@@ -400,8 +400,10 @@ for test_entry in "${TEST_FILES[@]}"; do
   exit_code=$?
 
   # Count passed/failed tests
-  passed=$(echo "$output" | grep -c "✓" || true)
-  failed=$(echo "$output" | grep -c "✗" || true)
+  # Look for "PASS" or "✓" for passed tests
+  passed=$(echo "$output" | grep -c "PASS\|✓" || true)
+  # Look for "FAIL" or "✗" for failed tests
+  failed=$(echo "$output" | grep -c "FAIL\|✗" || true)
 
   ((PASSED_TESTS += passed))
   ((FAILED_TESTS += failed))
