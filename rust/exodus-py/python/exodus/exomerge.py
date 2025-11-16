@@ -42,8 +42,18 @@ from exodus import (
     EntityType,
 )
 
+# Get version from the Rust extension module to ensure consistency
+# This avoids circular imports with __init__.py
+try:
+    from .exodus import __version__
+except (ImportError, ModuleNotFoundError, AttributeError):
+    # Fallback: read from package metadata
+    try:
+        from importlib.metadata import version as _get_version
+        __version__ = _get_version("exodus-py")
+    except Exception:
+        __version__ = "0.0.0-unknown"
 
-__version__ = "0.3.0"
 VERSION = __version__
 
 # Contact person for issues
