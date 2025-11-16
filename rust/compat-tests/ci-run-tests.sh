@@ -396,16 +396,8 @@ for test_entry in "${TEST_FILES[@]}"; do
   fi
 
   # Run C verification
-  if [ "$VERBOSE" = true ]; then
-    output=$("./verify" "$test_file" 2>&1)
-    echo "$output"
-  else
-    output=$("./verify" "$test_file" 2>&1 || true)
-    # Show errors even in non-verbose mode
-    if [[ "$output" == *"error"* ]] || [[ "$output" == *"Error"* ]] || [[ "$output" == *"cannot"* ]]; then
-      echo "$output"
-    fi
-  fi
+  output=$("./verify" "$test_file" 2>&1 || true)
+  exit_code=$?
 
   # Count passed/failed tests
   passed=$(echo "$output" | grep -c "✓" || true)
@@ -414,16 +406,16 @@ for test_entry in "${TEST_FILES[@]}"; do
   ((PASSED_TESTS += passed))
   ((FAILED_TESTS += failed))
 
-  if [ "$failed" -eq 0 ]; then
+  if [ "$failed" -eq 0 ] && [ "$passed" -gt 0 ]; then
     echo -e "  ${GREEN}✓ All $passed tests passed${NC}"
     ((PASSED_FILES++))
   else
-    echo -e "  ${RED}✗ $failed of $expected_tests tests failed${NC}"
+    echo -e "  ${RED}✗ Tests failed (exit code: $exit_code, passed: $passed, failed: $failed)${NC}"
     ((FAILED_FILES++))
 
-    if [ "$VERBOSE" = false ]; then
-      echo "$output" | grep "✗"
-    fi
+    # Show full output when tests fail
+    echo "  Output from verify:"
+    echo "$output" | sed 's/^/    /'
 
     if [ "$KEEP_FAILURES" = false ]; then
       rm "$test_file"
