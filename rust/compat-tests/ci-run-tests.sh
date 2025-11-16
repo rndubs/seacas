@@ -383,6 +383,10 @@ for test_entry in "${TEST_FILES[@]}"; do
   IFS=':' read -r command filename expected_tests <<< "$test_entry"
   test_file="$OUTPUT_DIR/${filename}.exo"
 
+  echo "DEBUG: Processing $test_entry" >&2
+  echo "  command=$command, filename=$filename, expected_tests=$expected_tests" >&2
+  echo "  test_file=$test_file" >&2
+
   ((TOTAL_FILES++))
   ((TOTAL_TESTS += expected_tests))
 
