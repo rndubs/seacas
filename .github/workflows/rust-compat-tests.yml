@@ -28,7 +28,6 @@ jobs:
         sudo apt-get install -y \
           build-essential \
           cmake \
-          gfortran \
           curl \
           m4 \
           zlib1g-dev
@@ -55,19 +54,26 @@ jobs:
     - name: Cache TPL build (HDF5, NetCDF)
       uses: actions/cache@v4
       with:
-        path: TPL
-        key: ${{ runner.os }}-tpl-${{ hashFiles('install-tpl.sh') }}
+        path: rust/compat-tests/tpl-install
+        key: ${{ runner.os }}-tpl-local-${{ hashFiles('rust/compat-tests/build-tpls.sh') }}
         restore-keys: |
-          ${{ runner.os }}-tpl-
+          ${{ runner.os }}-tpl-local-
 
-    - name: Cache compat test build
+    - name: Cache Exodus C library build
       uses: actions/cache@v4
       with:
-        path: |
-          build-compat
-        key: ${{ runner.os }}-compat-build-${{ hashFiles('rust/compat-tests/**', 'packages/seacas/libraries/exodus/**') }}
+        path: rust/compat-tests/exodus-install
+        key: ${{ runner.os }}-exodus-local-${{ hashFiles('rust/compat-tests/build-exodus.sh', 'packages/seacas/libraries/exodus/**') }}
         restore-keys: |
-          ${{ runner.os }}-compat-build-
+          ${{ runner.os }}-exodus-local-
+
+    - name: Cache Rust build artifacts
+      uses: actions/cache@v4
+      with:
+        path: rust/compat-tests/rust-to-c/target
+        key: ${{ runner.os }}-rust-target-${{ hashFiles('rust/compat-tests/rust-to-c/Cargo.lock', 'rust/exodus-rs/Cargo.lock') }}
+        restore-keys: |
+          ${{ runner.os }}-rust-target-
 
     - name: Run compatibility tests
       run: |
