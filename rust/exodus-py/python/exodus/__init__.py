@@ -5,14 +5,23 @@ This package provides Python bindings to the exodus-rs library,
 a pure Rust implementation of the Exodus II finite element data format.
 """
 
-__version__ = "0.1.0"
-
-# Import the Rust extension module (optional for testing)
+# Get version from the Rust extension module (which reads from Cargo.toml)
+# Fall back to package metadata if the extension module isn't available
 try:
-    from .exodus import *
+    from .exodus import __version__
     _exodus_available = True
-except (ImportError, ModuleNotFoundError):
+except (ImportError, ModuleNotFoundError, AttributeError):
     _exodus_available = False
+    # Fallback: read from package metadata
+    try:
+        from importlib.metadata import version
+        __version__ = version("exodus-py")
+    except Exception:
+        __version__ = "0.0.0-unknown"
+
+# Import the rest of the Rust extension module
+if _exodus_available:
+    from .exodus import *
 
 # Import the exomerge module for high-level mesh manipulation
 # This provides API compatibility with the legacy exomerge3.py

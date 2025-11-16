@@ -66,22 +66,63 @@ jobs:
         cd rust/exodus-py
         maturin build --release --out dist
 
-    - name: Publish to GitHub Packages
+    - name: Extract version from pyproject.toml
+      id: get_version
       run: |
         cd rust/exodus-py
-        pip install twine
+        VERSION=$(grep '^version = ' pyproject.toml | head -1 | sed 's/version = "\(.*\)"/\1/')
+        echo "version=$VERSION" >> $GITHUB_OUTPUT
+        echo "Package version: $VERSION"
+
+    - name: Check if version exists in GitHub Packages
+      id: check_version
+      run: |
+        cd rust/exodus-py
+        pip install twine requests
+
+        # Check if this version already exists in GitHub Packages
+        VERSION="${{ steps.get_version.outputs.version }}"
+        PACKAGE_NAME="exodus-py"
+
+        # Try to query GitHub Packages API to see if this version exists
+        # Note: This uses the GitHub REST API to check package versions
+        RESPONSE=$(curl -s -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+          "https://api.github.com/users/${{ github.repository_owner }}/packages/pypi/$PACKAGE_NAME/versions" || echo "[]")
+
+        # Check if our version exists in the response
+        if echo "$RESPONSE" | grep -q "\"name\":\"$VERSION\""; then
+          echo "Version $VERSION already exists in GitHub Packages. Skipping publish."
+          echo "should_publish=false" >> $GITHUB_OUTPUT
+        else
+          echo "Version $VERSION does not exist. Will publish."
+          echo "should_publish=true" >> $GITHUB_OUTPUT
+        fi
+      continue-on-error: true
+
+    - name: Publish to GitHub Packages
+      if: steps.check_version.outputs.should_publish == 'true'
+      run: |
+        cd rust/exodus-py
+
+        echo "Publishing exodus-py version ${{ steps.get_version.outputs.version }} to GitHub Packages..."
 
         # Upload to GitHub Packages PyPI registry
-        # Format: https://upload.pypi.org/legacy/ for PyPI
-        # Format: https://pypi.pkg.github.com/<owner>/ for GitHub Packages
+        # Note: GitHub Packages does NOT support --skip-existing flag
+        # If the version already exists, this will fail with a clear error message
         python -m twine upload \
           --repository-url https://pypi.pkg.github.com/${{ github.repository_owner }}/ \
           --username __token__ \
           --password ${{ secrets.GITHUB_TOKEN }} \
-          --skip-existing \
           --verbose \
           dist/*
-      continue-on-error: true
+
+        echo "Successfully published version ${{ steps.get_version.outputs.version }}!"
+
+    - name: Skipped - Version already exists
+      if: steps.check_version.outputs.should_publish == 'false'
+      run: |
+        echo "Skipping publish: version ${{ steps.get_version.outputs.version }} already exists in GitHub Packages"
+        echo "To publish a new version, bump the version in rust/exodus-py/pyproject.toml and rust/exodus-py/Cargo.toml"
 
     - name: Upload wheel as artifact
       uses: actions/upload-artifact@v4

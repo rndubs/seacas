@@ -72,4 +72,4 @@ exodus-py is distributed under the BSD 3-Clause License.
 
 ## Support
 
-For issues, questions, or contributions, please visit the [SEACAS GitHub repository](https://github.com/sandialabs/seacas).
+For issues, questions, or contributions, please visit the [SEACAS GitHub repository](https://github.com/rndubs/seacas).
