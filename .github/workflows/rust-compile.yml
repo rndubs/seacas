@@ -4,9 +4,9 @@ name: Rust Compile
 
 on:
   push:
-    branches: [ main, master, 'claude/**' ]
+    branches: [ main, master, exodus-rust-lib, 'claude/**' ]
   pull_request:
-    branches: [ main, master ]
+    branches: [ main, master, exodus-rust-lib ]
   workflow_dispatch:
 
 env:
@@ -83,7 +83,10 @@ jobs:
 
     - name: Build exodus-py
       run: |
-        cd rust/exodus-py
+        python -m venv build-venv
+        source build-venv/bin/activate
+        pip install --upgrade pip
         pip install maturin
+        cd rust/exodus-py
         maturin build --release
 
