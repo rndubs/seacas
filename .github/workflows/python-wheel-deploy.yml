@@ -18,10 +18,14 @@ env:
 
 jobs:
   build-and-deploy:
-    name: Build and Deploy Linux Wheel
+    name: Build and Deploy Linux Wheel (Python ${{ matrix.python-version }})
     runs-on: ubuntu-latest
     # Only deploy on pushes to main branches (not PRs)
     if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+
+    strategy:
+      matrix:
+        python-version: ['3.11', '3.12', '3.13', '3.14']
 
     steps:
     - name: Checkout repository
@@ -30,7 +34,7 @@ jobs:
     - name: Set up Python
       uses: actions/setup-python@v5
       with:
-        python-version: '3.11'
+        python-version: ${{ matrix.python-version }}
 
     - name: Install system dependencies
       run: |
@@ -89,16 +93,18 @@ jobs:
         body: |
           Python wheel release for exodus-py version ${{ steps.get_version.outputs.version }}
 
+          This release includes wheels for Python 3.11, 3.12, 3.13, and 3.14.
+
           ## Installation
 
-          Download the wheel file and install with pip:
+          Download the appropriate wheel file for your Python version and install with pip:
           ```bash
           pip install exodus_py-${{ steps.get_version.outputs.version }}-*.whl
           ```
 
-          Or install directly from this release:
+          Or install directly from this release (replace cpXXX with your Python version):
           ```bash
-          pip install https://github.com/${{ github.repository }}/releases/download/exodus-py-v${{ steps.get_version.outputs.version }}/exodus_py-${{ steps.get_version.outputs.version }}-cp311-cp311-manylinux_2_34_x86_64.whl
+          pip install https://github.com/${{ github.repository }}/releases/download/exodus-py-v${{ steps.get_version.outputs.version }}/exodus_py-${{ steps.get_version.outputs.version }}-cpXXX-cpXXX-manylinux_2_34_x86_64.whl
           ```
         files: rust/exodus-py/dist/*.whl
         draft: false
@@ -109,6 +115,6 @@ jobs:
     - name: Upload wheel as artifact
       uses: actions/upload-artifact@v4
       with:
-        name: exodus-py-wheel-linux
+        name: exodus-py-wheel-linux-py${{ matrix.python-version }}
         path: rust/exodus-py/dist/*.whl
         retention-days: 30
