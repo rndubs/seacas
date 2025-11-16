@@ -15,25 +15,15 @@ from exodus import ExodusReader
 with ExodusReader.open("mesh.exo") as reader:
     # Get basic mesh information
     params = reader.init_params()
-    print(f"Title: {params.title}")
-    print(f"Dimensions: {params.num_dim}D")
-    print(f"Nodes: {params.num_nodes}")
-    print(f"Elements: {params.num_elems}")
 
     # Get coordinates
     x, y, z = reader.get_coords()
-    print(f"X coordinates: {x}")
-    print(f"Y coordinates: {y}")
 
     # Get element blocks
     block_ids = reader.get_block_ids()
     for block_id in block_ids:
         block = reader.get_block(block_id)
-        print(f"Block {block_id}: {block.topology}, {block.num_entries} elements")
-
-        # Get connectivity for this block
         conn = reader.get_connectivity(block_id)
-        print(f"  Connectivity: {conn}")
 ```
 
 ### Reading Time Series Data
@@ -41,71 +31,82 @@ with ExodusReader.open("mesh.exo") as reader:
 If your Exodus file contains time-dependent results:
 
 ```python
-from exodus import ExodusReader, EntityType, ExodusWriter, InitParams, Block, MeshBuilder, BlockBuilder, CreateMode, CreateOptions
+from exodus import (
+    ExodusReader, EntityType, ExodusWriter,
+    InitParams, Block, MeshBuilder, BlockBuilder,
+    CreateMode, CreateOptions
+)
 
-# First create a sample file with time series data using Writer
-(MeshBuilder("Results Mesh")
-    .dimensions(2)
-    .coordinates(
-        x=[0.0, 1.0, 1.0, 0.0],
-        y=[0.0, 0.0, 1.0, 1.0],
-        z=[]
-    )
-    .add_block(
-        BlockBuilder(1, "QUAD4")
-            .connectivity([1, 2, 3, 4])
-            .build()
-    )
-    .write("/tmp/quickstart_results1.exo"))
+# First create a sample file with time series data
+builder = MeshBuilder("Results Mesh")
+builder.dimensions(2)
+builder.coordinates(
+    x=[0.0, 1.0, 1.0, 0.0],
+    y=[0.0, 0.0, 1.0, 1.0],
+    z=[]
+)
+
+block = BlockBuilder(1, "QUAD4")
+block.connectivity([1, 2, 3, 4])
+builder.add_block(block.build())
+builder.write("/tmp/quickstart_results1.exo")
 
 # Add variables and time steps using Writer
-writer = ExodusWriter.create("/tmp/quickstart_results_temp1.exo", CreateOptions(mode=CreateMode.Clobber))
-# First copy the mesh from the builder file
-params = InitParams(title="Results Mesh", num_dim=2, num_nodes=4, num_elems=1, num_elem_blocks=1)
+options = CreateOptions(mode=CreateMode.Clobber)
+writer = ExodusWriter.create("/tmp/quickstart_results_temp1.exo", options)
+
+# Copy the mesh
+params = InitParams(
+    title="Results Mesh",
+    num_dim=2,
+    num_nodes=4,
+    num_elems=1,
+    num_elem_blocks=1
+)
 writer.put_init_params(params)
 writer.put_coords([0.0, 1.0, 1.0, 0.0], [0.0, 0.0, 1.0, 1.0], [])
-block_info = Block(id=1, entity_type=EntityType.ElemBlock, topology="QUAD4", num_entries=1, num_nodes_per_entry=4, num_attributes=0)
+
+block_info = Block(
+    id=1,
+    entity_type=EntityType.ElemBlock,
+    topology="QUAD4",
+    num_entries=1,
+    num_nodes_per_entry=4,
+    num_attributes=0
+)
 writer.put_block(block_info)
 writer.put_connectivity(1, [1, 2, 3, 4])
-# Now add variables
+# Define and write variables
 writer.define_variables(EntityType.Nodal, ["Temperature"])
 writer.define_variables(EntityType.Global, ["TotalEnergy"])
+
+# Write first time step
 writer.put_time(0, 1.0)
 writer.put_var(0, EntityType.Nodal, 0, 0, [100.0, 150.0, 150.0, 100.0])
 writer.put_var(0, EntityType.Global, 0, 0, [1000.0])
+
+# Write second time step
 writer.put_time(1, 2.0)
 writer.put_var(1, EntityType.Nodal, 0, 0, [110.0, 160.0, 160.0, 110.0])
 writer.put_var(1, EntityType.Global, 0, 0, [1100.0])
 writer.close()
 
+# Read the data back
 with ExodusReader.open("/tmp/quickstart_results_temp1.exo") as reader:
-    # Get number of time steps
     num_steps = reader.num_time_steps()
-    print(f"File has {num_steps} time steps")
-
-    # Get all time values
     times = reader.times()
-    print(f"Time values: {times}")
 
-    # Get variable names
     nodal_vars = reader.variable_names(EntityType.Nodal)
-    print(f"Nodal variables: {nodal_vars}")
-
     global_vars = reader.variable_names(EntityType.Global)
-    print(f"Global variables: {global_vars}")
 
     # Read nodal variable at first time step
-    # Arguments: step (0-based), var_type, entity_id, var_index (0-based)
     temperature = reader.var(0, EntityType.Nodal, 0, 0)
-    print(f"Temperature at t=0: {temperature}")
 
     # Read global variable at first time step
     energy = reader.var(0, EntityType.Global, 0, 0)
-    print(f"Total energy at t=0: {energy[0]}")
 
-    # Read variable time series (all time steps for one variable)
+    # Read variable time series
     temp_history = reader.var_time_series(0, num_steps, EntityType.Nodal, 0, 0)
-    print(f"Temperature history length: {len(temp_history)}")
 ```
 
 ## Writing a New File After Adding Time Series Data
@@ -127,22 +128,20 @@ from exodus import (
 )
 
 # First create an example mesh file
-(MeshBuilder("Original Mesh")
-    .dimensions(3)
-    .coordinates(
-        x=[0.0, 1.0, 1.0, 0.0, 0.0, 1.0, 1.0, 0.0],
-        y=[0.0, 0.0, 1.0, 1.0, 0.0, 0.0, 1.0, 1.0],
-        z=[0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0]
-    )
-    .add_block(
-        BlockBuilder(1, "HEX8")
-            .connectivity([1, 2, 3, 4, 5, 6, 7, 8])
-            .build()
-    )
-    .write("/tmp/quickstart_original_mesh.exo"))
+builder = MeshBuilder("Original Mesh")
+builder.dimensions(3)
+builder.coordinates(
+    x=[0.0, 1.0, 1.0, 0.0, 0.0, 1.0, 1.0, 0.0],
+    y=[0.0, 0.0, 1.0, 1.0, 0.0, 0.0, 1.0, 1.0],
+    z=[0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0]
+)
+
+block = BlockBuilder(1, "HEX8")
+block.connectivity([1, 2, 3, 4, 5, 6, 7, 8])
+builder.add_block(block.build())
+builder.write("/tmp/quickstart_original_mesh.exo")
 
 # Step 1: Read the original mesh
-print("Reading original mesh...")
 with ExodusReader.open("/tmp/quickstart_original_mesh.exo") as reader:
     # Get all mesh parameters
     params = reader.init_params()
@@ -165,8 +164,8 @@ with ExodusReader.open("/tmp/quickstart_original_mesh.exo") as reader:
         # Read existing time step data...
 
 # Step 2: Create a new file with the same mesh
-print("Creating new mesh file...")
-writer = ExodusWriter.create("/tmp/quickstart_new_results.exo", CreateOptions(mode=CreateMode.Clobber))
+options = CreateOptions(mode=CreateMode.Clobber)
+writer = ExodusWriter.create("/tmp/quickstart_new_results.exo", options)
 
 # Initialize with original parameters, but update time step count
 writer.put_init_params(params)
@@ -180,13 +179,11 @@ for block in blocks:
     writer.put_connectivity(block.id, connectivities[block.id])
 
 # Step 3: Define new variables for time series data
-print("Defining variables...")
 writer.define_variables(EntityType.Global, ["TotalEnergy", "MaxStress"])
 writer.define_variables(EntityType.Nodal, ["Temperature", "Pressure", "Displacement"])
 writer.define_variables(EntityType.ElemBlock, ["Stress", "Strain"])
 
 # Step 4: Write time series data
-print("Writing time series data...")
 num_nodes = params.num_nodes
 
 # Write data for multiple time steps
@@ -223,22 +220,17 @@ for step in range(5):
 
 # Close the writer
 writer.close()
-print("✓ Successfully created quickstart_new_results.exo with time series data")
 
 # Step 5: Verify the new file
-print("\nVerifying new file...")
 with ExodusReader.open("/tmp/quickstart_new_results.exo") as reader:
     params_new = reader.init_params()
     num_steps = reader.num_time_steps()
-    print(f"Verification: {num_steps} time steps written")
 
     # Check that variables were written
     nodal_vars = reader.variable_names(EntityType.Nodal)
-    print(f"Nodal variables: {nodal_vars}")
 
     # Read back first time step
     temp_0 = reader.var(0, EntityType.Nodal, 0, 0)
-    print(f"First node temperature at t=0: {temp_0[0]:.2f}")
 ```
 
 ### Simpler Approach: Using MeshBuilder
@@ -256,22 +248,37 @@ builder.coordinates(
     y=[0.0, 0.0, 1.0, 1.0, 0.0, 0.0, 1.0, 1.0],
     z=[0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0]
 )
-builder.add_block(
-    BlockBuilder(1, "HEX8")
-        .connectivity([1, 2, 3, 4, 5, 6, 7, 8])
-        .build()
-)
+
+block = BlockBuilder(1, "HEX8")
+block.connectivity([1, 2, 3, 4, 5, 6, 7, 8])
+builder.add_block(block.build())
 
 # Write to file and define variables in one step
-writer = ExodusWriter.create("/tmp/quickstart_hex_mesh_final.exo", CreateOptions(mode=CreateMode.Clobber))
-params2 = InitParams(title="Analysis Results", num_dim=3, num_nodes=8, num_elems=1, num_elem_blocks=1)
+options = CreateOptions(mode=CreateMode.Clobber)
+writer = ExodusWriter.create("/tmp/quickstart_hex_mesh_final.exo", options)
+
+params2 = InitParams(
+    title="Analysis Results",
+    num_dim=3,
+    num_nodes=8,
+    num_elems=1,
+    num_elem_blocks=1
+)
 writer.put_init_params(params2)
 writer.put_coords(
     [0.0, 1.0, 1.0, 0.0, 0.0, 1.0, 1.0, 0.0],
     [0.0, 0.0, 1.0, 1.0, 0.0, 0.0, 1.0, 1.0],
     [0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0]
 )
-hex_block = Block(id=1, entity_type=EntityType.ElemBlock, topology="HEX8", num_entries=1, num_nodes_per_entry=8, num_attributes=0)
+
+hex_block = Block(
+    id=1,
+    entity_type=EntityType.ElemBlock,
+    topology="HEX8",
+    num_entries=1,
+    num_nodes_per_entry=8,
+    num_attributes=0
+)
 writer.put_block(hex_block)
 writer.put_connectivity(1, [1, 2, 3, 4, 5, 6, 7, 8])
 writer.define_variables(EntityType.Nodal, ["Temperature"])

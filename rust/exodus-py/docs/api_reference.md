@@ -685,12 +685,13 @@ Open an existing file for read-write access.
 with ExodusAppender.append("mesh.exo") as appender:
     # Read existing data
     params = appender.init_params()
-    print(f"Mesh has {params.num_nodes} nodes, {params.num_dim}D")
+    num_nodes = params.num_nodes
+    num_dim = params.num_dim
 
     # Get coordinates
     x, y, z = appender.get_coords()
     z_val = z[0] if z else 0.0
-    print(f"First node: ({x[0]}, {y[0]}, {z_val})")
+    first_node = (x[0], y[0], z_val)
 ```
 
 ---
@@ -787,11 +788,14 @@ fd, temp_path = tempfile.mkstemp(suffix=".exo")
 os.close(fd)
 os.unlink(temp_path)
 
-(MeshBuilder("Mesh")
-    .dimensions(2)
-    .coordinates(x=[0.0, 1.0, 1.0, 0.0], y=[0.0, 0.0, 1.0, 1.0])
-    .add_block(BlockBuilder(1, "QUAD4").connectivity([1, 2, 3, 4]).build())
-    .write(temp_path))
+builder = MeshBuilder("Mesh")
+builder.dimensions(2)
+builder.coordinates(x=[0.0, 1.0, 1.0, 0.0], y=[0.0, 0.0, 1.0, 1.0])
+
+block = BlockBuilder(1, "QUAD4")
+block.connectivity([1, 2, 3, 4])
+builder.add_block(block.build())
+builder.write(temp_path)
 
 # Cleanup
 os.unlink(temp_path)
@@ -857,11 +861,11 @@ Build and return the block builder (no-op for API compatibility).
 
 **Example:**
 ```python
-block = (BlockBuilder(1, "HEX8")
-    .connectivity([1, 2, 3, 4, 5, 6, 7, 8])
-    .attributes([100.0])
-    .attribute_names(["MaterialID"])
-    .build())
+block = BlockBuilder(1, "HEX8")
+block.connectivity([1, 2, 3, 4, 5, 6, 7, 8])
+block.attributes([100.0])
+block.attribute_names(["MaterialID"])
+block.build()
 ```
 
 ---
