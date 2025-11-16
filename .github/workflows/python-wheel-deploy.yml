@@ -2,7 +2,7 @@ name: Deploy Python Wheel
 
 on:
   push:
-    branches: [ main, master, exodus-rust-lib ]
+    branches: [ main, master, exodus-rust-lib, 'claude/**' ]
     paths:
       - 'rust/exodus-py/**'
       - '.github/workflows/python-wheel-deploy.yml'
