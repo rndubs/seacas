@@ -750,14 +750,246 @@ Reduction variables store aggregate values for entire objects (e.g., total mass 
 
 ### Chunking and Caching
 
-**Note:** Advanced performance configuration API (chunking, caching) is not yet available in exodus-py. The underlying NetCDF library handles file I/O operations.
+exodus-py provides comprehensive performance tuning through HDF5 chunk cache configuration. These settings can dramatically improve I/O performance (1-50x speedups for large meshes) by optimizing how NetCDF-4/HDF5 manages data access patterns.
 
-For optimal performance with the current implementation:
+#### Quick Start
+
+**Automatic Configuration (Recommended)**
+
+The simplest approach is to let exodus-py auto-detect your environment and apply optimal settings:
+
+```python
+from exodus import ExodusWriter, CreateOptions, PerformanceConfig, CreateMode, InitParams
+
+# Auto-detect node type and apply appropriate settings
+perf = PerformanceConfig.auto()
+opts = CreateOptions(mode=CreateMode.Clobber, performance=perf)
+file = ExodusWriter.create("mesh.exo", opts)
+
+# Initialize and use normally
+params = InitParams(
+    title="Optimized Mesh",
+    num_dim=3,
+    num_nodes=100000,
+    num_elems=90000,
+    num_elem_blocks=10
+)
+file.put_init_params(params)
+# ... continue with mesh creation
+file.close()
+```
+
+**Preset Configurations**
+
+Use predefined presets for common scenarios:
+
+```python
+# Conservative settings (4MB cache) - safe for login nodes
+perf = PerformanceConfig.conservative()
+
+# Aggressive settings (128MB cache) - for compute nodes
+perf = PerformanceConfig.aggressive()
+
+opts = CreateOptions(mode=CreateMode.Clobber, performance=perf)
+file = ExodusWriter.create("mesh.exo", opts)
+```
+
+**Custom Configuration**
+
+Fine-tune performance for your specific workload:
+
+```python
+# Custom settings for large compute node
+perf = PerformanceConfig.auto() \
+    .with_cache_mb(256) \
+    .with_node_chunk_size(20000) \
+    .with_element_chunk_size(15000) \
+    .with_preemption(0.5)
+
+opts = CreateOptions(mode=CreateMode.Clobber, performance=perf)
+file = ExodusWriter.create("mesh.exo", opts)
+```
+
+#### Node Type Detection
+
+exodus-py automatically detects whether you're running on:
+- **Compute nodes** (inside a job scheduler) - 128MB cache, 10k chunk sizes
+- **Login nodes** (on HPC system but not in job) - 4MB cache, 1k chunk sizes (conservative)
+- **Unknown** (local development machine) - 16MB cache, 5k chunk sizes (moderate)
+
+Supported job schedulers: SLURM, Flux, PBS, LSF
+
+```python
+from exodus import NodeType
+
+# Check current environment
+node_type = NodeType.detect()
+print(f"Detected: {node_type}")
+
+# Get defaults for this node type
+print(f"Default cache size: {node_type.default_cache_size()} bytes")
+print(f"Default node chunk size: {node_type.default_chunk_nodes()}")
+
+# Create configuration for specific node type
+perf = PerformanceConfig.for_node_type(node_type)
+```
+
+#### Performance Classes
+
+**PerformanceConfig**
+
+High-level configuration combining cache and chunk settings:
+
+```python
+# Factory methods
+PerformanceConfig.auto()           # Auto-detect environment
+PerformanceConfig.conservative()   # Safe for login nodes (4MB)
+PerformanceConfig.aggressive()     # Optimized for compute (128MB)
+PerformanceConfig.for_node_type(node_type)  # Node-specific
+
+# Builder methods (chainable)
+perf.with_cache_mb(256)           # Set cache size in megabytes
+perf.with_node_chunk_size(20000)  # Nodes per chunk
+perf.with_element_chunk_size(15000)  # Elements per chunk
+perf.with_time_chunk_size(10)     # Time steps per chunk (for transient data)
+perf.with_preemption(0.5)         # Cache eviction policy (0.0-1.0)
+
+# Inspection
+perf.summary()  # Human-readable configuration summary
+```
+
+**CacheConfig**
+
+Fine-grained HDF5 chunk cache control:
+
+```python
+from exodus import CacheConfig
+
+# Create with default size (auto-detected)
+cache = CacheConfig()
+
+# Create with specific size
+cache = CacheConfig(cache_size=64 * 1024 * 1024)  # 64MB
+
+# Configure cache parameters
+cache = cache.with_cache_mb(128)     # 128MB cache
+cache = cache.with_preemption(0.75)  # Preemption policy
+
+# Access properties
+print(cache.cache_size)   # Size in bytes
+print(cache.preemption)   # Preemption value (0.0-1.0)
+```
+
+**ChunkConfig**
+
+Configure chunk dimensions for spatial and temporal data:
+
+```python
+from exodus import ChunkConfig
+
+# Auto-detect based on node type
+chunks = ChunkConfig()
+
+# Custom chunk sizes
+chunks = ChunkConfig(
+    node_chunk_size=20000,
+    element_chunk_size=15000,
+    time_chunk_size=10
+)
+
+# Builder pattern
+chunks = chunks.with_node_chunk_size(25000)
+chunks = chunks.with_element_chunk_size(20000)
+chunks = chunks.with_time_chunk_size(5)
+
+# Access properties
+print(chunks.node_chunk_size)
+print(chunks.element_chunk_size)
+print(chunks.time_chunk_size)
+```
+
+#### Cache Size Guidelines
+
+| Node RAM | Recommended Cache | Use Case |
+|----------|-------------------|----------|
+| 16 GB | 4-16 MB | Development/login nodes |
+| 64 GB | 32-128 MB | Small compute nodes |
+| 256 GB | 128-512 MB | Large compute nodes |
+| 512+ GB | 1+ GB | HPC nodes |
+
+**Rule of thumb**: Larger cache = better performance (up to available memory)
+
+#### Preemption Policy
+
+Controls which chunks get evicted from cache first:
+
+| Value | Behavior | Use Case |
+|-------|----------|----------|
+| 0.0 | Never evict write-only chunks | Write-heavy workloads |
+| 0.75 | Balanced (default) | Mixed read/write |
+| 1.0 | Aggressively evict write-only | Read-heavy workloads |
+
+#### Example: Large Mesh with Optimized Performance
+
+```python
+import numpy as np
+from exodus import (
+    ExodusWriter, CreateOptions, CreateMode,
+    PerformanceConfig, InitParams
+)
+
+# Configure for large compute node
+perf = PerformanceConfig.aggressive() \
+    .with_cache_mb(512) \
+    .with_node_chunk_size(50000) \
+    .with_element_chunk_size(40000)
+
+opts = CreateOptions(mode=CreateMode.Clobber, performance=perf)
+
+with ExodusWriter.create("large_mesh.exo", opts) as file:
+    # Initialize large mesh
+    params = InitParams(
+        title="Large Mesh - Optimized Performance",
+        num_dim=3,
+        num_nodes=1000000,
+        num_elems=900000,
+        num_elem_blocks=10
+    )
+    file.put_init_params(params)
+
+    # Write coordinates efficiently
+    x = np.random.rand(1000000)
+    y = np.random.rand(1000000)
+    z = np.random.rand(1000000)
+    file.put_coords(x, y, z)
+
+    # Large cache significantly speeds up these operations
+    # ... continue with mesh creation
+```
+
+#### Performance Tips
+
+For optimal performance with exodus-py:
+- **Use performance config**: Always specify performance settings for large meshes
+- **Auto-detect when possible**: `PerformanceConfig.auto()` handles most cases well
+- **Tune for workload**: Write-heavy? Use lower preemption (0.0-0.5)
+- **Match chunk sizes**: Set chunks to match your typical read/write patterns
+- **Use context managers**: Ensure files are properly closed to flush caches
+- **Avoid over-allocation**: Don't set cache larger than available RAM
+- **Test your settings**: Run benchmarks to find optimal values for your data
+
+#### Additional Resources
+
+For detailed performance tuning guidance, benchmark results, and troubleshooting:
+- See `rust/exodus-rs/PERFORMANCE.md` in the repository for comprehensive performance guide
+- Example: `rust/exodus-py/tests/test_performance.py` for complete test coverage
+
+#### General Best Practices
+
+Beyond chunking and caching, follow these practices:
 - Use context managers to ensure files are properly closed
 - Read variables one at a time instead of loading all into memory
-- Use appropriate data types (`Int64Mode`, `FloatSize`)
-
-Advanced chunking and caching controls may be added in future releases.
+- Use appropriate data types (`Int64Mode`, `FloatSize`) for your data range
 
 ## Best Practices
 
