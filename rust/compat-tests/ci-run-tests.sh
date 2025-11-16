@@ -387,8 +387,13 @@ for test_entry in "${TEST_FILES[@]}"; do
   echo "  command=$command, filename=$filename, expected_tests=$expected_tests" >&2
   echo "  test_file=$test_file" >&2
 
-  ((TOTAL_FILES++))
-  ((TOTAL_TESTS += expected_tests))
+  echo "DEBUG: About to increment TOTAL_FILES (currently $TOTAL_FILES)" >&2
+  ((TOTAL_FILES++)) || { echo "ERROR: Failed to increment TOTAL_FILES" >&2; exit 1; }
+  echo "DEBUG: TOTAL_FILES is now $TOTAL_FILES" >&2
+
+  echo "DEBUG: About to add $expected_tests to TOTAL_TESTS (currently $TOTAL_TESTS)" >&2
+  ((TOTAL_TESTS += expected_tests)) || { echo "ERROR: Failed to add to TOTAL_TESTS" >&2; exit 1; }
+  echo "DEBUG: TOTAL_TESTS is now $TOTAL_TESTS" >&2
 
   echo -e "${BLUE}Testing ${filename}.exo${NC}"
 
