@@ -720,6 +720,54 @@ impl<M: FileMode> ExodusFile<M> {
         let ids = self.set_ids(entity_type)?;
         Ok(SetIterator { ids, index: 0 })
     }
+
+    /// Convert a nodeset to a sideset.
+    ///
+    /// Creates a new sideset containing all element faces where every node belongs
+    /// to the specified nodeset. Only boundary faces (faces appearing in exactly one
+    /// element) are included, and face normals are verified to point outward from the
+    /// mesh center of mass.
+    ///
+    /// # Arguments
+    ///
+    /// * `nodeset_id` - ID of the existing nodeset
+    /// * `new_sideset_id` - ID for the new sideset
+    ///
+    /// # Returns
+    ///
+    /// A `SideSet` structure containing element IDs and side numbers
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - The nodeset doesn't exist
+    /// - Unable to read coordinates or connectivity
+    /// - File I/O errors occur
+    ///
+    /// # Warnings
+    ///
+    /// Warnings are logged to stderr for:
+    /// - Empty nodeset
+    /// - No boundary faces found
+    /// - Inward-pointing normals
+    /// - Inconsistent normal directions
+    ///
+    /// # Example
+    ///
+    /// ```rust,ignore
+    /// let file = ExodusFile::<mode::Read>::open("mesh.exo")?;
+    ///
+    /// // Convert nodeset 10 to sideset 100
+    /// let sideset = file.convert_nodeset_to_sideset(10, 100)?;
+    /// println!("Created sideset with {} faces", sideset.elements.len());
+    /// ```
+    pub fn convert_nodeset_to_sideset(
+        &self,
+        nodeset_id: EntityId,
+        new_sideset_id: EntityId,
+    ) -> Result<SideSet> {
+        crate::sideset_utils::convert_nodeset_to_sideset(self, nodeset_id, new_sideset_id)
+    }
 }
 
 /// Iterator over set IDs

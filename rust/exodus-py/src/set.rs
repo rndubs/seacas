@@ -2,7 +2,7 @@
 
 use pyo3::prelude::*;
 use crate::error::IntoPyResult;
-use crate::file::{ExodusWriter, ExodusReader};
+use crate::file::{ExodusWriter, ExodusReader, ExodusAppender};
 use crate::types::{NodeSet, SideSet, EntitySet, EntityType};
 
 #[pymethods]
@@ -218,5 +218,82 @@ impl ExodusReader {
     ///     List of set IDs
     fn get_set_ids(&self, entity_type: &EntityType) -> PyResult<Vec<i64>> {
         self.file_ref().set_ids(entity_type.to_rust()).into_py()
+    }
+
+    /// Convert a nodeset to a sideset
+    ///
+    /// Creates a sideset containing all element faces where every node belongs
+    /// to the specified nodeset. Only boundary faces (faces appearing in exactly
+    /// one element) are included, and face normals are verified to point outward
+    /// from the mesh center of mass.
+    ///
+    /// Args:
+    ///     nodeset_id: ID of the existing nodeset
+    ///     new_sideset_id: ID for the new sideset
+    ///
+    /// Returns:
+    ///     SideSet object containing element IDs and side numbers
+    ///
+    /// Warnings are printed to stderr for:
+    ///     - Empty nodeset
+    ///     - No boundary faces found
+    ///     - Inward-pointing normals
+    ///     - Inconsistent normal directions
+    ///
+    /// Example:
+    ///     >>> reader = ExodusReader.open("mesh.exo")
+    ///     >>> # Convert nodeset 10 to sideset 100
+    ///     >>> sideset = reader.convert_nodeset_to_sideset(10, 100)
+    ///     >>> print(f"Created sideset with {len(sideset.elements)} faces")
+    fn convert_nodeset_to_sideset(
+        &self,
+        nodeset_id: i64,
+        new_sideset_id: i64,
+    ) -> PyResult<SideSet> {
+        let side_set = self.file_ref()
+            .convert_nodeset_to_sideset(nodeset_id, new_sideset_id)
+            .into_py()?;
+        Ok(SideSet {
+            id: side_set.id,
+            elements: side_set.elements,
+            sides: side_set.sides,
+            dist_factors: side_set.dist_factors,
+        })
+    }
+}
+
+#[pymethods]
+impl ExodusAppender {
+    /// Convert a nodeset to a sideset and write it to the file
+    ///
+    /// This is a convenience method that combines reading the nodeset, converting it
+    /// to a sideset based on boundary faces, and writing the result to the file.
+    ///
+    /// Only boundary faces (faces appearing in exactly one element) are included,
+    /// and face normals are verified to point outward from the mesh center of mass.
+    ///
+    /// Args:
+    ///     nodeset_id: ID of the existing nodeset
+    ///     new_sideset_id: ID for the new sideset
+    ///
+    /// Warnings are printed to stderr for:
+    ///     - Empty nodeset
+    ///     - No boundary faces found
+    ///     - Inward-pointing normals
+    ///     - Inconsistent normal directions
+    ///
+    /// Example:
+    ///     >>> appender = ExodusAppender.append("mesh.exo")
+    ///     >>> # Convert nodeset 10 to sideset 100 and write it
+    ///     >>> appender.create_sideset_from_nodeset(10, 100)
+    ///     >>> appender.close()
+    fn create_sideset_from_nodeset(
+        &mut self,
+        nodeset_id: i64,
+        new_sideset_id: i64,
+    ) -> PyResult<()> {
+        self.file_mut()?
+            .create_sideset_from_nodeset(nodeset_id, new_sideset_id)
+            .into_py()
     }
 }
