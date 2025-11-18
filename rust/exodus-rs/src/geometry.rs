@@ -6,7 +6,7 @@
 //! - Verifying normal orientations
 //! - Checking normal consistency
 
-use crate::{mode, EntityType, ExodusFile, Result};
+use crate::{mode, ExodusFile, Result};
 
 /// 3D point or vector
 pub type Vec3 = [f64; 3];
@@ -78,15 +78,15 @@ pub fn compute_face_center(coords: &[Vec3]) -> Vec3 {
 /// The center of mass position
 pub fn compute_center_of_mass(file: &ExodusFile<mode::Read>) -> Result<Vec3> {
     let coords = file.coords()?;
-    let num_nodes = coords.0.len();
+    let num_nodes = coords.x.len();
 
     if num_nodes == 0 {
         return Ok([0.0, 0.0, 0.0]);
     }
 
-    let sum_x: f64 = coords.0.iter().sum();
-    let sum_y: f64 = coords.1.iter().sum();
-    let sum_z: f64 = coords.2.iter().sum();
+    let sum_x: f64 = coords.x.iter().sum();
+    let sum_y: f64 = coords.y.iter().sum();
+    let sum_z: f64 = coords.z.iter().sum();
 
     Ok([
         sum_x / num_nodes as f64,

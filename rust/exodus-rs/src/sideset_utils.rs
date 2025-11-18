@@ -3,7 +3,7 @@
 //! This module provides functionality to automatically create sidesets from nodesets
 //! by identifying element faces where all nodes belong to the nodeset.
 
-use crate::{geometry, mode, topology::FaceDef, EntityId, EntityType, ExodusFile, Result, SideSet, Topology};
+use crate::{geometry, mode, EntityId, EntityType, ExodusFile, Result, SideSet, Topology};
 use std::collections::{HashMap, HashSet};
 
 /// Convert a nodeset to a sideset by finding all element faces contained in the nodeset.
@@ -139,7 +139,7 @@ pub fn convert_nodeset_to_sideset(
                     .iter()
                     .map(|&node_id| {
                         let idx = (node_id - 1) as usize; // Convert to 0-based index
-                        [coords.0[idx], coords.1[idx], coords.2[idx]]
+                        [coords.x[idx], coords.y[idx], coords.z[idx]]
                     })
                     .collect();
 

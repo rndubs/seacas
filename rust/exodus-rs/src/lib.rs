@@ -97,7 +97,7 @@ pub mod sideset_utils;
 pub use attribute::AttributeData;
 pub use builder::{BlockBuilder, MeshBuilder};
 pub use coord::{CoordValue, Coordinates};
-pub use error::{ExodusError, Result};
+pub use error::{EntityId, ExodusError, Result};
 pub use file::ExodusFile;
 pub use performance::{CacheConfig, ChunkConfig, NodeType, PerformanceConfig};
 pub use set::SetIterator;

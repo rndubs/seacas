@@ -30,7 +30,7 @@ mod tests {
             num_elems: 1,
             num_elem_blocks: 1,
             num_node_sets: 1,
-            num_side_sets: 0,
+            num_side_sets: 1, // Reserve space for 1 sideset
             ..Default::default()
         };
         file.init(&params).unwrap();

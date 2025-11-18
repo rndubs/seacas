@@ -684,42 +684,6 @@ impl ExodusFile<mode::Read> {
             entities,
         })
     }
-}
-
-// ====================
-// Set Iteration
-// ====================
-
-impl<M: FileMode> ExodusFile<M> {
-    /// Get an iterator over all sets of a given type
-    ///
-    /// # Arguments
-    ///
-    /// * `entity_type` - Type of set to iterate over
-    ///
-    /// # Returns
-    ///
-    /// Iterator over set IDs
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if the entity type is not a set type
-    ///
-    /// # Example
-    ///
-    /// ```rust,ignore
-    /// let file = ExodusFile::<mode::Read>::open("mesh.exo")?;
-    ///
-    /// // Iterate over all node sets
-    /// for set_id in file.sets(EntityType::NodeSet)? {
-    ///     let node_set = file.node_set(set_id)?;
-    ///     println!("Node set {}: {} nodes", set_id, node_set.nodes.len());
-    /// }
-    /// ```
-    pub fn sets(&self, entity_type: EntityType) -> Result<SetIterator> {
-        let ids = self.set_ids(entity_type)?;
-        Ok(SetIterator { ids, index: 0 })
-    }
 
     /// Convert a nodeset to a sideset.
     ///
@@ -767,6 +731,42 @@ impl<M: FileMode> ExodusFile<M> {
         new_sideset_id: EntityId,
     ) -> Result<SideSet> {
         crate::sideset_utils::convert_nodeset_to_sideset(self, nodeset_id, new_sideset_id)
+    }
+}
+
+// ====================
+// Set Iteration
+// ====================
+
+impl<M: FileMode> ExodusFile<M> {
+    /// Get an iterator over all sets of a given type
+    ///
+    /// # Arguments
+    ///
+    /// * `entity_type` - Type of set to iterate over
+    ///
+    /// # Returns
+    ///
+    /// Iterator over set IDs
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the entity type is not a set type
+    ///
+    /// # Example
+    ///
+    /// ```rust,ignore
+    /// let file = ExodusFile::<mode::Read>::open("mesh.exo")?;
+    ///
+    /// // Iterate over all node sets
+    /// for set_id in file.sets(EntityType::NodeSet)? {
+    ///     let node_set = file.node_set(set_id)?;
+    ///     println!("Node set {}: {} nodes", set_id, node_set.nodes.len());
+    /// }
+    /// ```
+    pub fn sets(&self, entity_type: EntityType) -> Result<SetIterator> {
+        let ids = self.set_ids(entity_type)?;
+        Ok(SetIterator { ids, index: 0 })
     }
 }
 

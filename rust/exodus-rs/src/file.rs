@@ -605,8 +605,8 @@ impl ExodusFile<mode::Append> {
     /// ```
     pub fn create_sideset_from_nodeset(
         &mut self,
-        nodeset_id: crate::EntityId,
-        new_sideset_id: crate::EntityId,
+        nodeset_id: i64,
+        new_sideset_id: i64,
     ) -> Result<()> {
         // Note: Append mode has both read and write capabilities, but Rust's type
         // system requires separate impl blocks. We'll use internal methods that work
