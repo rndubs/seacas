@@ -220,12 +220,14 @@ impl ExodusReader {
         self.file_ref().set_ids(entity_type.to_rust()).into_py()
     }
 
-    /// Convert a nodeset to a sideset
+    /// Convert a nodeset to a sideset with explicit ID
     ///
     /// Creates a sideset containing all element faces where every node belongs
     /// to the specified nodeset. Only boundary faces (faces appearing in exactly
     /// one element) are included, and face normals are verified to point outward
     /// from the mesh center of mass.
+    ///
+    /// For automatic ID assignment, use `convert_nodeset_to_sideset_auto()`.
     ///
     /// Args:
     ///     nodeset_id: ID of the existing nodeset
@@ -244,7 +246,7 @@ impl ExodusReader {
     ///     >>> reader = ExodusReader.open("mesh.exo")
     ///     >>> # Convert nodeset 10 to sideset 100
     ///     >>> sideset = reader.convert_nodeset_to_sideset(10, 100)
-    ///     >>> print(f"Created sideset with {len(sideset.elements)} faces")
+    ///     >>> print(f"Created sideset {sideset.id} with {len(sideset.elements)} faces")
     fn convert_nodeset_to_sideset(
         &self,
         nodeset_id: i64,
@@ -260,14 +262,109 @@ impl ExodusReader {
             dist_factors: side_set.dist_factors,
         })
     }
+
+    /// Convert a nodeset to a sideset with auto-assigned ID
+    ///
+    /// This is the recommended method for most use cases. The sideset ID is automatically
+    /// assigned as one greater than the maximum existing sideset ID (or 1 if no sidesets exist).
+    ///
+    /// Args:
+    ///     nodeset_id: ID of the existing nodeset
+    ///
+    /// Returns:
+    ///     SideSet object with auto-assigned ID
+    ///
+    /// Example:
+    ///     >>> reader = ExodusReader.open("mesh.exo")
+    ///     >>> sideset = reader.convert_nodeset_to_sideset_auto(10)
+    ///     >>> print(f"Created sideset {sideset.id} with {len(sideset.elements)} faces")
+    fn convert_nodeset_to_sideset_auto(&self, nodeset_id: i64) -> PyResult<SideSet> {
+        let side_set = self.file_ref()
+            .convert_nodeset_to_sideset_auto(nodeset_id)
+            .into_py()?;
+        Ok(SideSet {
+            id: side_set.id,
+            elements: side_set.elements,
+            sides: side_set.sides,
+            dist_factors: side_set.dist_factors,
+        })
+    }
+
+    /// Convert a nodeset to a sideset using entity names
+    ///
+    /// Creates a sideset from a nodeset, looking up the nodeset by name rather than ID.
+    /// The new sideset ID is automatically assigned.
+    ///
+    /// Args:
+    ///     nodeset_name: Name of the existing nodeset
+    ///
+    /// Returns:
+    ///     SideSet object with auto-assigned ID
+    ///
+    /// Example:
+    ///     >>> reader = ExodusReader.open("mesh.exo")
+    ///     >>> sideset = reader.convert_nodeset_to_sideset_by_name("inlet")
+    ///     >>> print(f"Created sideset {sideset.id} with {len(sideset.elements)} faces")
+    fn convert_nodeset_to_sideset_by_name(&self, nodeset_name: &str) -> PyResult<SideSet> {
+        let side_set = self.file_ref()
+            .convert_nodeset_to_sideset_by_name(nodeset_name)
+            .into_py()?;
+        Ok(SideSet {
+            id: side_set.id,
+            elements: side_set.elements,
+            sides: side_set.sides,
+            dist_factors: side_set.dist_factors,
+        })
+    }
+
+    /// Convert a nodeset to a sideset with explicit name for the new sideset
+    ///
+    /// Creates a sideset from a nodeset, with automatic ID assignment. Returns
+    /// the sideset data along with the assigned ID and name.
+    ///
+    /// **Note:** This only creates the sideset data structure. To write it to a file,
+    /// use ExodusAppender.
+    ///
+    /// Args:
+    ///     nodeset_id: ID of the existing nodeset
+    ///     sideset_name: Desired name for the new sideset
+    ///
+    /// Returns:
+    ///     Tuple of (assigned_sideset_id, sideset_name, sideset_data)
+    ///
+    /// Example:
+    ///     >>> reader = ExodusReader.open("mesh.exo")
+    ///     >>> ss_id, ss_name, sideset = reader.convert_nodeset_to_sideset_named(10, "outlet")
+    ///     >>> print(f"Created sideset '{ss_name}' with ID {ss_id}")
+    fn convert_nodeset_to_sideset_named(
+        &self,
+        nodeset_id: i64,
+        sideset_name: &str,
+    ) -> PyResult<(i64, String, SideSet)> {
+        let (id, name, side_set) = self.file_ref()
+            .convert_nodeset_to_sideset_named(nodeset_id, sideset_name)
+            .into_py()?;
+        Ok((
+            id,
+            name,
+            SideSet {
+                id: side_set.id,
+                elements: side_set.elements,
+                sides: side_set.sides,
+                dist_factors: side_set.dist_factors,
+            },
+        ))
+    }
 }
 
 #[pymethods]
 impl ExodusAppender {
-    /// Convert a nodeset to a sideset and write it to the file
+    /// Convert a nodeset to a sideset and write it to the file with explicit ID
     ///
     /// This is a convenience method that combines reading the nodeset, converting it
     /// to a sideset based on boundary faces, and writing the result to the file.
+    ///
+    /// For automatic ID assignment, use `create_sideset_from_nodeset_auto()`.
     ///
     /// Only boundary faces (faces appearing in exactly one element) are included,
     /// and face normals are verified to point outward from the mesh center of mass.
@@ -294,6 +391,81 @@ impl ExodusAppender {
     ) -> PyResult<()> {
         self.file_mut()?
             .create_sideset_from_nodeset(nodeset_id, new_sideset_id)
+            .into_py()
+    }
+
+    /// Convert a nodeset to a sideset with auto-assigned ID and write it to the file
+    ///
+    /// This is the recommended method for most use cases. The sideset ID is automatically
+    /// assigned as one greater than the maximum existing sideset ID (or 1 if no sidesets exist).
+    ///
+    /// Args:
+    ///     nodeset_id: ID of the existing nodeset
+    ///
+    /// Returns:
+    ///     The ID that was assigned to the new sideset
+    ///
+    /// Example:
+    ///     >>> appender = ExodusAppender.append("mesh.exo")
+    ///     >>> # Convert nodeset 10 to a sideset with auto-assigned ID
+    ///     >>> sideset_id = appender.create_sideset_from_nodeset_auto(10)
+    ///     >>> print(f"Created sideset with ID {sideset_id}")
+    ///     >>> appender.close()
+    fn create_sideset_from_nodeset_auto(&mut self, nodeset_id: i64) -> PyResult<i64> {
+        self.file_mut()?
+            .create_sideset_from_nodeset_auto(nodeset_id)
+            .into_py()
+    }
+
+    /// Convert a nodeset to a sideset by name and write it to the file
+    ///
+    /// This method looks up the nodeset by name, converts it to a sideset with
+    /// auto-assigned ID, and writes it to the file. The nodeset's name is copied
+    /// to the new sideset.
+    ///
+    /// Args:
+    ///     nodeset_name: Name of the existing nodeset
+    ///
+    /// Returns:
+    ///     The ID that was assigned to the new sideset
+    ///
+    /// Example:
+    ///     >>> appender = ExodusAppender.append("mesh.exo")
+    ///     >>> # Convert nodeset named "inlet" to a sideset
+    ///     >>> sideset_id = appender.create_sideset_from_nodeset_by_name("inlet")
+    ///     >>> print(f"Created sideset with ID {sideset_id}")
+    ///     >>> appender.close()
+    fn create_sideset_from_nodeset_by_name(&mut self, nodeset_name: &str) -> PyResult<i64> {
+        self.file_mut()?
+            .create_sideset_from_nodeset_by_name(nodeset_name)
+            .into_py()
+    }
+
+    /// Convert a nodeset to a sideset with explicit name and write it to the file
+    ///
+    /// Creates a sideset from a nodeset with auto-assigned ID and writes both the
+    /// sideset data and its name to the file.
+    ///
+    /// Args:
+    ///     nodeset_id: ID of the existing nodeset
+    ///     sideset_name: Name to assign to the new sideset
+    ///
+    /// Returns:
+    ///     The ID that was assigned to the new sideset
+    ///
+    /// Example:
+    ///     >>> appender = ExodusAppender.append("mesh.exo")
+    ///     >>> # Convert nodeset 10 to a sideset named "outlet"
+    ///     >>> sideset_id = appender.create_sideset_from_nodeset_named(10, "outlet")
+    ///     >>> print(f"Created sideset 'outlet' with ID {sideset_id}")
+    ///     >>> appender.close()
+    fn create_sideset_from_nodeset_named(
+        &mut self,
+        nodeset_id: i64,
+        sideset_name: &str,
+    ) -> PyResult<i64> {
+        self.file_mut()?
+            .create_sideset_from_nodeset_named(nodeset_id, sideset_name)
             .into_py()
     }
 }
