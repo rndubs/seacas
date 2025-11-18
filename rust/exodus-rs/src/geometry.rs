@@ -297,7 +297,10 @@ mod tests {
         let avg = average_normals(&normals);
         // Should be normalized diagonal
         let expected_val = 1.0 / 3.0_f64.sqrt();
-        assert!(vec_approx_eq(avg, [expected_val, expected_val, expected_val]));
+        assert!(vec_approx_eq(
+            avg,
+            [expected_val, expected_val, expected_val]
+        ));
     }
 
     #[test]

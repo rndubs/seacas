@@ -238,10 +238,6 @@ mod tests {
         assert!(is_outward_facing(face_center, face_normal, mesh_center));
 
         let inward_normal = [-1.0, 0.0, 0.0];
-        assert!(!is_outward_facing(
-            face_center,
-            inward_normal,
-            mesh_center
-        ));
+        assert!(!is_outward_facing(face_center, inward_normal, mesh_center));
     }
 }

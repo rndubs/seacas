@@ -51,9 +51,11 @@ impl Topology {
             Topology::Hex8 | Topology::Hex20 | Topology::Hex27 => Some(hex_faces()),
 
             // Tetrahedral elements
-            Topology::Tet4 | Topology::Tet8 | Topology::Tet10 | Topology::Tet14 | Topology::Tet15 => {
-                Some(tet_faces())
-            }
+            Topology::Tet4
+            | Topology::Tet8
+            | Topology::Tet10
+            | Topology::Tet14
+            | Topology::Tet15 => Some(tet_faces()),
 
             // Wedge/Prism elements
             Topology::Wedge6 | Topology::Wedge15 | Topology::Wedge18 => Some(wedge_faces()),
