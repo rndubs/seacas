@@ -109,32 +109,87 @@ def example_multiple_conversions():
     print()
 
 
+def example_auto_increment_id():
+    """
+    Example 4: Auto-increment sideset IDs (NEW!)
+
+    Demonstrates automatic ID assignment for sidesets.
+    The sideset ID is automatically assigned as the max existing ID + 1.
+    """
+    print("=" * 60)
+    print("Example 4: Auto-increment sideset IDs")
+    print("=" * 60)
+
+    appender = ExodusAppender.append("mesh_with_nodesets.exo")
+
+    # Convert nodesets with auto-assigned IDs
+    id1 = appender.create_sideset_from_nodeset_auto(10)
+    print(f"✓ Converted nodeset 10 → sideset {id1} (auto-assigned)")
+
+    id2 = appender.create_sideset_from_nodeset_auto(20)
+    print(f"✓ Converted nodeset 20 → sideset {id2} (auto-assigned)")
+
+    appender.close()
+    print()
+
+
+def example_name_based_conversion():
+    """
+    Example 5: Name-based conversion (NEW!)
+
+    Demonstrates looking up nodesets by name and copying names to sidesets.
+    """
+    print("=" * 60)
+    print("Example 5: Name-based conversion")
+    print("=" * 60)
+
+    appender = ExodusAppender.append("mesh_with_nodesets.exo")
+
+    # Convert nodeset by name (if the nodeset has a name)
+    # The name is automatically copied to the sideset
+    try:
+        sideset_id = appender.create_sideset_from_nodeset_by_name("inlet")
+        print(f"✓ Converted nodeset 'inlet' → sideset {sideset_id}")
+        print("  (Name was automatically copied to the sideset)")
+    except Exception as e:
+        print(f"✗ Could not convert by name: {e}")
+        print("  (Nodeset may not have a name defined)")
+
+    # Or create a sideset with an explicit name
+    sideset_id = appender.create_sideset_from_nodeset_named(10, "outlet")
+    print(f"✓ Converted nodeset 10 → sideset {sideset_id} named 'outlet'")
+
+    appender.close()
+    print()
+
+
 def example_with_context_manager():
     """
-    Example 4: Using Python context manager ('with' statement)
+    Example 6: Using Python context manager ('with' statement)
 
     Demonstrates the Pythonic way to handle file operations.
     """
     print("=" * 60)
-    print("Example 4: Using context manager")
+    print("Example 6: Using context manager")
     print("=" * 60)
 
     # File automatically closes when leaving 'with' block
     with ExodusAppender.append("mesh_with_nodesets.exo") as appender:
-        appender.create_sideset_from_nodeset(10, 100)
-        print("✓ Converted and wrote sideset (file will auto-close)")
+        # Use the auto-increment version for convenience
+        sideset_id = appender.create_sideset_from_nodeset_auto(10)
+        print(f"✓ Converted to sideset {sideset_id} (file will auto-close)")
 
     print()
 
 
 def example_inspect_results():
     """
-    Example 5: Inspect conversion results in detail
+    Example 7: Inspect conversion results in detail
 
     Shows how to examine the generated sideset in detail.
     """
     print("=" * 60)
-    print("Example 5: Inspect conversion results")
+    print("Example 7: Inspect conversion results")
     print("=" * 60)
 
     reader = ExodusReader.open("mesh_with_nodesets.exo")
@@ -179,6 +234,8 @@ def main():
         example_read_and_convert()
         example_convert_and_write()
         example_multiple_conversions()
+        example_auto_increment_id()        # NEW!
+        example_name_based_conversion()    # NEW!
         example_with_context_manager()
         example_inspect_results()
 

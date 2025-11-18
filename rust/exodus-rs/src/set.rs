@@ -685,12 +685,15 @@ impl ExodusFile<mode::Read> {
         })
     }
 
-    /// Convert a nodeset to a sideset.
+    /// Convert a nodeset to a sideset with explicit sideset ID.
     ///
     /// Creates a new sideset containing all element faces where every node belongs
     /// to the specified nodeset. Only boundary faces (faces appearing in exactly one
     /// element) are included, and face normals are verified to point outward from the
     /// mesh center of mass.
+    ///
+    /// This version requires you to explicitly specify the new sideset ID. For
+    /// automatic ID assignment, use [`convert_nodeset_to_sideset_auto`].
     ///
     /// # Arguments
     ///
@@ -721,16 +724,156 @@ impl ExodusFile<mode::Read> {
     /// ```rust,ignore
     /// let file = ExodusFile::<mode::Read>::open("mesh.exo")?;
     ///
-    /// // Convert nodeset 10 to sideset 100
+    /// // Convert nodeset 10 to sideset 100 (explicit ID)
     /// let sideset = file.convert_nodeset_to_sideset(10, 100)?;
-    /// println!("Created sideset with {} faces", sideset.elements.len());
+    /// println!("Created sideset {} with {} faces", sideset.id, sideset.elements.len());
     /// ```
+    ///
+    /// [`convert_nodeset_to_sideset_auto`]: ExodusFile::convert_nodeset_to_sideset_auto
     pub fn convert_nodeset_to_sideset(
         &self,
         nodeset_id: EntityId,
         new_sideset_id: EntityId,
     ) -> Result<SideSet> {
         crate::sideset_utils::convert_nodeset_to_sideset(self, nodeset_id, new_sideset_id)
+    }
+
+    /// Convert a nodeset to a sideset with automatic ID assignment.
+    ///
+    /// Creates a new sideset containing all element faces where every node belongs
+    /// to the specified nodeset. The sideset ID is automatically assigned as one
+    /// greater than the maximum existing sideset ID (or 1 if no sidesets exist).
+    ///
+    /// This is the recommended method for most use cases. For explicit ID control,
+    /// use [`convert_nodeset_to_sideset`].
+    ///
+    /// # Arguments
+    ///
+    /// * `nodeset_id` - ID of the existing nodeset
+    ///
+    /// # Returns
+    ///
+    /// A `SideSet` structure with the auto-assigned ID. Check `sideset.id` to see
+    /// which ID was assigned.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - The nodeset doesn't exist
+    /// - Unable to read coordinates or connectivity
+    /// - File I/O errors occur
+    ///
+    /// # Example
+    ///
+    /// ```rust,ignore
+    /// let file = ExodusFile::<mode::Read>::open("mesh.exo")?;
+    ///
+    /// // Convert nodeset 10 to a new sideset with auto-assigned ID
+    /// let sideset = file.convert_nodeset_to_sideset_auto(10)?;
+    /// println!("Created sideset {} with {} faces", sideset.id, sideset.elements.len());
+    /// ```
+    ///
+    /// [`convert_nodeset_to_sideset`]: ExodusFile::convert_nodeset_to_sideset
+    pub fn convert_nodeset_to_sideset_auto(&self, nodeset_id: EntityId) -> Result<SideSet> {
+        // Find the next available sideset ID
+        let existing_ids = self.set_ids(EntityType::SideSet)?;
+        let new_id = existing_ids.iter().max().map(|&id| id + 1).unwrap_or(1);
+
+        crate::sideset_utils::convert_nodeset_to_sideset(self, nodeset_id, new_id)
+    }
+
+    /// Convert a nodeset to a sideset using entity names.
+    ///
+    /// Creates a new sideset from a nodeset, looking up the nodeset by name rather
+    /// than ID. The new sideset ID is automatically assigned.
+    ///
+    /// # Arguments
+    ///
+    /// * `nodeset_name` - Name of the existing nodeset
+    ///
+    /// # Returns
+    ///
+    /// A `SideSet` structure with auto-assigned ID
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - The nodeset name is not found
+    /// - Names are not defined for nodesets
+    /// - Unable to read coordinates or connectivity
+    /// - File I/O errors occur
+    ///
+    /// # Example
+    ///
+    /// ```rust,ignore
+    /// let file = ExodusFile::<mode::Read>::open("mesh.exo")?;
+    ///
+    /// // Convert nodeset named "inlet" to a sideset
+    /// let sideset = file.convert_nodeset_to_sideset_by_name("inlet")?;
+    /// println!("Created sideset {} with {} faces", sideset.id, sideset.elements.len());
+    /// ```
+    pub fn convert_nodeset_to_sideset_by_name(&self, nodeset_name: &str) -> Result<SideSet> {
+        // Find the nodeset ID by name
+        let names = self.names(EntityType::NodeSet)?;
+        let ids = self.set_ids(EntityType::NodeSet)?;
+
+        let index = names
+            .iter()
+            .position(|name| name == nodeset_name)
+            .ok_or_else(|| {
+                ExodusError::Other(format!("Nodeset with name '{}' not found", nodeset_name))
+            })?;
+
+        let nodeset_id = ids.get(index).ok_or_else(|| {
+            ExodusError::Other(format!(
+                "Nodeset index {} out of bounds (found name but no ID)",
+                index
+            ))
+        })?;
+
+        self.convert_nodeset_to_sideset_auto(*nodeset_id)
+    }
+
+    /// Convert a nodeset to a sideset with explicit name for the new sideset.
+    ///
+    /// Creates a new sideset from a nodeset, with automatic ID assignment. This
+    /// is a convenience wrapper that returns both the sideset and the assigned ID.
+    ///
+    /// **Note:** This function only creates the sideset data structure. To write
+    /// the sideset to a file with its name, you need to use an `ExodusFile<mode::Write>`
+    /// or `ExodusFile<mode::Append>` and call `put_side_set()` followed by `put_name()`.
+    ///
+    /// # Arguments
+    ///
+    /// * `nodeset_id` - ID of the existing nodeset
+    /// * `sideset_name` - Desired name for the new sideset (for documentation purposes)
+    ///
+    /// # Returns
+    ///
+    /// Tuple of (assigned_sideset_id, sideset_name, sideset_data)
+    ///
+    /// # Example
+    ///
+    /// ```rust,ignore
+    /// // Read mode: create sideset data
+    /// let file_read = ExodusFile::<mode::Read>::open("mesh.exo")?;
+    /// let (ss_id, ss_name, sideset) = file_read.convert_nodeset_to_sideset_named(10, "outlet")?;
+    ///
+    /// // Write mode: save sideset with name
+    /// let mut file_write = ExodusFile::<mode::Append>::append("mesh.exo")?;
+    /// file_write.put_side_set(ss_id, &sideset.elements, &sideset.sides, None)?;
+    /// // Get the index of the new sideset (it's the last one)
+    /// let ss_ids = file_write.set_ids(EntityType::SideSet)?;
+    /// let ss_index = ss_ids.len() - 1;
+    /// file_write.put_name(EntityType::SideSet, ss_index, &ss_name)?;
+    /// ```
+    pub fn convert_nodeset_to_sideset_named(
+        &self,
+        nodeset_id: EntityId,
+        sideset_name: &str,
+    ) -> Result<(EntityId, String, SideSet)> {
+        let sideset = self.convert_nodeset_to_sideset_auto(nodeset_id)?;
+        Ok((sideset.id, sideset_name.to_string(), sideset))
     }
 }
 

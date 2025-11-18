@@ -576,10 +576,12 @@ impl ExodusFile<mode::Append> {
         Ok(())
     }
 
-    /// Convert a nodeset to a sideset and write it to the file.
+    /// Convert a nodeset to a sideset and write it to the file with explicit ID.
     ///
     /// This is a convenience method that combines reading the nodeset, converting it
     /// to a sideset based on boundary faces, and writing the result to the file.
+    ///
+    /// For automatic ID assignment, use [`create_sideset_from_nodeset_auto`].
     ///
     /// # Arguments
     ///
@@ -603,6 +605,8 @@ impl ExodusFile<mode::Append> {
     /// file.create_sideset_from_nodeset(10, 100)?;
     /// file.sync()?;
     /// ```
+    ///
+    /// [`create_sideset_from_nodeset_auto`]: ExodusFile::create_sideset_from_nodeset_auto
     pub fn create_sideset_from_nodeset(
         &mut self,
         nodeset_id: i64,
@@ -632,6 +636,168 @@ impl ExodusFile<mode::Append> {
         let writer = unsafe { &mut *(self as *mut _ as *mut ExodusFile<mode::Write>) };
         writer.put_set(&set)?;
         writer.put_side_set(new_sideset_id, &sideset.elements, &sideset.sides, None)?;
+
+        Ok(())
+    }
+
+    /// Convert a nodeset to a sideset with auto-assigned ID and write it to the file.
+    ///
+    /// This is the recommended method for most use cases. The sideset ID is automatically
+    /// assigned as one greater than the maximum existing sideset ID (or 1 if no sidesets exist).
+    ///
+    /// # Arguments
+    ///
+    /// * `nodeset_id` - ID of the existing nodeset
+    ///
+    /// # Returns
+    ///
+    /// The ID that was assigned to the new sideset
+    ///
+    /// # Example
+    ///
+    /// ```rust,ignore
+    /// let mut file = ExodusFile::<mode::Append>::append("mesh.exo")?;
+    ///
+    /// // Convert nodeset 10 to a sideset with auto-assigned ID
+    /// let sideset_id = file.create_sideset_from_nodeset_auto(10)?;
+    /// println!("Created sideset with ID {}", sideset_id);
+    /// file.sync()?;
+    /// ```
+    pub fn create_sideset_from_nodeset_auto(&mut self, nodeset_id: i64) -> Result<i64> {
+        // Get the next available sideset ID
+        let reader = unsafe { &*(self as *const _ as *const ExodusFile<mode::Read>) };
+        let existing_ids = reader.set_ids(crate::EntityType::SideSet)?;
+        let new_id = existing_ids.iter().max().map(|&id| id + 1).unwrap_or(1);
+
+        // Use the explicit version to do the actual work
+        self.create_sideset_from_nodeset(nodeset_id, new_id)?;
+
+        Ok(new_id)
+    }
+
+    /// Convert a nodeset to a sideset by name and write it to the file.
+    ///
+    /// This method looks up the nodeset by name, converts it to a sideset with
+    /// auto-assigned ID, and writes it to the file. If the nodeset has a name,
+    /// that name is copied to the new sideset.
+    ///
+    /// # Arguments
+    ///
+    /// * `nodeset_name` - Name of the existing nodeset
+    ///
+    /// # Returns
+    ///
+    /// The ID that was assigned to the new sideset
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - The nodeset name is not found
+    /// - Names are not defined for nodesets
+    /// - Unable to read coordinates or connectivity
+    /// - File I/O errors occur
+    ///
+    /// # Example
+    ///
+    /// ```rust,ignore
+    /// let mut file = ExodusFile::<mode::Append>::append("mesh.exo")?;
+    ///
+    /// // Convert nodeset named "inlet" to a sideset
+    /// let sideset_id = file.create_sideset_from_nodeset_by_name("inlet")?;
+    /// println!("Created sideset with ID {}", sideset_id);
+    /// ```
+    pub fn create_sideset_from_nodeset_by_name(&mut self, nodeset_name: &str) -> Result<i64> {
+        // Find the nodeset ID by name
+        let reader = unsafe { &*(self as *const _ as *const ExodusFile<mode::Read>) };
+        let names = reader.names(crate::EntityType::NodeSet)?;
+        let ids = reader.set_ids(crate::EntityType::NodeSet)?;
+
+        let index = names
+            .iter()
+            .position(|name| name == nodeset_name)
+            .ok_or_else(|| {
+                crate::ExodusError::Other(format!("Nodeset with name '{}' not found", nodeset_name))
+            })?;
+
+        let nodeset_id = ids.get(index).ok_or_else(|| {
+            crate::ExodusError::Other(format!(
+                "Nodeset index {} out of bounds (found name but no ID)",
+                index
+            ))
+        })?;
+
+        // Create the sideset with auto ID
+        let sideset_id = self.create_sideset_from_nodeset_auto(*nodeset_id)?;
+
+        // Copy the name to the new sideset
+        self.copy_name_to_sideset(index, sideset_id, nodeset_name)?;
+
+        Ok(sideset_id)
+    }
+
+    /// Convert a nodeset to a sideset with explicit name and write it to the file.
+    ///
+    /// Creates a sideset from a nodeset with auto-assigned ID and writes both the
+    /// sideset data and its name to the file.
+    ///
+    /// # Arguments
+    ///
+    /// * `nodeset_id` - ID of the existing nodeset
+    /// * `sideset_name` - Name to assign to the new sideset
+    ///
+    /// # Returns
+    ///
+    /// The ID that was assigned to the new sideset
+    ///
+    /// # Example
+    ///
+    /// ```rust,ignore
+    /// let mut file = ExodusFile::<mode::Append>::append("mesh.exo")?;
+    ///
+    /// // Convert nodeset 10 to a sideset named "outlet"
+    /// let sideset_id = file.create_sideset_from_nodeset_named(10, "outlet")?;
+    /// println!("Created sideset '{}' with ID {}", "outlet", sideset_id);
+    /// ```
+    pub fn create_sideset_from_nodeset_named(
+        &mut self,
+        nodeset_id: i64,
+        sideset_name: &str,
+    ) -> Result<i64> {
+        // Create the sideset with auto ID
+        let sideset_id = self.create_sideset_from_nodeset_auto(nodeset_id)?;
+
+        // Find the index of the new sideset (it's the last one)
+        let reader = unsafe { &*(self as *const _ as *const ExodusFile<mode::Read>) };
+        let ss_ids = reader.set_ids(crate::EntityType::SideSet)?;
+        let ss_index = ss_ids.len().saturating_sub(1);
+
+        // Set the name
+        let writer = unsafe { &mut *(self as *mut _ as *mut ExodusFile<mode::Write>) };
+        writer.put_name(crate::EntityType::SideSet, ss_index, sideset_name)?;
+
+        Ok(sideset_id)
+    }
+
+    /// Helper function to copy a name from nodeset to sideset
+    fn copy_name_to_sideset(
+        &mut self,
+        _nodeset_index: usize,
+        sideset_id: i64,
+        name: &str,
+    ) -> Result<()> {
+        // Find the index of the sideset
+        let reader = unsafe { &*(self as *const _ as *const ExodusFile<mode::Read>) };
+        let ss_ids = reader.set_ids(crate::EntityType::SideSet)?;
+        let ss_index = ss_ids
+            .iter()
+            .position(|&id| id == sideset_id)
+            .ok_or_else(|| {
+                crate::ExodusError::Other(format!("Sideset with ID {} not found", sideset_id))
+            })?;
+
+        // Set the name
+        let writer = unsafe { &mut *(self as *mut _ as *mut ExodusFile<mode::Write>) };
+        writer.put_name(crate::EntityType::SideSet, ss_index, name)?;
 
         Ok(())
     }
