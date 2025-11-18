@@ -19,6 +19,7 @@ mod assembly;
 mod variable;
 mod attribute;
 mod performance;
+mod geometry;
 
 // Re-exports
 use types::*;
@@ -68,6 +69,9 @@ fn exodus(m: &Bound<'_, PyModule>) -> PyResult<()> {
     // Register builder API
     m.add_class::<MeshBuilder>()?;
     m.add_class::<BlockBuilder>()?;
+
+    // Register geometry functions
+    geometry::register_geometry_functions(m)?;
 
     Ok(())
 }
