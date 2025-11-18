@@ -627,6 +627,214 @@ with ExodusWriter.create("/tmp/ug_edgeface_example.exo", CreateOptions(mode=Crea
     writer.put_connectivity(2, [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20])
 ```
 
+## Geometry Utilities
+
+exodus-py provides high-performance geometry calculations for mesh analysis, powered by native Rust implementations.
+
+### Element Volume Calculations
+
+Calculate the volume of 3D finite elements using optimized tetrahedral decomposition methods.
+
+**Supported Element Types:**
+- `HEX8`, `HEX20`, `HEX27` - Hexahedral elements
+- `TET4`, `TET8`, `TET10`, `TET14`, `TET15` - Tetrahedral elements
+- `WEDGE6`, `WEDGE15`, `WEDGE18` - Wedge/prism elements
+- `PYRAMID5`, `PYRAMID13`, `PYRAMID14` - Pyramidal elements
+
+```python
+from exodus import element_volume
+
+# Compute volume of a unit cube hex element
+hex_coords = [
+    [0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [1.0, 1.0, 0.0], [0.0, 1.0, 0.0],
+    [0.0, 0.0, 1.0], [1.0, 0.0, 1.0], [1.0, 1.0, 1.0], [0.0, 1.0, 1.0],
+]
+volume = element_volume("HEX8", hex_coords)
+print(f"Hex volume: {volume}")  # 1.0
+
+# Compute volume of a tetrahedron
+tet_coords = [
+    [0.0, 0.0, 0.0],
+    [1.0, 0.0, 0.0],
+    [0.0, 1.0, 0.0],
+    [0.0, 0.0, 1.0],
+]
+volume = element_volume("TET4", tet_coords)
+print(f"Tet volume: {volume}")  # 0.16666... (1/6)
+
+# Works with distorted/irregular elements too
+distorted_hex = [
+    [0.0, 0.0, 0.0], [1.2, 0.0, 0.0], [1.0, 1.1, 0.0], [0.0, 1.0, 0.0],
+    [0.1, 0.0, 1.0], [1.0, 0.0, 0.9], [1.0, 1.0, 1.0], [0.0, 1.0, 1.1],
+]
+volume = element_volume("HEX8", distorted_hex)
+```
+
+**Computing volumes for an entire mesh:**
+
+```python
+from exodus import ExodusReader, element_volume
+
+# Read mesh and compute element volumes
+with ExodusReader.open("mesh.exo") as reader:
+    # Get element block information
+    block_ids = reader.get_block_ids()
+    coords_x, coords_y, coords_z = reader.get_coords()
+
+    # Process each element block
+    for block_id in block_ids:
+        block = reader.get_block(block_id)
+        connectivity = reader.get_connectivity(block_id)
+
+        # Get topology and nodes per element
+        topology = block.topology
+        nodes_per_elem = block.num_nodes_per_entry
+        num_elems = block.num_entries
+
+        # Compute volume for each element
+        volumes = []
+        for elem_idx in range(num_elems):
+            # Extract node indices for this element
+            start = elem_idx * nodes_per_elem
+            end = start + nodes_per_elem
+            node_indices = connectivity[start:end]
+
+            # Get coordinates for this element's nodes
+            elem_coords = []
+            for node_id in node_indices:
+                # Node IDs are 1-based in Exodus, convert to 0-based for array access
+                idx = node_id - 1
+                elem_coords.append([coords_x[idx], coords_y[idx], coords_z[idx]])
+
+            # Compute volume
+            vol = element_volume(topology, elem_coords)
+            volumes.append(vol)
+
+        total_volume = sum(volumes)
+        print(f"Block {block_id}: {num_elems} elements, total volume = {total_volume}")
+```
+
+**Use Cases:**
+- Mesh quality metrics and validation
+- Physics calculations (mass, density)
+- Post-processing and analysis
+- Volume-weighted averaging
+
+### Element Centroid Calculations
+
+Calculate the geometric center (centroid) of an element as the average of all node positions.
+
+```python
+from exodus import element_centroid
+
+# Compute centroid of a cube
+hex_coords = [
+    [0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [1.0, 1.0, 0.0], [0.0, 1.0, 0.0],
+    [0.0, 0.0, 1.0], [1.0, 0.0, 1.0], [1.0, 1.0, 1.0], [0.0, 1.0, 1.0],
+]
+centroid = element_centroid(hex_coords)
+print(f"Centroid: {centroid}")  # [0.5, 0.5, 0.5]
+
+# Works with any element type
+tet_coords = [
+    [0.0, 0.0, 0.0],
+    [3.0, 0.0, 0.0],
+    [0.0, 3.0, 0.0],
+    [0.0, 0.0, 3.0],
+]
+centroid = element_centroid(tet_coords)
+print(f"Tet centroid: {centroid}")  # [0.75, 0.75, 0.75]
+```
+
+**Computing centroids for mesh visualization:**
+
+```python
+from exodus import ExodusReader, element_centroid
+import numpy as np
+
+# Read mesh and compute element centroids
+with ExodusReader.open("mesh.exo") as reader:
+    block_ids = reader.get_block_ids()
+    coords_x, coords_y, coords_z = reader.get_coords()
+
+    all_centroids = []
+
+    for block_id in block_ids:
+        block = reader.get_block(block_id)
+        connectivity = reader.get_connectivity(block_id)
+
+        nodes_per_elem = block.num_nodes_per_entry
+        num_elems = block.num_entries
+
+        for elem_idx in range(num_elems):
+            # Extract element coordinates
+            start = elem_idx * nodes_per_elem
+            end = start + nodes_per_elem
+            node_indices = connectivity[start:end]
+
+            elem_coords = []
+            for node_id in node_indices:
+                idx = node_id - 1
+                elem_coords.append([coords_x[idx], coords_y[idx], coords_z[idx]])
+
+            # Compute centroid
+            centroid = element_centroid(elem_coords)
+            all_centroids.append(centroid)
+
+    # Convert to numpy array for further processing
+    centroids = np.array(all_centroids)
+
+    # Useful for:
+    # - Spatial queries (find elements in a region)
+    # - Element-based visualization
+    # - Sorting elements by location
+    # - Computing distances between elements
+```
+
+**Use Cases:**
+- Element location and spatial queries
+- Visualization and post-processing
+- Element sorting and organization
+- Distance calculations
+- Interpolation to element centers
+
+### Performance Notes
+
+Both geometry functions are implemented in native Rust for optimal performance:
+- **element_volume**: Uses efficient tetrahedral decomposition
+  - Hexahedron: 5 tetrahedra
+  - Wedge: 3 tetrahedra
+  - Pyramid: 2 tetrahedra
+- **element_centroid**: Simple average of node positions
+- No Python/Rust boundary overhead for batch operations
+- Works correctly for both regular and distorted elements
+
+### Error Handling
+
+Both functions provide clear error messages for invalid inputs:
+
+```python
+from exodus import element_volume, element_centroid
+
+# Invalid topology
+try:
+    volume = element_volume("SPHERE", [[0, 0, 0]])
+except RuntimeError as e:
+    print(f"Error: {e}")  # "Volume calculation not supported for topology: SPHERE"
+
+# Insufficient coordinates
+try:
+    volume = element_volume("HEX8", [[0, 0, 0], [1, 0, 0]])  # Need 8 coords
+except RuntimeError as e:
+    print(f"Error: {e}")  # "HEX element requires at least 8 coordinates, got 2"
+
+# Invalid coordinate dimensions
+try:
+    volume = element_volume("TET4", [[0, 0], [1, 0], [0, 1], [0, 0]])
+except ValueError as e:
+    print(f"Error: {e}")  # "Each coordinate must have 3 values (x, y, z), got 2"
+```
+
 ## Entity Sets
 
 Entity sets provide a unified interface for working with different set types. In exodus-py, use the specialized `put_node_set` and `put_side_set` methods for working with sets:
