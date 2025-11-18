@@ -673,7 +673,12 @@ mod tests {
     fn test_element_volume_tet() {
         use crate::Topology;
 
-        let coords = vec![[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]];
+        let coords = vec![
+            [0.0, 0.0, 0.0],
+            [1.0, 0.0, 0.0],
+            [0.0, 1.0, 0.0],
+            [0.0, 0.0, 1.0],
+        ];
         let volume = element_volume(Topology::Tet4, &coords).unwrap();
         assert!(approx_eq(volume, 1.0 / 6.0));
     }
@@ -700,7 +705,12 @@ mod tests {
     #[test]
     fn test_element_centroid_tet() {
         // Tetrahedron
-        let coords = vec![[0.0, 0.0, 0.0], [3.0, 0.0, 0.0], [0.0, 3.0, 0.0], [0.0, 0.0, 3.0]];
+        let coords = vec![
+            [0.0, 0.0, 0.0],
+            [3.0, 0.0, 0.0],
+            [0.0, 3.0, 0.0],
+            [0.0, 0.0, 3.0],
+        ];
         let centroid = element_centroid(&coords);
         // Centroid at (3/4, 3/4, 3/4) for this tet
         assert!(approx_eq(centroid[0], 0.75));
