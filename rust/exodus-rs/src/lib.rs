@@ -52,6 +52,9 @@
 //! - [`assembly`] - Assembly (hierarchical grouping) operations
 //! - [`blob`] - Blob (arbitrary data) operations
 //! - [`attribute`] - Attribute operations
+//! - [`geometry`] - Geometric utilities (normals, center of mass)
+//! - [`topology`] - Element topology and face definitions
+//! - [`sideset_utils`] - Utilities for converting nodesets to sidesets
 
 #![deny(missing_docs)]
 #![deny(missing_debug_implementations)]
@@ -83,11 +86,18 @@ pub mod raw;
 // Internal utilities
 mod utils;
 
+// Geometry and topology utilities
+pub mod geometry;
+pub mod topology;
+
+// Sideset utilities
+pub mod sideset_utils;
+
 // Re-exports for convenience
 pub use attribute::AttributeData;
 pub use builder::{BlockBuilder, MeshBuilder};
 pub use coord::{CoordValue, Coordinates};
-pub use error::{ExodusError, Result};
+pub use error::{EntityId, ExodusError, Result};
 pub use file::ExodusFile;
 pub use performance::{CacheConfig, ChunkConfig, NodeType, PerformanceConfig};
 pub use set::SetIterator;

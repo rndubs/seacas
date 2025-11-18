@@ -1,6 +1,6 @@
 # Rust Exodus Library - Implementation Status
 
-**Last Updated:** 2025-11-15
+**Last Updated:** 2025-11-17
 **Repository:** `./rust/exodus-rs/`
 
 ## Executive Summary
@@ -418,7 +418,18 @@ The **exodus-rs library is production-ready** for all use cases with:
 - ✅ NetCDF format validation: 11/11 files valid
 - ✅ **C library compatibility: 11/11 files, 80/80 tests passed**
 
-**Recent Improvements (2025-11-11):**
+**Recent Improvements:**
+
+*2025-11-17:*
+- ✅ **NodeSet to SideSet Conversion** - Automatic conversion of nodesets to sidesets with:
+  - Element face topology analysis for HEX8, TET4, WEDGE6, PYRAMID5, QUAD4, TRI3
+  - Boundary face detection (filters interior faces)
+  - Outward-pointing normal verification
+  - Normal consistency checking
+  - Available in both Rust API and Python bindings
+  - See `exodus-py/examples/nodeset_to_sideset.py` for usage
+
+*2025-11-11:*
 - ✅ Automatic define/data mode management (no manual mode switching needed)
 - ✅ API documentation verified at 100% coverage
 - ✅ Enhanced ergonomics - users can freely mix define and data operations

@@ -575,6 +575,66 @@ impl ExodusFile<mode::Append> {
         }
         Ok(())
     }
+
+    /// Convert a nodeset to a sideset and write it to the file.
+    ///
+    /// This is a convenience method that combines reading the nodeset, converting it
+    /// to a sideset based on boundary faces, and writing the result to the file.
+    ///
+    /// # Arguments
+    ///
+    /// * `nodeset_id` - ID of the existing nodeset
+    /// * `new_sideset_id` - ID for the new sideset
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - The nodeset doesn't exist
+    /// - Unable to read coordinates or connectivity
+    /// - Unable to write the sideset to the file
+    /// - File I/O errors occur
+    ///
+    /// # Example
+    ///
+    /// ```rust,ignore
+    /// let mut file = ExodusFile::<mode::Append>::append("mesh.exo")?;
+    ///
+    /// // Convert nodeset 10 to sideset 100 and write it
+    /// file.create_sideset_from_nodeset(10, 100)?;
+    /// file.sync()?;
+    /// ```
+    pub fn create_sideset_from_nodeset(
+        &mut self,
+        nodeset_id: i64,
+        new_sideset_id: i64,
+    ) -> Result<()> {
+        // Note: Append mode has both read and write capabilities, but Rust's type
+        // system requires separate impl blocks. We'll use internal methods that work
+        // with the generic mode.
+
+        // Read and convert the nodeset (uses read operations)
+        let sideset = crate::sideset_utils::convert_nodeset_to_sideset(
+            // Safe cast since Append mode supports reads
+            unsafe { &*(self as *const _ as *const ExodusFile<mode::Read>) },
+            nodeset_id,
+            new_sideset_id,
+        )?;
+
+        // Write the sideset (uses write operations)
+        let set = crate::types::Set {
+            id: new_sideset_id,
+            entity_type: crate::EntityType::SideSet,
+            num_entries: sideset.elements.len(),
+            num_dist_factors: 0,
+        };
+
+        // Safe cast since Append mode supports writes
+        let writer = unsafe { &mut *(self as *mut _ as *mut ExodusFile<mode::Write>) };
+        writer.put_set(&set)?;
+        writer.put_side_set(new_sideset_id, &sideset.elements, &sideset.sides, None)?;
+
+        Ok(())
+    }
 }
 
 #[cfg(feature = "netcdf4")]
