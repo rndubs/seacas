@@ -259,6 +259,180 @@ def test_multiple_nodal_variables():
             os.unlink(tmp_path)
 
 
+def test_var_time_series_global():
+    """Test multi-timestep variable retrieval for global variables"""
+    with tempfile.NamedTemporaryFile(suffix=".exo", delete=False) as tmp:
+        tmp_path = tmp.name
+
+    # Delete the empty file so ExodusWriter can create it
+    os.unlink(tmp_path)
+
+    try:
+        writer = ExodusWriter.create(tmp_path)
+        params = InitParams(title="Time Series Test", num_dim=2, num_nodes=4)
+        writer.put_init_params(params)
+
+        writer.define_variables(EntityType.Global, ["Energy", "Momentum"])
+
+        # Write 10 time steps
+        for i in range(10):
+            writer.put_time(i, float(i) * 0.5)
+            writer.put_var(i, EntityType.Global, 0, 0, [float(i * 10)])  # Energy
+            writer.put_var(i, EntityType.Global, 0, 1, [float(i * 5)])   # Momentum
+        writer.close()
+
+        # Read back using var_time_series
+        reader = ExodusReader.open(tmp_path)
+
+        # Test reading all time steps at once
+        energy_series = reader.var_time_series(0, 10, EntityType.Global, 0, 0)
+        momentum_series = reader.var_time_series(0, 10, EntityType.Global, 0, 1)
+
+        expected_energy = [float(i * 10) for i in range(10)]
+        expected_momentum = [float(i * 5) for i in range(10)]
+
+        assert len(energy_series) == 10
+        assert len(momentum_series) == 10
+        assert energy_series == pytest.approx(expected_energy, abs=1e-6)
+        assert momentum_series == pytest.approx(expected_momentum, abs=1e-6)
+
+        # Test reading partial time range
+        energy_partial = reader.var_time_series(3, 7, EntityType.Global, 0, 0)
+        expected_partial = [float(i * 10) for i in range(3, 7)]
+        assert len(energy_partial) == 4
+        assert energy_partial == pytest.approx(expected_partial, abs=1e-6)
+
+        reader.close()
+
+    finally:
+        if os.path.exists(tmp_path):
+            os.unlink(tmp_path)
+
+
+def test_var_time_series_nodal():
+    """Test multi-timestep variable retrieval for nodal variables"""
+    with tempfile.NamedTemporaryFile(suffix=".exo", delete=False) as tmp:
+        tmp_path = tmp.name
+
+    # Delete the empty file so ExodusWriter can create it
+    os.unlink(tmp_path)
+
+    try:
+        writer = ExodusWriter.create(tmp_path)
+        params = InitParams(title="Nodal Time Series", num_dim=2, num_nodes=3)
+        writer.put_init_params(params)
+
+        writer.define_variables(EntityType.Nodal, ["Temperature"])
+
+        # Write 5 time steps with varying nodal values
+        for i in range(5):
+            writer.put_time(i, float(i))
+            # Temperature increases at each node over time
+            temps = [100.0 + i * 10, 200.0 + i * 20, 300.0 + i * 30]
+            writer.put_var(i, EntityType.Nodal, 0, 0, temps)
+        writer.close()
+
+        # Read back using var_time_series
+        reader = ExodusReader.open(tmp_path)
+
+        # Read all time steps at once - should get flattened array
+        # [step0_node0, step0_node1, step0_node2, step1_node0, step1_node1, step1_node2, ...]
+        temp_series = reader.var_time_series(0, 5, EntityType.Nodal, 0, 0)
+
+        # Expected: 5 time steps * 3 nodes = 15 values
+        expected = []
+        for i in range(5):
+            expected.extend([100.0 + i * 10, 200.0 + i * 20, 300.0 + i * 30])
+
+        assert len(temp_series) == 15
+        assert temp_series == pytest.approx(expected, abs=1e-6)
+
+        # Test partial range: steps 1-3
+        temp_partial = reader.var_time_series(1, 3, EntityType.Nodal, 0, 0)
+        expected_partial = []
+        for i in range(1, 3):
+            expected_partial.extend([100.0 + i * 10, 200.0 + i * 20, 300.0 + i * 30])
+
+        assert len(temp_partial) == 6  # 2 steps * 3 nodes
+        assert temp_partial == pytest.approx(expected_partial, abs=1e-6)
+
+        reader.close()
+
+    finally:
+        if os.path.exists(tmp_path):
+            os.unlink(tmp_path)
+
+
+def test_var_time_series_element():
+    """Test multi-timestep variable retrieval for element variables"""
+    with tempfile.NamedTemporaryFile(suffix=".exo", delete=False) as tmp:
+        tmp_path = tmp.name
+
+    # Delete the empty file so ExodusWriter can create it
+    os.unlink(tmp_path)
+
+    try:
+        writer = ExodusWriter.create(tmp_path)
+        params = InitParams(
+            title="Element Time Series",
+            num_dim=2,
+            num_nodes=8,
+            num_elems=2,
+            num_elem_blocks=1,
+        )
+        writer.put_init_params(params)
+
+        block = Block(
+            id=100,
+            entity_type=EntityType.ElemBlock,
+            topology="QUAD4",
+            num_entries=2,
+            num_nodes_per_entry=4,
+            num_attributes=0,
+        )
+        writer.put_block(block)
+
+        writer.define_variables(EntityType.ElemBlock, ["Stress", "Strain"])
+
+        # Write 4 time steps
+        for i in range(4):
+            writer.put_time(i, float(i) * 0.25)
+            stresses = [100.0 + i * 10, 200.0 + i * 20]
+            strains = [0.01 + i * 0.01, 0.02 + i * 0.02]
+            writer.put_var(i, EntityType.ElemBlock, 100, 0, stresses)
+            writer.put_var(i, EntityType.ElemBlock, 100, 1, strains)
+        writer.close()
+
+        # Read back using var_time_series
+        reader = ExodusReader.open(tmp_path)
+
+        # Read stress over all time steps
+        stress_series = reader.var_time_series(0, 4, EntityType.ElemBlock, 100, 0)
+
+        expected_stress = []
+        for i in range(4):
+            expected_stress.extend([100.0 + i * 10, 200.0 + i * 20])
+
+        assert len(stress_series) == 8  # 4 steps * 2 elements
+        assert stress_series == pytest.approx(expected_stress, abs=1e-6)
+
+        # Read strain for a subset of time steps
+        strain_series = reader.var_time_series(1, 3, EntityType.ElemBlock, 100, 1)
+
+        expected_strain = []
+        for i in range(1, 3):
+            expected_strain.extend([0.01 + i * 0.01, 0.02 + i * 0.02])
+
+        assert len(strain_series) == 4  # 2 steps * 2 elements
+        assert strain_series == pytest.approx(expected_strain, abs=1e-6)
+
+        reader.close()
+
+    finally:
+        if os.path.exists(tmp_path):
+            os.unlink(tmp_path)
+
+
 def test_element_variable_truth_table():
     """Test element variable truth table with multiple blocks"""
     with tempfile.NamedTemporaryFile(suffix=".exo", delete=False) as tmp:

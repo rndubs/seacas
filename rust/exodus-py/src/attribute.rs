@@ -1,10 +1,10 @@
 //! Attribute operations
 
-use pyo3::prelude::*;
-use exodus_rs::AttributeData as RustAttributeData;
 use crate::error::IntoPyResult;
-use crate::file::{ExodusWriter, ExodusAppender, ExodusReader};
-use crate::types::{EntityType, AttributeType};
+use crate::file::{ExodusAppender, ExodusReader, ExodusWriter};
+use crate::types::{AttributeType, EntityType};
+use exodus_rs::AttributeData as RustAttributeData;
+use pyo3::prelude::*;
 
 /// Python wrapper for AttributeData
 #[pyclass(name = "AttributeData")]
@@ -44,7 +44,7 @@ impl AttributeData {
         match &self.inner {
             RustAttributeData::Integer(values) => Ok(values.clone()),
             _ => Err(PyErr::new::<pyo3::exceptions::PyTypeError, _>(
-                "Attribute is not an integer type"
+                "Attribute is not an integer type",
             )),
         }
     }
@@ -54,7 +54,7 @@ impl AttributeData {
         match &self.inner {
             RustAttributeData::Double(values) => Ok(values.clone()),
             _ => Err(PyErr::new::<pyo3::exceptions::PyTypeError, _>(
-                "Attribute is not a double type"
+                "Attribute is not a double type",
             )),
         }
     }
@@ -64,7 +64,7 @@ impl AttributeData {
         match &self.inner {
             RustAttributeData::Char(value) => Ok(value.clone()),
             _ => Err(PyErr::new::<pyo3::exceptions::PyTypeError, _>(
-                "Attribute is not a character type"
+                "Attribute is not a character type",
             )),
         }
     }
@@ -117,13 +117,15 @@ impl ExodusWriter {
         attr_type: AttributeType,
         data: AttributeData,
     ) -> PyResult<()> {
-        self.file_mut()?.put_attribute(
-            entity_type.to_rust(),
-            entity_id,
-            name,
-            attr_type.to_rust(),
-            data.to_rust(),
-        ).into_py()?;
+        self.file_mut()?
+            .put_attribute(
+                entity_type.to_rust(),
+                entity_id,
+                name,
+                attr_type.to_rust(),
+                data.to_rust(),
+            )
+            .into_py()?;
         Ok(())
     }
 }
@@ -131,16 +133,25 @@ impl ExodusWriter {
 #[pymethods]
 impl ExodusAppender {
     /// Read an attribute (NOTE: Not available in Append mode)
-    fn get_attribute(&self, _entity_type: EntityType, _entity_id: i64, _name: String) -> PyResult<AttributeData> {
+    fn get_attribute(
+        &self,
+        _entity_type: EntityType,
+        _entity_id: i64,
+        _name: String,
+    ) -> PyResult<AttributeData> {
         Err(PyErr::new::<pyo3::exceptions::PyNotImplementedError, _>(
-            "get_attribute not available in Append mode - use ExodusReader instead"
+            "get_attribute not available in Append mode - use ExodusReader instead",
         ))
     }
 
     /// Get attribute names (NOTE: Not available in Append mode)
-    fn get_attribute_names(&self, _entity_type: EntityType, _entity_id: i64) -> PyResult<Vec<String>> {
+    fn get_attribute_names(
+        &self,
+        _entity_type: EntityType,
+        _entity_id: i64,
+    ) -> PyResult<Vec<String>> {
         Err(PyErr::new::<pyo3::exceptions::PyNotImplementedError, _>(
-            "get_attribute_names not available in Append mode - use ExodusReader instead"
+            "get_attribute_names not available in Append mode - use ExodusReader instead",
         ))
     }
 }
@@ -166,11 +177,10 @@ impl ExodusReader {
         entity_id: i64,
         name: String,
     ) -> PyResult<AttributeData> {
-        let attr = self.file_ref().attribute(
-            entity_type.to_rust(),
-            entity_id,
-            name,
-        ).into_py()?;
+        let attr = self
+            .file_ref()
+            .attribute(entity_type.to_rust(), entity_id, name)
+            .into_py()?;
         Ok(AttributeData::from_rust(&attr))
     }
 
@@ -192,9 +202,8 @@ impl ExodusReader {
         entity_type: EntityType,
         entity_id: i64,
     ) -> PyResult<Vec<String>> {
-        self.file_ref().attribute_names(
-            entity_type.to_rust(),
-            entity_id,
-        ).into_py()
+        self.file_ref()
+            .attribute_names(entity_type.to_rust(), entity_id)
+            .into_py()
     }
 }

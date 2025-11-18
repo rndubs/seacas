@@ -266,27 +266,107 @@ Read all variables for an entity at a time step.
 
 ##### `var_time_series(start_step: int, end_step: int, var_type: EntityType, entity_id: int, var_index: int) -> list[float]`
 
-Read variable time series.
+Read variable values across multiple time steps efficiently.
+
+This method retrieves variable data for a range of time steps in a single operation, which is much more efficient than iterating through time steps manually. This is particularly useful for time-series analysis and post-processing workflows.
 
 **Parameters:**
 - `start_step` (int): Starting time step index (0-based, inclusive)
 - `end_step` (int): Ending time step index (exclusive)
 - `var_type` (EntityType): Entity type
-- `entity_id` (int): Entity ID
+- `entity_id` (int): Entity ID (block ID for block variables, 0 for global/nodal)
 - `var_index` (int): Variable index (0-based)
 
 **Returns:**
 - Variable values for all requested time steps
+  - For global variables: list of length `(end_step - start_step)`
+  - For nodal variables: list of length `(end_step - start_step) × num_nodes`
+  - For element variables: list of length `(end_step - start_step) × num_elements_in_block`
+
+**Example:**
+```python
+from exodus import ExodusReader, EntityType
+
+with ExodusReader.open("simulation.exo") as reader:
+    # Read temperature over all 100 time steps
+    temp_history = reader.var_time_series(0, 100, EntityType.Nodal, 0, 0)
+
+    # Read stress for a specific block over steps 10-50
+    stress_history = reader.var_time_series(10, 50, EntityType.ElemBlock, 1, 0)
+
+    # For global variable, get scalar time series
+    energy_history = reader.var_time_series(0, 100, EntityType.Global, 0, 0)
+    # Returns 100 values, one per time step
+```
+
+**Performance:**
+This is significantly faster than manual iteration:
+```python
+# Slow: Manual iteration
+values = []
+for step in range(100):
+    vals = reader.var(step, EntityType.Nodal, 0, 0)
+    values.extend(vals)
+
+# Fast: Single call
+values = reader.var_time_series(0, 100, EntityType.Nodal, 0, 0)
+```
 
 ##### `truth_table(var_type: EntityType) -> TruthTable`
 
 Get truth table for sparse variable storage.
 
+Truth tables indicate which variables are defined for which blocks, allowing for sparse variable storage. For example, you might have "Stress" defined only on solid element blocks, not on shell element blocks. The truth table lets you query whether a specific variable exists for a specific block before attempting to read it.
+
 **Parameters:**
-- `var_type` (EntityType): Entity type (must be a block type)
+- `var_type` (EntityType): Entity type (must be a block type: ElemBlock, EdgeBlock, or FaceBlock)
 
 **Returns:**
-- TruthTable object
+- TruthTable object with methods:
+  - `get(block_index: int, var_index: int) -> bool` - Check if variable exists for block
+  - `set(block_index: int, var_index: int, value: bool)` - Set truth table entry (for writing)
+  - `num_blocks` (int) - Number of blocks
+  - `num_vars` (int) - Number of variables
+
+**Example:**
+```python
+from exodus import ExodusReader, EntityType
+
+with ExodusReader.open("multiphysics.exo") as reader:
+    # Get variable names
+    var_names = reader.variable_names(EntityType.ElemBlock)
+    print(f"Variables: {var_names}")  # ["Temperature", "Stress", "Strain"]
+
+    # Get truth table
+    tt = reader.truth_table(EntityType.ElemBlock)
+
+    # Check which blocks have which variables
+    block_ids = reader.get_block_ids()
+    for block_idx, block_id in enumerate(block_ids):
+        print(f"\nBlock {block_id}:")
+        for var_idx, var_name in enumerate(var_names):
+            if tt.get(block_idx, var_idx):
+                print(f"  ✓ {var_name}")
+            else:
+                print(f"  ✗ {var_name} (not defined)")
+
+    # Only read variables that exist for a specific block
+    block_idx = 0
+    var_idx = 1  # Stress
+    if tt.get(block_idx, var_idx):
+        stress = reader.var(0, EntityType.ElemBlock, block_ids[block_idx], var_idx)
+        print(f"Stress values: {stress}")
+    else:
+        print("Stress not defined for this block")
+```
+
+**Use Case:**
+Truth tables are essential when working with multi-physics simulations where different element types have different variable sets. For example:
+- Solid mechanics blocks: Stress, Strain, Displacement
+- Thermal blocks: Temperature, Heat_Flux
+- Fluid blocks: Velocity, Pressure
+
+**Note:** If no truth table was explicitly written to the file, all variables are assumed to exist for all blocks (default: all True).
 
 ##### `reduction_variable_names(var_type: EntityType) -> list[str]`
 

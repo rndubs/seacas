@@ -1,8 +1,8 @@
 //! Coordinate operations for Exodus files
 
-use pyo3::prelude::*;
 use crate::error::IntoPyResult;
-use crate::file::{ExodusWriter, ExodusAppender, ExodusReader};
+use crate::file::{ExodusAppender, ExodusReader, ExodusWriter};
+use pyo3::prelude::*;
 
 #[pymethods]
 impl ExodusWriter {

@@ -1,9 +1,9 @@
 //! Block operations for Exodus files
 
-use pyo3::prelude::*;
 use crate::error::IntoPyResult;
-use crate::file::{ExodusWriter, ExodusAppender, ExodusReader};
+use crate::file::{ExodusAppender, ExodusReader, ExodusWriter};
 use crate::types::Block;
+use pyo3::prelude::*;
 
 #[pymethods]
 impl ExodusWriter {
@@ -73,14 +73,14 @@ impl ExodusAppender {
     /// Read a block definition (NOTE: Not fully available in Append mode)
     fn get_block(&self, _block_id: i64) -> PyResult<Block> {
         Err(PyErr::new::<pyo3::exceptions::PyNotImplementedError, _>(
-            "get_block not fully available in Append mode - use ExodusReader instead"
+            "get_block not fully available in Append mode - use ExodusReader instead",
         ))
     }
 
     /// Read element connectivity (NOTE: Not available in Append mode)
     fn get_connectivity(&self, _block_id: i64) -> PyResult<Vec<i64>> {
         Err(PyErr::new::<pyo3::exceptions::PyNotImplementedError, _>(
-            "get_connectivity not available in Append mode - use ExodusReader instead"
+            "get_connectivity not available in Append mode - use ExodusReader instead",
         ))
     }
 

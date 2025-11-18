@@ -1,9 +1,9 @@
 //! Set operations for Exodus files
 
-use pyo3::prelude::*;
 use crate::error::IntoPyResult;
-use crate::file::{ExodusWriter, ExodusReader, ExodusAppender};
-use crate::types::{NodeSet, SideSet, EntitySet, EntityType};
+use crate::file::{ExodusAppender, ExodusReader, ExodusWriter};
+use crate::types::{EntitySet, EntityType, NodeSet, SideSet};
+use pyo3::prelude::*;
 
 #[pymethods]
 impl ExodusWriter {
@@ -86,7 +86,9 @@ impl ExodusWriter {
         dist_factors: Option<Vec<f64>>,
     ) -> PyResult<()> {
         let df = dist_factors.as_deref();
-        self.file_mut()?.put_side_set(set_id, &elements, &sides, df).into_py()
+        self.file_mut()?
+            .put_side_set(set_id, &elements, &sides, df)
+            .into_py()
     }
 
     /// Write an entity set (edge, face, or element set)
@@ -110,7 +112,9 @@ impl ExodusWriter {
         set_id: i64,
         entities: Vec<i64>,
     ) -> PyResult<()> {
-        self.file_mut()?.put_entity_set(entity_type.to_rust(), set_id, &entities).into_py()
+        self.file_mut()?
+            .put_entity_set(entity_type.to_rust(), set_id, &entities)
+            .into_py()
     }
 
     /// Get all set IDs of a given type
@@ -177,7 +181,10 @@ impl ExodusReader {
     /// Returns:
     ///     EntitySet object containing entity IDs
     fn get_entity_set(&self, entity_type: &EntityType, set_id: i64) -> PyResult<EntitySet> {
-        let entity_set = self.file_ref().entity_set(entity_type.to_rust(), set_id).into_py()?;
+        let entity_set = self
+            .file_ref()
+            .entity_set(entity_type.to_rust(), set_id)
+            .into_py()?;
         Ok(EntitySet {
             id: entity_set.id,
             entity_type: EntityType::from_rust(entity_set.entity_type),
@@ -190,7 +197,9 @@ impl ExodusReader {
     /// Returns:
     ///     List of all node set IDs
     fn get_node_set_ids(&self) -> PyResult<Vec<i64>> {
-        self.file_ref().set_ids(exodus_rs::EntityType::NodeSet).into_py()
+        self.file_ref()
+            .set_ids(exodus_rs::EntityType::NodeSet)
+            .into_py()
     }
 
     /// Get side set IDs
@@ -198,7 +207,9 @@ impl ExodusReader {
     /// Returns:
     ///     List of all side set IDs
     fn get_side_set_ids(&self) -> PyResult<Vec<i64>> {
-        self.file_ref().set_ids(exodus_rs::EntityType::SideSet).into_py()
+        self.file_ref()
+            .set_ids(exodus_rs::EntityType::SideSet)
+            .into_py()
     }
 
     /// Get element set IDs
@@ -206,7 +217,9 @@ impl ExodusReader {
     /// Returns:
     ///     List of all element set IDs
     fn get_elem_set_ids(&self) -> PyResult<Vec<i64>> {
-        self.file_ref().set_ids(exodus_rs::EntityType::ElemSet).into_py()
+        self.file_ref()
+            .set_ids(exodus_rs::EntityType::ElemSet)
+            .into_py()
     }
 
     /// Get all set IDs of a given type
@@ -250,7 +263,8 @@ impl ExodusReader {
         nodeset_id: i64,
         new_sideset_id: i64,
     ) -> PyResult<SideSet> {
-        let side_set = self.file_ref()
+        let side_set = self
+            .file_ref()
             .convert_nodeset_to_sideset(nodeset_id, new_sideset_id)
             .into_py()?;
         Ok(SideSet {

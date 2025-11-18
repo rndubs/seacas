@@ -112,7 +112,13 @@ impl ExodusReader {
         var_index: usize,
     ) -> PyResult<Vec<f64>> {
         self.file
-            .var_time_series(start_step, end_step, var_type.to_rust(), entity_id, var_index)
+            .var_time_series(
+                start_step,
+                end_step,
+                var_type.to_rust(),
+                entity_id,
+                var_index,
+            )
             .into_py()
     }
 
@@ -143,7 +149,9 @@ impl ExodusReader {
     ///     >>> names = reader.reduction_variable_names(EntityType.ASSEMBLY)
     ///     >>> print(names)  # ['Momentum_X', 'Momentum_Y', 'Kinetic_Energy']
     fn reduction_variable_names(&self, var_type: EntityType) -> PyResult<Vec<String>> {
-        self.file.reduction_variable_names(var_type.to_rust()).into_py()
+        self.file
+            .reduction_variable_names(var_type.to_rust())
+            .into_py()
     }
 
     /// Read reduction variable values for a time step
@@ -344,7 +352,11 @@ impl ExodusWriter {
     /// Example:
     ///     >>> writer.define_reduction_variables(EntityType.ASSEMBLY,
     ///     ...     ["Momentum_X", "Momentum_Y", "Kinetic_Energy"])
-    fn define_reduction_variables(&mut self, var_type: EntityType, names: Vec<String>) -> PyResult<()> {
+    fn define_reduction_variables(
+        &mut self,
+        var_type: EntityType,
+        names: Vec<String>,
+    ) -> PyResult<()> {
         if let Some(ref mut file) = self.file {
             let name_refs: Vec<&str> = names.iter().map(|s| s.as_str()).collect();
             file.define_reduction_variables(var_type.to_rust(), &name_refs)

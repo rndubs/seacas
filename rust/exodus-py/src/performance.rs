@@ -1,7 +1,7 @@
 //! Python bindings for performance configuration
 
-use pyo3::prelude::*;
 use exodus_rs::performance as rust_perf;
+use pyo3::prelude::*;
 
 /// Node type detection for HPC environments
 ///
@@ -104,9 +104,7 @@ impl PyCacheConfig {
     #[new]
     #[pyo3(signature = (cache_size=None, num_slots=0, preemption=0.75))]
     fn new(cache_size: Option<usize>, num_slots: usize, preemption: f64) -> Self {
-        let size = cache_size.unwrap_or_else(|| {
-            rust_perf::NodeType::detect().default_cache_size()
-        });
+        let size = cache_size.unwrap_or_else(|| rust_perf::NodeType::detect().default_cache_size());
 
         Self {
             inner: rust_perf::CacheConfig::new(size)
