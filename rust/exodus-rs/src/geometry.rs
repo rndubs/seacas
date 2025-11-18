@@ -412,6 +412,230 @@ pub fn element_centroid(coords: &[Vec3]) -> Vec3 {
 }
 
 // ============================================================================
+// High-level API for mesh geometry calculations
+// ============================================================================
+
+impl ExodusFile<mode::Read> {
+    /// Compute volumes for all elements in a block.
+    ///
+    /// This method efficiently computes the volume of every element in the specified
+    /// block, eliminating the need for nested loops in user code.
+    ///
+    /// # Arguments
+    ///
+    /// * `block_id` - ID of the element block
+    ///
+    /// # Returns
+    ///
+    /// Vector of volumes, one per element in the block
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - Block ID doesn't exist
+    /// - Block topology doesn't support volume calculation
+    /// - Coordinates cannot be read
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use exodus_rs::{ExodusFile, mode, types::EntityType};
+    ///
+    /// # fn main() -> exodus_rs::Result<()> {
+    /// let file = ExodusFile::<mode::Read>::open("mesh.exo")?;
+    /// let block_ids = file.block_ids(EntityType::ElemBlock)?;
+    /// let volumes = file.block_element_volumes(block_ids[0])?;
+    /// let total_volume: f64 = volumes.iter().sum();
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn block_element_volumes(&self, block_id: i64) -> Result<Vec<f64>> {
+        // Get block information
+        let block = self.block(block_id)?;
+        let topology = Topology::from_string(&block.topology);
+        let num_elems = block.num_entries;
+        let nodes_per_elem = block.num_nodes_per_entry;
+
+        // Get connectivity
+        let connectivity = self.connectivity(block_id)?;
+
+        // Get all coordinates
+        let coords = self.coords()?;
+
+        // Compute volume for each element
+        let mut volumes = Vec::with_capacity(num_elems);
+        for elem_idx in 0..num_elems {
+            // Extract node indices for this element
+            let start = elem_idx * nodes_per_elem;
+            let end = start + nodes_per_elem;
+            let node_indices = &connectivity[start..end];
+
+            // Get coordinates for this element's nodes
+            let mut elem_coords = Vec::with_capacity(nodes_per_elem);
+            for &node_id in node_indices {
+                // Node IDs are 1-based in Exodus, convert to 0-based for array access
+                let idx = (node_id - 1) as usize;
+                elem_coords.push([coords.x[idx], coords.y[idx], coords.z[idx]]);
+            }
+
+            // Compute volume
+            let vol = element_volume(topology.clone(), &elem_coords)?;
+            volumes.push(vol);
+        }
+
+        Ok(volumes)
+    }
+
+    /// Compute centroids for all elements in a block.
+    ///
+    /// This method efficiently computes the centroid of every element in the specified
+    /// block, eliminating the need for nested loops in user code.
+    ///
+    /// # Arguments
+    ///
+    /// * `block_id` - ID of the element block
+    ///
+    /// # Returns
+    ///
+    /// Vector of centroids as [x, y, z] coordinates, one per element in the block
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - Block ID doesn't exist
+    /// - Coordinates cannot be read
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use exodus_rs::{ExodusFile, mode, types::EntityType};
+    ///
+    /// # fn main() -> exodus_rs::Result<()> {
+    /// let file = ExodusFile::<mode::Read>::open("mesh.exo")?;
+    /// let block_ids = file.block_ids(EntityType::ElemBlock)?;
+    /// let centroids = file.block_element_centroids(block_ids[0])?;
+    /// println!("First element centroid: {:?}", centroids[0]);
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn block_element_centroids(&self, block_id: i64) -> Result<Vec<Vec3>> {
+        // Get block information
+        let block = self.block(block_id)?;
+        let num_elems = block.num_entries;
+        let nodes_per_elem = block.num_nodes_per_entry;
+
+        // Get connectivity
+        let connectivity = self.connectivity(block_id)?;
+
+        // Get all coordinates
+        let coords = self.coords()?;
+
+        // Compute centroid for each element
+        let mut centroids = Vec::with_capacity(num_elems);
+        for elem_idx in 0..num_elems {
+            // Extract node indices for this element
+            let start = elem_idx * nodes_per_elem;
+            let end = start + nodes_per_elem;
+            let node_indices = &connectivity[start..end];
+
+            // Get coordinates for this element's nodes
+            let mut elem_coords = Vec::with_capacity(nodes_per_elem);
+            for &node_id in node_indices {
+                // Node IDs are 1-based in Exodus, convert to 0-based for array access
+                let idx = (node_id - 1) as usize;
+                elem_coords.push([coords.x[idx], coords.y[idx], coords.z[idx]]);
+            }
+
+            // Compute centroid
+            let centroid = element_centroid(&elem_coords);
+            centroids.push(centroid);
+        }
+
+        Ok(centroids)
+    }
+
+    /// Compute volumes for all elements in the mesh.
+    ///
+    /// This method efficiently computes the volume of every element in all blocks,
+    /// returning a vector indexed by global element number (0-based).
+    ///
+    /// # Returns
+    ///
+    /// Vector of volumes, one per element in the entire mesh, ordered by element blocks
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - Any block topology doesn't support volume calculation
+    /// - Coordinates cannot be read
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use exodus_rs::{ExodusFile, mode};
+    ///
+    /// # fn main() -> exodus_rs::Result<()> {
+    /// let file = ExodusFile::<mode::Read>::open("mesh.exo")?;
+    /// let all_volumes = file.all_element_volumes()?;
+    /// let total_volume: f64 = all_volumes.iter().sum();
+    /// println!("Total mesh volume: {}", total_volume);
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn all_element_volumes(&self) -> Result<Vec<f64>> {
+        use crate::types::EntityType;
+        let block_ids = self.block_ids(EntityType::ElemBlock)?;
+        let mut all_volumes = Vec::new();
+
+        for block_id in block_ids {
+            let volumes = self.block_element_volumes(block_id)?;
+            all_volumes.extend(volumes);
+        }
+
+        Ok(all_volumes)
+    }
+
+    /// Compute centroids for all elements in the mesh.
+    ///
+    /// This method efficiently computes the centroid of every element in all blocks,
+    /// returning a vector indexed by global element number (0-based).
+    ///
+    /// # Returns
+    ///
+    /// Vector of centroids as [x, y, z] coordinates, one per element in the entire mesh,
+    /// ordered by element blocks
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if coordinates cannot be read
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use exodus_rs::{ExodusFile, mode};
+    ///
+    /// # fn main() -> exodus_rs::Result<()> {
+    /// let file = ExodusFile::<mode::Read>::open("mesh.exo")?;
+    /// let all_centroids = file.all_element_centroids()?;
+    /// println!("Mesh has {} elements", all_centroids.len());
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn all_element_centroids(&self) -> Result<Vec<Vec3>> {
+        use crate::types::EntityType;
+        let block_ids = self.block_ids(EntityType::ElemBlock)?;
+        let mut all_centroids = Vec::new();
+
+        for block_id in block_ids {
+            let centroids = self.block_element_centroids(block_id)?;
+            all_centroids.extend(centroids);
+        }
+
+        Ok(all_centroids)
+    }
+}
+
+// ============================================================================
 // Vector math utilities
 // ============================================================================
 
@@ -714,5 +938,322 @@ mod tests {
         assert!(approx_eq(centroid[0], 0.75));
         assert!(approx_eq(centroid[1], 0.75));
         assert!(approx_eq(centroid[2], 0.75));
+    }
+
+    #[test]
+    #[cfg(feature = "netcdf4")]
+    fn test_block_element_volumes() {
+        use crate::{ExodusFile, mode, types::{EntityType, Block}, InitParams, CreateOptions, CreateMode};
+        use tempfile::NamedTempFile;
+
+        // Create a test file with a simple 2-element mesh
+        let temp_file = NamedTempFile::new().unwrap();
+        let path = temp_file.path().to_str().unwrap();
+
+        // Create file and write mesh
+        {
+            let options = CreateOptions {
+                mode: CreateMode::Clobber,
+                ..Default::default()
+            };
+            let mut file = ExodusFile::create(path, options).unwrap();
+
+            let params = InitParams {
+                title: "Test".into(),
+                num_dim: 3,
+                num_nodes: 8,
+                num_elems: 2,
+                num_elem_blocks: 1,
+                ..Default::default()
+            };
+            file.init(&params).unwrap();
+
+            // Two unit cubes side by side
+            let x = vec![0.0, 1.0, 1.0, 0.0, 0.0, 1.0, 1.0, 0.0];
+            let y = vec![0.0, 0.0, 1.0, 1.0, 0.0, 0.0, 1.0, 1.0];
+            let z = vec![0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0];
+            file.put_coords(&x, Some(&y), Some(&z)).unwrap();
+
+            // Define block
+            let block = Block {
+                id: 100,
+                entity_type: EntityType::ElemBlock,
+                topology: "HEX8".into(),
+                num_entries: 2,
+                num_nodes_per_entry: 8,
+                num_edges_per_entry: 0,
+                num_faces_per_entry: 0,
+                num_attributes: 0,
+            };
+            file.put_block(&block).unwrap();
+
+            // Two cubes: first is 0-7, second is offset but shares some nodes
+            let connectivity = vec![
+                1, 2, 3, 4, 5, 6, 7, 8, // First cube
+                1, 2, 3, 4, 5, 6, 7, 8, // Second cube (same for simplicity)
+            ];
+            file.put_connectivity(100, &connectivity).unwrap();
+        }
+
+        // Read and compute volumes
+        let file = ExodusFile::<mode::Read>::open(path).unwrap();
+        let volumes = file.block_element_volumes(100).unwrap();
+
+        assert_eq!(volumes.len(), 2);
+        // Each cube should have volume 1.0
+        assert!(approx_eq(volumes[0], 1.0));
+        assert!(approx_eq(volumes[1], 1.0));
+    }
+
+    #[test]
+    #[cfg(feature = "netcdf4")]
+    fn test_block_element_centroids() {
+        use crate::{ExodusFile, mode, types::{EntityType, Block}, InitParams, CreateOptions, CreateMode};
+        use tempfile::NamedTempFile;
+
+        // Create a test file with a simple 2-element mesh
+        let temp_file = NamedTempFile::new().unwrap();
+        let path = temp_file.path().to_str().unwrap();
+
+        // Create file and write mesh
+        {
+            let options = CreateOptions {
+                mode: CreateMode::Clobber,
+                ..Default::default()
+            };
+            let mut file = ExodusFile::create(path, options).unwrap();
+
+            let params = InitParams {
+                title: "Test".into(),
+                num_dim: 3,
+                num_nodes: 16,
+                num_elems: 2,
+                num_elem_blocks: 1,
+                ..Default::default()
+            };
+            file.init(&params).unwrap();
+
+            // Two unit cubes: one at origin, one offset in x by 2
+            let x = vec![
+                0.0, 1.0, 1.0, 0.0, 0.0, 1.0, 1.0, 0.0, // First cube
+                2.0, 3.0, 3.0, 2.0, 2.0, 3.0, 3.0, 2.0, // Second cube
+            ];
+            let y = vec![
+                0.0, 0.0, 1.0, 1.0, 0.0, 0.0, 1.0, 1.0,
+                0.0, 0.0, 1.0, 1.0, 0.0, 0.0, 1.0, 1.0,
+            ];
+            let z = vec![
+                0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0,
+                0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0,
+            ];
+            file.put_coords(&x, Some(&y), Some(&z)).unwrap();
+
+            // Define block
+            let block = Block {
+                id: 100,
+                entity_type: EntityType::ElemBlock,
+                topology: "HEX8".into(),
+                num_entries: 2,
+                num_nodes_per_entry: 8,
+                num_edges_per_entry: 0,
+                num_faces_per_entry: 0,
+                num_attributes: 0,
+            };
+            file.put_block(&block).unwrap();
+
+            let connectivity = vec![
+                1, 2, 3, 4, 5, 6, 7, 8,    // First cube (nodes 1-8)
+                9, 10, 11, 12, 13, 14, 15, 16, // Second cube (nodes 9-16)
+            ];
+            file.put_connectivity(100, &connectivity).unwrap();
+        }
+
+        // Read and compute centroids
+        let file = ExodusFile::<mode::Read>::open(path).unwrap();
+        let centroids = file.block_element_centroids(100).unwrap();
+
+        assert_eq!(centroids.len(), 2);
+        // First cube centroid at (0.5, 0.5, 0.5)
+        assert!(approx_eq(centroids[0][0], 0.5));
+        assert!(approx_eq(centroids[0][1], 0.5));
+        assert!(approx_eq(centroids[0][2], 0.5));
+        // Second cube centroid at (2.5, 0.5, 0.5)
+        assert!(approx_eq(centroids[1][0], 2.5));
+        assert!(approx_eq(centroids[1][1], 0.5));
+        assert!(approx_eq(centroids[1][2], 0.5));
+    }
+
+    #[test]
+    #[cfg(feature = "netcdf4")]
+    fn test_all_element_volumes() {
+        use crate::{ExodusFile, mode, types::{EntityType, Block}, InitParams, CreateOptions, CreateMode};
+        use tempfile::NamedTempFile;
+
+        // Create a test file with two blocks
+        let temp_file = NamedTempFile::new().unwrap();
+        let path = temp_file.path().to_str().unwrap();
+
+        // Create file and write mesh
+        {
+            let options = CreateOptions {
+                mode: CreateMode::Clobber,
+                ..Default::default()
+            };
+            let mut file = ExodusFile::create(path, options).unwrap();
+
+            let params = InitParams {
+                title: "Test".into(),
+                num_dim: 3,
+                num_nodes: 12,
+                num_elems: 3,
+                num_elem_blocks: 2,
+                ..Default::default()
+            };
+            file.init(&params).unwrap();
+
+            // Coordinates for 1 hex and 2 tets
+            let x = vec![
+                0.0, 1.0, 1.0, 0.0, 0.0, 1.0, 1.0, 0.0, // Hex nodes 1-8
+                2.0, 3.0, 2.5, 2.5, // Tet nodes 9-12
+            ];
+            let y = vec![
+                0.0, 0.0, 1.0, 1.0, 0.0, 0.0, 1.0, 1.0,
+                0.0, 0.0, 1.0, 0.5,
+            ];
+            let z = vec![
+                0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0,
+                0.0, 0.0, 0.0, 1.0,  // Give the tet some height in z
+            ];
+            file.put_coords(&x, Some(&y), Some(&z)).unwrap();
+
+            // Block 1: 1 hex
+            let block1 = Block {
+                id: 100,
+                entity_type: EntityType::ElemBlock,
+                topology: "HEX8".into(),
+                num_entries: 1,
+                num_nodes_per_entry: 8,
+                num_edges_per_entry: 0,
+                num_faces_per_entry: 0,
+                num_attributes: 0,
+            };
+            file.put_block(&block1).unwrap();
+            file.put_connectivity(100, &[1, 2, 3, 4, 5, 6, 7, 8]).unwrap();
+
+            // Block 2: 2 tets
+            let block2 = Block {
+                id: 200,
+                entity_type: EntityType::ElemBlock,
+                topology: "TET4".into(),
+                num_entries: 2,
+                num_nodes_per_entry: 4,
+                num_edges_per_entry: 0,
+                num_faces_per_entry: 0,
+                num_attributes: 0,
+            };
+            file.put_block(&block2).unwrap();
+            file.put_connectivity(200, &[
+                9, 10, 11, 12,  // First tet
+                9, 10, 11, 12,  // Second tet (same for simplicity)
+            ]).unwrap();
+        }
+
+        // Read and compute all volumes
+        let file = ExodusFile::<mode::Read>::open(path).unwrap();
+        let all_volumes = file.all_element_volumes().unwrap();
+
+        assert_eq!(all_volumes.len(), 3); // 1 hex + 2 tets
+        // Hex volume should be 1.0
+        assert!(approx_eq(all_volumes[0], 1.0));
+        // Tets should have positive volumes
+        assert!(all_volumes[1] > 0.0);
+        assert!(all_volumes[2] > 0.0);
+    }
+
+    #[test]
+    #[cfg(feature = "netcdf4")]
+    fn test_all_element_centroids() {
+        use crate::{ExodusFile, mode, types::{EntityType, Block}, InitParams, CreateOptions, CreateMode};
+        use tempfile::NamedTempFile;
+
+        // Create a test file with two blocks
+        let temp_file = NamedTempFile::new().unwrap();
+        let path = temp_file.path().to_str().unwrap();
+
+        // Create file and write mesh
+        {
+            let options = CreateOptions {
+                mode: CreateMode::Clobber,
+                ..Default::default()
+            };
+            let mut file = ExodusFile::create(path, options).unwrap();
+
+            let params = InitParams {
+                title: "Test".into(),
+                num_dim: 3,
+                num_nodes: 12,
+                num_elems: 2,
+                num_elem_blocks: 2,
+                ..Default::default()
+            };
+            file.init(&params).unwrap();
+
+            // Two unit cubes in different blocks
+            let x = vec![
+                0.0, 1.0, 1.0, 0.0, 0.0, 1.0, 1.0, 0.0, // First cube
+                2.0, 3.0, 3.0, 2.0, // Second cube (only 4 nodes for simplicity)
+            ];
+            let y = vec![
+                0.0, 0.0, 1.0, 1.0, 0.0, 0.0, 1.0, 1.0,
+                0.0, 0.0, 1.0, 1.0,
+            ];
+            let z = vec![
+                0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0,
+                0.0, 0.0, 0.0, 0.0,
+            ];
+            file.put_coords(&x, Some(&y), Some(&z)).unwrap();
+
+            // Block 1: 1 hex
+            let block1 = Block {
+                id: 100,
+                entity_type: EntityType::ElemBlock,
+                topology: "HEX8".into(),
+                num_entries: 1,
+                num_nodes_per_entry: 8,
+                num_edges_per_entry: 0,
+                num_faces_per_entry: 0,
+                num_attributes: 0,
+            };
+            file.put_block(&block1).unwrap();
+            file.put_connectivity(100, &[1, 2, 3, 4, 5, 6, 7, 8]).unwrap();
+
+            // Block 2: 1 quad (2D)
+            let block2 = Block {
+                id: 200,
+                entity_type: EntityType::ElemBlock,
+                topology: "QUAD4".into(),
+                num_entries: 1,
+                num_nodes_per_entry: 4,
+                num_edges_per_entry: 0,
+                num_faces_per_entry: 0,
+                num_attributes: 0,
+            };
+            file.put_block(&block2).unwrap();
+            file.put_connectivity(200, &[9, 10, 11, 12]).unwrap();
+        }
+
+        // Read and compute all centroids
+        let file = ExodusFile::<mode::Read>::open(path).unwrap();
+        let all_centroids = file.all_element_centroids().unwrap();
+
+        assert_eq!(all_centroids.len(), 2); // 1 hex + 1 quad
+        // First element (hex) centroid at (0.5, 0.5, 0.5)
+        assert!(approx_eq(all_centroids[0][0], 0.5));
+        assert!(approx_eq(all_centroids[0][1], 0.5));
+        assert!(approx_eq(all_centroids[0][2], 0.5));
+        // Second element (quad) centroid at (2.5, 0.5, 0.0)
+        assert!(approx_eq(all_centroids[1][0], 2.5));
+        assert!(approx_eq(all_centroids[1][1], 0.5));
+        assert!(approx_eq(all_centroids[1][2], 0.0));
     }
 }
