@@ -3,8 +3,7 @@
 #[cfg(all(test, feature = "netcdf4"))]
 mod tests {
     use exodus_rs::{
-        mode, Block, CreateMode, CreateOptions, EntityId, EntityType, ExodusFile, InitParams,
-        NodeSet, Set, Topology,
+        mode, Block, CreateMode, CreateOptions, EntityType, ExodusFile, InitParams, Set, Topology,
     };
     use tempfile::NamedTempFile;
 
@@ -66,7 +65,7 @@ mod tests {
             num_dist_factors: 0,
         };
         file.put_set(&ns).unwrap();
-        file.put_node_set(10, &vec![5, 6, 7, 8], None).unwrap();
+        file.put_node_set(10, &[5, 6, 7, 8], None).unwrap();
 
         file.sync().unwrap();
         drop(file);
@@ -161,7 +160,7 @@ mod tests {
             num_attributes: 0,
         };
         file.put_block(&block).unwrap();
-        file.put_connectivity(1, &vec![1, 2, 3, 4, 5, 6, 7, 8]).unwrap();
+        file.put_connectivity(1, &[1, 2, 3, 4, 5, 6, 7, 8]).unwrap();
 
         // Empty node set
         let ns = Set {
@@ -171,7 +170,7 @@ mod tests {
             num_dist_factors: 0,
         };
         file.put_set(&ns).unwrap();
-        file.put_node_set(10, &vec![], None).unwrap();
+        file.put_node_set(10, &[], None).unwrap();
         file.sync().unwrap();
         drop(file);
 
@@ -186,8 +185,6 @@ mod tests {
 
     #[test]
     fn test_topology_face_definitions() {
-        use exodus_rs::topology::*;
-
         // Test HEX8
         let hex = Topology::Hex8;
         let faces = hex.faces().unwrap();
