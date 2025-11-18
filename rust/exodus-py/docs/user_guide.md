@@ -670,12 +670,12 @@ distorted_hex = [
 volume = element_volume("HEX8", distorted_hex)
 ```
 
-**Computing volumes for an entire mesh:**
+**Computing volumes for an entire mesh (manual approach):**
 
 ```python
 from exodus import ExodusReader, element_volume
 
-# Read mesh and compute element volumes
+# Read mesh and compute element volumes manually
 with ExodusReader.open("mesh.exo") as reader:
     # Get element block information
     block_ids = reader.get_block_ids()
@@ -714,6 +714,28 @@ with ExodusReader.open("mesh.exo") as reader:
         print(f"Block {block_id}: {num_elems} elements, total volume = {total_volume}")
 ```
 
+**Computing volumes for an entire mesh (simplified approach):**
+
+The above manual approach requires deeply nested loops. exodus-py provides high-level methods
+that eliminate this complexity:
+
+```python
+from exodus import ExodusReader
+
+# Compute volumes for entire mesh with one method call
+with ExodusReader.open("mesh.exo") as reader:
+    # Get all element volumes at once
+    all_volumes = reader.all_element_volumes()
+    total_volume = sum(all_volumes)
+    print(f"Total mesh volume: {total_volume}")
+    print(f"Number of elements: {len(all_volumes)}")
+
+    # Or compute volumes for a specific block
+    block_ids = reader.get_block_ids()
+    block_volumes = reader.block_element_volumes(block_ids[0])
+    print(f"Block {block_ids[0]} volume: {sum(block_volumes)}")
+```
+
 **Use Cases:**
 - Mesh quality metrics and validation
 - Physics calculations (mass, density)
@@ -746,13 +768,13 @@ centroid = element_centroid(tet_coords)
 print(f"Tet centroid: {centroid}")  # [0.75, 0.75, 0.75]
 ```
 
-**Computing centroids for mesh visualization:**
+**Computing centroids for mesh visualization (manual approach):**
 
 ```python
 from exodus import ExodusReader, element_centroid
 import numpy as np
 
-# Read mesh and compute element centroids
+# Read mesh and compute element centroids manually
 with ExodusReader.open("mesh.exo") as reader:
     block_ids = reader.get_block_ids()
     coords_x, coords_y, coords_z = reader.get_coords()
@@ -783,6 +805,36 @@ with ExodusReader.open("mesh.exo") as reader:
 
     # Convert to numpy array for further processing
     centroids = np.array(all_centroids)
+
+    # Useful for:
+    # - Spatial queries (find elements in a region)
+    # - Element-based visualization
+    # - Sorting elements by location
+    # - Computing distances between elements
+```
+
+**Computing centroids for mesh visualization (simplified approach):**
+
+The above manual approach requires deeply nested loops. exodus-py provides high-level methods
+that eliminate this complexity:
+
+```python
+from exodus import ExodusReader
+import numpy as np
+
+# Compute centroids for entire mesh with one method call
+with ExodusReader.open("mesh.exo") as reader:
+    # Get all element centroids at once
+    all_centroids = reader.all_element_centroids()
+    centroids = np.array(all_centroids)
+
+    print(f"Mesh has {len(all_centroids)} elements")
+    print(f"First element centroid: {all_centroids[0]}")
+
+    # Or compute centroids for a specific block
+    block_ids = reader.get_block_ids()
+    block_centroids = reader.block_element_centroids(block_ids[0])
+    print(f"Block {block_ids[0]} has {len(block_centroids)} elements")
 
     # Useful for:
     # - Spatial queries (find elements in a region)
