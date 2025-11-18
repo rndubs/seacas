@@ -192,9 +192,7 @@ pub fn tetrahedron_volume(coords: &[Vec3; 4]) -> f64 {
 
     // Scalar triple product: ad · (bd × cd)
     let cross_bc = cross(bd, cd);
-    let volume = dot(ad, cross_bc).abs() / 6.0;
-
-    volume
+    dot(ad, cross_bc).abs() / 6.0
 }
 
 /// Compute the volume of a hexahedral element using tetrahedral decomposition.
