@@ -943,7 +943,11 @@ mod tests {
     #[test]
     #[cfg(feature = "netcdf4")]
     fn test_block_element_volumes() {
-        use crate::{ExodusFile, mode, types::{EntityType, Block}, InitParams, CreateOptions, CreateMode};
+        use crate::{
+            mode,
+            types::{Block, EntityType},
+            CreateMode, CreateOptions, ExodusFile, InitParams,
+        };
         use tempfile::NamedTempFile;
 
         // Create a test file with a simple 2-element mesh
@@ -1008,7 +1012,11 @@ mod tests {
     #[test]
     #[cfg(feature = "netcdf4")]
     fn test_block_element_centroids() {
-        use crate::{ExodusFile, mode, types::{EntityType, Block}, InitParams, CreateOptions, CreateMode};
+        use crate::{
+            mode,
+            types::{Block, EntityType},
+            CreateMode, CreateOptions, ExodusFile, InitParams,
+        };
         use tempfile::NamedTempFile;
 
         // Create a test file with a simple 2-element mesh
@@ -1039,12 +1047,10 @@ mod tests {
                 2.0, 3.0, 3.0, 2.0, 2.0, 3.0, 3.0, 2.0, // Second cube
             ];
             let y = vec![
-                0.0, 0.0, 1.0, 1.0, 0.0, 0.0, 1.0, 1.0,
-                0.0, 0.0, 1.0, 1.0, 0.0, 0.0, 1.0, 1.0,
+                0.0, 0.0, 1.0, 1.0, 0.0, 0.0, 1.0, 1.0, 0.0, 0.0, 1.0, 1.0, 0.0, 0.0, 1.0, 1.0,
             ];
             let z = vec![
-                0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0,
-                0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0,
+                0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0,
             ];
             file.put_coords(&x, Some(&y), Some(&z)).unwrap();
 
@@ -1062,7 +1068,7 @@ mod tests {
             file.put_block(&block).unwrap();
 
             let connectivity = vec![
-                1, 2, 3, 4, 5, 6, 7, 8,    // First cube (nodes 1-8)
+                1, 2, 3, 4, 5, 6, 7, 8, // First cube (nodes 1-8)
                 9, 10, 11, 12, 13, 14, 15, 16, // Second cube (nodes 9-16)
             ];
             file.put_connectivity(100, &connectivity).unwrap();
@@ -1086,7 +1092,11 @@ mod tests {
     #[test]
     #[cfg(feature = "netcdf4")]
     fn test_all_element_volumes() {
-        use crate::{ExodusFile, mode, types::{EntityType, Block}, InitParams, CreateOptions, CreateMode};
+        use crate::{
+            mode,
+            types::{Block, EntityType},
+            CreateMode, CreateOptions, ExodusFile, InitParams,
+        };
         use tempfile::NamedTempFile;
 
         // Create a test file with two blocks
@@ -1116,13 +1126,10 @@ mod tests {
                 0.0, 1.0, 1.0, 0.0, 0.0, 1.0, 1.0, 0.0, // Hex nodes 1-8
                 2.0, 3.0, 2.5, 2.5, // Tet nodes 9-12
             ];
-            let y = vec![
-                0.0, 0.0, 1.0, 1.0, 0.0, 0.0, 1.0, 1.0,
-                0.0, 0.0, 1.0, 0.5,
-            ];
+            let y = vec![0.0, 0.0, 1.0, 1.0, 0.0, 0.0, 1.0, 1.0, 0.0, 0.0, 1.0, 0.5];
             let z = vec![
-                0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0,
-                0.0, 0.0, 0.0, 1.0,  // Give the tet some height in z
+                0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0, 0.0, 0.0, 0.0,
+                1.0, // Give the tet some height in z
             ];
             file.put_coords(&x, Some(&y), Some(&z)).unwrap();
 
@@ -1138,7 +1145,8 @@ mod tests {
                 num_attributes: 0,
             };
             file.put_block(&block1).unwrap();
-            file.put_connectivity(100, &[1, 2, 3, 4, 5, 6, 7, 8]).unwrap();
+            file.put_connectivity(100, &[1, 2, 3, 4, 5, 6, 7, 8])
+                .unwrap();
 
             // Block 2: 2 tets
             let block2 = Block {
@@ -1152,10 +1160,14 @@ mod tests {
                 num_attributes: 0,
             };
             file.put_block(&block2).unwrap();
-            file.put_connectivity(200, &[
-                9, 10, 11, 12,  // First tet
-                9, 10, 11, 12,  // Second tet (same for simplicity)
-            ]).unwrap();
+            file.put_connectivity(
+                200,
+                &[
+                    9, 10, 11, 12, // First tet
+                    9, 10, 11, 12, // Second tet (same for simplicity)
+                ],
+            )
+            .unwrap();
         }
 
         // Read and compute all volumes
@@ -1163,7 +1175,7 @@ mod tests {
         let all_volumes = file.all_element_volumes().unwrap();
 
         assert_eq!(all_volumes.len(), 3); // 1 hex + 2 tets
-        // Hex volume should be 1.0
+                                          // Hex volume should be 1.0
         assert!(approx_eq(all_volumes[0], 1.0));
         // Tets should have positive volumes
         assert!(all_volumes[1] > 0.0);
@@ -1173,7 +1185,11 @@ mod tests {
     #[test]
     #[cfg(feature = "netcdf4")]
     fn test_all_element_centroids() {
-        use crate::{ExodusFile, mode, types::{EntityType, Block}, InitParams, CreateOptions, CreateMode};
+        use crate::{
+            mode,
+            types::{Block, EntityType},
+            CreateMode, CreateOptions, ExodusFile, InitParams,
+        };
         use tempfile::NamedTempFile;
 
         // Create a test file with two blocks
@@ -1203,14 +1219,8 @@ mod tests {
                 0.0, 1.0, 1.0, 0.0, 0.0, 1.0, 1.0, 0.0, // First cube
                 2.0, 3.0, 3.0, 2.0, // Second cube (only 4 nodes for simplicity)
             ];
-            let y = vec![
-                0.0, 0.0, 1.0, 1.0, 0.0, 0.0, 1.0, 1.0,
-                0.0, 0.0, 1.0, 1.0,
-            ];
-            let z = vec![
-                0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0,
-                0.0, 0.0, 0.0, 0.0,
-            ];
+            let y = vec![0.0, 0.0, 1.0, 1.0, 0.0, 0.0, 1.0, 1.0, 0.0, 0.0, 1.0, 1.0];
+            let z = vec![0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0, 0.0, 0.0, 0.0, 0.0];
             file.put_coords(&x, Some(&y), Some(&z)).unwrap();
 
             // Block 1: 1 hex
@@ -1225,7 +1235,8 @@ mod tests {
                 num_attributes: 0,
             };
             file.put_block(&block1).unwrap();
-            file.put_connectivity(100, &[1, 2, 3, 4, 5, 6, 7, 8]).unwrap();
+            file.put_connectivity(100, &[1, 2, 3, 4, 5, 6, 7, 8])
+                .unwrap();
 
             // Block 2: 1 quad (2D)
             let block2 = Block {
@@ -1247,7 +1258,7 @@ mod tests {
         let all_centroids = file.all_element_centroids().unwrap();
 
         assert_eq!(all_centroids.len(), 2); // 1 hex + 1 quad
-        // First element (hex) centroid at (0.5, 0.5, 0.5)
+                                            // First element (hex) centroid at (0.5, 0.5, 0.5)
         assert!(approx_eq(all_centroids[0][0], 0.5));
         assert!(approx_eq(all_centroids[0][1], 0.5));
         assert!(approx_eq(all_centroids[0][2], 0.5));
