@@ -507,6 +507,88 @@ Side numbering depends on element topology. Generally:
 - For quads: 1=bottom, 2=right, 3=top, 4=left
 - For hexes: 1-6 for faces
 
+### Converting NodeSets to SideSets
+
+exodus-py provides convenient methods to automatically convert nodesets (collections of nodes) into sidesets (collections of element faces). This conversion:
+- Identifies element faces where all nodes are in the nodeset
+- Filters for boundary faces only (faces on the mesh exterior)
+- Verifies normals point outward from the mesh center
+- Checks for consistent normal orientations
+
+This is particularly useful for defining boundary conditions on surfaces specified by nodal coordinates.
+
+#### Basic Conversion
+
+**Read-only conversion** (using ExodusReader):
+
+```python
+from exodus import ExodusReader
+
+# Read and convert without modifying the file
+with ExodusReader.open("mesh.exo") as reader:
+    # Convert nodeset 10 to a new sideset with ID 100
+    sideset = reader.convert_nodeset_to_sideset(
+        nodeset_id=10,
+        new_sideset_id=100
+    )
+    print(f"Created sideset {sideset.id} with {len(sideset.elements)} faces")
+```
+
+**Write to file** (using ExodusAppender):
+
+```python
+from exodus import ExodusAppender
+
+# Convert and save to file
+with ExodusAppender.append("mesh.exo") as appender:
+    appender.create_sideset_from_nodeset(
+        nodeset_id=10,
+        new_sideset_id=100
+    )
+```
+
+#### Auto-Increment IDs
+
+Automatically assign sideset IDs by finding the maximum existing ID and incrementing:
+
+```python
+with ExodusAppender.append("mesh.exo") as appender:
+    # Sideset ID is automatically assigned
+    sideset_id = appender.create_sideset_from_nodeset_auto(10)
+    print(f"Created sideset with auto-assigned ID: {sideset_id}")
+
+    # Convert multiple nodesets without ID conflicts
+    id1 = appender.create_sideset_from_nodeset_auto(20)
+    id2 = appender.create_sideset_from_nodeset_auto(30)
+```
+
+#### Name-Based Conversion
+
+Work with string names instead of numeric IDs:
+
+```python
+with ExodusAppender.append("mesh.exo") as appender:
+    # Convert by name - automatically copies the nodeset's name to the sideset
+    sideset_id = appender.create_sideset_from_nodeset_by_name("inlet")
+    print(f"Converted nodeset 'inlet' to sideset {sideset_id}")
+
+    # Create a sideset with an explicit name
+    sideset_id = appender.create_sideset_from_nodeset_named(10, "outlet")
+    print(f"Converted nodeset 10 to sideset named 'outlet'")
+```
+
+#### Conversion Examples
+
+For complete examples demonstrating all conversion features, see:
+- `rust/exodus-py/examples/nodeset_to_sideset.py`
+
+The example includes:
+- Multiple conversion approaches (read-only vs. write)
+- Auto-increment ID assignment
+- Name-based conversion
+- Using context managers
+- Inspecting conversion results
+
 ### Edge and Face Blocks
 
 For 3D meshes, you can also define edge and face blocks:
