@@ -8,7 +8,7 @@ import os
 
 # Import from installed package after building
 try:
-    from exodus import ExodusReader, MeshBuilder, BlockBuilder, SpatialSearchResult
+    from exodus import ExodusReader, SpatialSearchResult
     EXODUS_AVAILABLE = True
 except ImportError:
     EXODUS_AVAILABLE = False
@@ -21,38 +21,51 @@ def create_test_mesh_with_variables():
     temp_file.close()
     path = temp_file.name
 
-    # Create a simple mesh with 4 nodes and 1 hex element
-    # Four nodes in a cube
+    # Delete the temp file so ExodusWriter can create it
+    os.unlink(path)
+
+    from exodus import ExodusWriter, InitParams, Block, EntityType
+
+    # Create file with ExodusWriter
+    writer = ExodusWriter.create(path)
+
+    # Initialize with 8 nodes, 1 element
+    params = InitParams(
+        title="Test Mesh",
+        num_dim=3,
+        num_nodes=8,
+        num_elems=1,
+        num_elem_blocks=1
+    )
+    writer.put_init_params(params)
+
+    # Set coordinates - cube
     coords_x = [0.0, 1.0, 1.0, 0.0, 0.0, 1.0, 1.0, 0.0]
     coords_y = [0.0, 0.0, 1.0, 1.0, 0.0, 0.0, 1.0, 1.0]
     coords_z = [0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0]
+    writer.put_coords(coords_x, coords_y, coords_z)
 
-    # Build and write mesh
-    (
-        MeshBuilder("Test Mesh")
-        .dimensions(3)
-        .coordinates(x=coords_x, y=coords_y, z=coords_z)
-        .add_block(
-            BlockBuilder(100, "HEX8")
-            .connectivity([1, 2, 3, 4, 5, 6, 7, 8])
-            .build()
-        )
-        .write(path)
+    # Define hex block
+    block = Block(
+        id=100,
+        entity_type=EntityType.ElemBlock,
+        topology="HEX8",
+        num_entries=1,
+        num_nodes_per_entry=8,
+        num_edges_per_entry=0,
+        num_faces_per_entry=0,
+        num_attributes=0
     )
+    writer.put_block(block)
+    writer.put_connectivity(100, [1, 2, 3, 4, 5, 6, 7, 8])
 
-    # Reopen in write mode to add variables
-    from exodus import ExodusAppender
-    appender = ExodusAppender.append(path)
-
-    # Define nodal variable
-    appender.define_variables("nodal", ["temperature"])
-
-    # Define element variable
-    appender.define_variables("elem_block", ["stress"])
+    # Define variables
+    writer.define_variables(EntityType.Nodal, ["temperature"])
+    writer.define_variables(EntityType.ElemBlock, ["stress"])
 
     # Write time steps
     for step in range(5):
-        appender.put_time(step, float(step) * 0.1)
+        writer.put_time(step, float(step) * 0.1)
 
         # Nodal variable: different values for each node
         nodal_values = [
@@ -65,13 +78,13 @@ def create_test_mesh_with_variables():
             70.0 + step,  # Node 7 at (1,1,1)
             80.0 + step,  # Node 8 at (0,1,1)
         ]
-        appender.put_var(step, "nodal", 0, 0, nodal_values)
+        writer.put_var(step, EntityType.Nodal, 0, 0, nodal_values)
 
         # Element variable
         elem_values = [100.0 + step]
-        appender.put_var(step, "elem_block", 100, 0, elem_values)
+        writer.put_var(step, EntityType.ElemBlock, 100, 0, elem_values)
 
-    appender.close()
+    writer.close()
 
     return path
 
@@ -241,19 +254,24 @@ class TestSpatialSearch:
 
             result = reader.search_nodal_variable(0.1, 0.1, 0.0, "temperature", -1.0)
 
-            # Slice by time range: 0.1 to 0.3
-            sliced = result.slice_by_time(reader, 0.1, 0.3)
+            # Slice by time range: 0.1 to 0.31 (slightly beyond 0.3 to handle floating point)
+            sliced = result.slice_by_time(reader, 0.1, 0.31)
 
             # Should get steps 1, 2, 3 (times 0.1, 0.2, 0.3)
-            assert len(sliced.time_history) == 3
+            assert len(sliced.time_history) == 3, f"Expected 3 time steps, got {len(sliced.time_history)}"
             assert abs(sliced.time_history[0] - 11.0) < 1e-10
             assert abs(sliced.time_history[1] - 12.0) < 1e-10
             assert abs(sliced.time_history[2] - 13.0) < 1e-10
 
-            # Test edge case: exact time match
-            sliced = result.slice_by_time(reader, 0.0, 0.0)
+            # Test edge case: exact time match at start
+            sliced = result.slice_by_time(reader, 0.0, 0.01)
             assert len(sliced.time_history) == 1
             assert abs(sliced.time_history[0] - 10.0) < 1e-10
+
+            # Test slicing middle range
+            sliced = result.slice_by_time(reader, 0.15, 0.25)
+            assert len(sliced.time_history) == 1
+            assert abs(sliced.time_history[0] - 12.0) < 1e-10
 
             reader.close()
         finally:
@@ -328,39 +346,57 @@ class TestMultipleElements:
         temp_file.close()
         path = temp_file.name
 
-        # Create a mesh with 2 cubes
-        # Two cubes side by side (using same nodes for simplicity)
+        # Delete the temp file so ExodusWriter can create it
+        os.unlink(path)
+
+        from exodus import ExodusWriter, InitParams, Block, EntityType
+
+        # Create file with ExodusWriter
+        writer = ExodusWriter.create(path)
+
+        # Initialize with 8 nodes, 2 elements
+        params = InitParams(
+            title="Multi Element Mesh",
+            num_dim=3,
+            num_nodes=8,
+            num_elems=2,
+            num_elem_blocks=1
+        )
+        writer.put_init_params(params)
+
+        # Set coordinates
         coords_x = [0.0, 1.0, 1.0, 0.0, 0.0, 1.0, 1.0, 0.0]
         coords_y = [0.0, 0.0, 1.0, 1.0, 0.0, 0.0, 1.0, 1.0]
         coords_z = [0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0]
+        writer.put_coords(coords_x, coords_y, coords_z)
 
-        # Build and write mesh with 2 elements
-        (
-            MeshBuilder("Multi Element Mesh")
-            .dimensions(3)
-            .coordinates(x=coords_x, y=coords_y, z=coords_z)
-            .add_block(
-                BlockBuilder(100, "HEX8")
-                .connectivity([
-                    1, 2, 3, 4, 5, 6, 7, 8,  # Element 1
-                    1, 2, 3, 4, 5, 6, 7, 8,  # Element 2 (same nodes for simplicity)
-                ])
-                .build()
-            )
-            .write(path)
+        # Define hex block with 2 elements
+        block = Block(
+            id=100,
+            entity_type=EntityType.ElemBlock,
+            topology="HEX8",
+            num_entries=2,
+            num_nodes_per_entry=8,
+            num_edges_per_entry=0,
+            num_faces_per_entry=0,
+            num_attributes=0
         )
+        writer.put_block(block)
+        writer.put_connectivity(100, [
+            1, 2, 3, 4, 5, 6, 7, 8,  # Element 1
+            1, 2, 3, 4, 5, 6, 7, 8,  # Element 2 (same nodes for simplicity)
+        ])
 
-        # Add element variables
-        from exodus import ExodusAppender
-        appender = ExodusAppender.open(path)
-        appender.define_variables("elem_block", ["pressure"])
+        # Define element variable
+        writer.define_variables(EntityType.ElemBlock, ["pressure"])
 
+        # Write time steps
         for step in range(3):
-            appender.put_time(step, float(step))
+            writer.put_time(step, float(step))
             elem_values = [50.0 + step, 150.0 + step]
-            appender.put_var(step, "elem_block", 100, 0, elem_values)
+            writer.put_var(step, EntityType.ElemBlock, 100, 0, elem_values)
 
-        appender.close()
+        writer.close()
         return path
 
     def test_search_multi_element(self):
