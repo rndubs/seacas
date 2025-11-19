@@ -19,8 +19,7 @@ exodus-py is a Python interface to the exodus-rs Rust library, enabling efficien
 ## Documentation Structure
 
 - **{doc}`quickstart`** - Get up and running quickly with common use cases
-- **{doc}`user_guide`** - Comprehensive guide to using exodus-py
-- **{doc}`search`** - Spatial search for extracting field data by location
+- **{doc}`user_guide`** - Comprehensive guide to using exodus-py (includes spatial search)
 - **{doc}`api_reference`** - Detailed API documentation for all classes and methods
 
 ## Example Usage
@@ -65,7 +64,6 @@ with ExodusReader.open("mesh.exo") as reader:
 
 quickstart
 user_guide
-search
 api_reference
 ```
 
