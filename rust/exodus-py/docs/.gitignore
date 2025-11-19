@@ -1,2 +1,8 @@
 # Sphinx build output
 _build/
+
+# Auto-generated API documentation (if using sphinx-apidoc)
+# Note: api_reference.md is now a template that uses autodoc directives
+# and should be tracked in git
+_autosummary/
+api/
