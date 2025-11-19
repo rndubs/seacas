@@ -34,7 +34,7 @@ approx = "0.5"
 tempfile = "3.8"
 
 [features]
-default = []
+default = ["numpy"]
 numpy = ["dep:numpy"]
 
 [package.metadata.maturin]

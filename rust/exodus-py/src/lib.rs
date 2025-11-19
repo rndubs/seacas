@@ -21,6 +21,7 @@ mod attribute;
 mod performance;
 mod geometry;
 mod search;
+mod numpy_utils;
 
 // Re-exports
 use types::*;

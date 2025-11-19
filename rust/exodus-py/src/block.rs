@@ -4,6 +4,7 @@ use pyo3::prelude::*;
 use crate::error::IntoPyResult;
 use crate::file::{ExodusWriter, ExodusAppender, ExodusReader};
 use crate::types::Block;
+use crate::numpy_utils::{extract_i64_vec, extract_f64_vec, vec_to_numpy_i64, vec_to_numpy_f64};
 
 #[pymethods]
 impl ExodusWriter {
@@ -30,14 +31,18 @@ impl ExodusWriter {
     ///
     /// Args:
     ///     block_id: Block ID
-    ///     connectivity: Flat array of node IDs (1-based)
+    ///     connectivity: Flat array of node IDs (1-based) - accepts list or NumPy array
     ///
     /// Example:
-    ///     >>> # One hex element with 8 nodes
+    ///     >>> # Using lists
     ///     >>> writer.put_connectivity(100, [1, 2, 3, 4, 5, 6, 7, 8])
-    fn put_connectivity(&mut self, block_id: i64, connectivity: Vec<i64>) -> PyResult<()> {
+    ///     >>> # Using NumPy
+    ///     >>> import numpy as np
+    ///     >>> writer.put_connectivity(100, np.array([1, 2, 3, 4, 5, 6, 7, 8]))
+    fn put_connectivity(&mut self, py: Python<'_>, block_id: i64, connectivity: &Bound<'_, PyAny>) -> PyResult<()> {
+        let connectivity_vec = extract_i64_vec(py, connectivity)?;
         self.file_mut()?
-            .put_connectivity(block_id, &connectivity)
+            .put_connectivity(block_id, &connectivity_vec)
             .into_py()?;
         Ok(())
     }
@@ -46,10 +51,11 @@ impl ExodusWriter {
     ///
     /// Args:
     ///     block_id: Block ID
-    ///     attributes: Flat array of attribute values
-    fn put_block_attributes(&mut self, block_id: i64, attributes: Vec<f64>) -> PyResult<()> {
+    ///     attributes: Flat array of attribute values - accepts list or NumPy array
+    fn put_block_attributes(&mut self, py: Python<'_>, block_id: i64, attributes: &Bound<'_, PyAny>) -> PyResult<()> {
+        let attributes_vec = extract_f64_vec(py, attributes)?;
         self.file_mut()?
-            .put_block_attributes(block_id, &attributes)
+            .put_block_attributes(block_id, &attributes_vec)
             .into_py()?;
         Ok(())
     }
@@ -100,17 +106,51 @@ impl ExodusReader {
     }
 
     /// Read element connectivity
+    ///
+    /// Returns:
+    ///     NumPy array of node IDs (1-based)
+    #[cfg(feature = "numpy")]
+    fn get_connectivity<'py>(&self, py: Python<'py>, block_id: i64) -> PyResult<Bound<'py, numpy::PyArray1<i64>>> {
+        let vec = self.file_ref().connectivity(block_id).into_py()?;
+        Ok(vec_to_numpy_i64(py, vec))
+    }
+
+    /// Read element connectivity
+    #[cfg(not(feature = "numpy"))]
     fn get_connectivity(&self, block_id: i64) -> PyResult<Vec<i64>> {
         self.file_ref().connectivity(block_id).into_py()
     }
 
     /// Read all block IDs
+    ///
+    /// Returns:
+    ///     NumPy array of block IDs
+    #[cfg(feature = "numpy")]
+    fn get_block_ids<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, numpy::PyArray1<i64>>> {
+        use exodus_rs::types::EntityType;
+        let vec = self.file_ref().block_ids(EntityType::ElemBlock).into_py()?;
+        Ok(vec_to_numpy_i64(py, vec))
+    }
+
+    /// Read all block IDs
+    #[cfg(not(feature = "numpy"))]
     fn get_block_ids(&self) -> PyResult<Vec<i64>> {
         use exodus_rs::types::EntityType;
         self.file_ref().block_ids(EntityType::ElemBlock).into_py()
     }
 
     /// Read block attributes
+    ///
+    /// Returns:
+    ///     NumPy array of attribute values
+    #[cfg(feature = "numpy")]
+    fn get_block_attributes<'py>(&self, py: Python<'py>, block_id: i64) -> PyResult<Bound<'py, numpy::PyArray1<f64>>> {
+        let vec = self.file_ref().block_attributes(block_id).into_py()?;
+        Ok(vec_to_numpy_f64(py, vec))
+    }
+
+    /// Read block attributes
+    #[cfg(not(feature = "numpy"))]
     fn get_block_attributes(&self, block_id: i64) -> PyResult<Vec<f64>> {
         self.file_ref().block_attributes(block_id).into_py()
     }

@@ -4,6 +4,7 @@ use pyo3::prelude::*;
 use crate::error::IntoPyResult;
 use crate::file::{ExodusWriter, ExodusReader, ExodusAppender};
 use crate::types::{NodeSet, SideSet, EntitySet, EntityType};
+use crate::numpy_utils::{extract_i64_vec, extract_f64_vec, vec_to_numpy_i64};
 
 #[pymethods]
 impl ExodusWriter {
@@ -39,8 +40,8 @@ impl ExodusWriter {
     ///
     /// Args:
     ///     set_id: ID of the set
-    ///     nodes: List of node IDs in the set
-    ///     dist_factors: Optional list of distribution factors (one per node)
+    ///     nodes: List/array of node IDs in the set - accepts list or NumPy array
+    ///     dist_factors: Optional list/array of distribution factors (one per node) - accepts list or NumPy array
     ///
     /// Raises:
     ///     ExodusError: If the set has not been defined or write fails
@@ -53,21 +54,24 @@ impl ExodusWriter {
     #[pyo3(signature = (set_id, nodes, dist_factors=None))]
     fn put_node_set(
         &mut self,
+        py: Python<'_>,
         set_id: i64,
-        nodes: Vec<i64>,
-        dist_factors: Option<Vec<f64>>,
+        nodes: &Bound<'_, PyAny>,
+        dist_factors: Option<&Bound<'_, PyAny>>,
     ) -> PyResult<()> {
-        let df = dist_factors.as_deref();
-        self.file_mut()?.put_node_set(set_id, &nodes, df).into_py()
+        let nodes_vec = extract_i64_vec(py, nodes)?;
+        let df_vec = dist_factors.map(|v| extract_f64_vec(py, v)).transpose()?;
+        let df = df_vec.as_deref();
+        self.file_mut()?.put_node_set(set_id, &nodes_vec, df).into_py()
     }
 
     /// Write a side set
     ///
     /// Args:
     ///     set_id: ID of the set
-    ///     elements: List of element IDs that define the sides
-    ///     sides: List of side numbers within each element (topology dependent)
-    ///     dist_factors: Optional list of distribution factors (one per node-on-side)
+    ///     elements: List/array of element IDs that define the sides - accepts list or NumPy array
+    ///     sides: List/array of side numbers within each element (topology dependent) - accepts list or NumPy array
+    ///     dist_factors: Optional list/array of distribution factors (one per node-on-side) - accepts list or NumPy array
     ///
     /// Raises:
     ///     ExodusError: If the set has not been defined or write fails
@@ -80,13 +84,17 @@ impl ExodusWriter {
     #[pyo3(signature = (set_id, elements, sides, dist_factors=None))]
     fn put_side_set(
         &mut self,
+        py: Python<'_>,
         set_id: i64,
-        elements: Vec<i64>,
-        sides: Vec<i64>,
-        dist_factors: Option<Vec<f64>>,
+        elements: &Bound<'_, PyAny>,
+        sides: &Bound<'_, PyAny>,
+        dist_factors: Option<&Bound<'_, PyAny>>,
     ) -> PyResult<()> {
-        let df = dist_factors.as_deref();
-        self.file_mut()?.put_side_set(set_id, &elements, &sides, df).into_py()
+        let elements_vec = extract_i64_vec(py, elements)?;
+        let sides_vec = extract_i64_vec(py, sides)?;
+        let df_vec = dist_factors.map(|v| extract_f64_vec(py, v)).transpose()?;
+        let df = df_vec.as_deref();
+        self.file_mut()?.put_side_set(set_id, &elements_vec, &sides_vec, df).into_py()
     }
 
     /// Write an entity set (edge, face, or element set)
@@ -94,7 +102,7 @@ impl ExodusWriter {
     /// Args:
     ///     entity_type: Type of set (EdgeSet, FaceSet, or ElemSet)
     ///     set_id: ID of the set
-    ///     entities: List of entity IDs in the set
+    ///     entities: List/array of entity IDs in the set - accepts list or NumPy array
     ///
     /// Raises:
     ///     ExodusError: If the set has not been defined or write fails
@@ -106,11 +114,26 @@ impl ExodusWriter {
     ///     >>> exo.put_entity_set(EntityType.ELEM_SET, 500, [2, 4, 6, 8, 10])
     fn put_entity_set(
         &mut self,
+        py: Python<'_>,
         entity_type: &EntityType,
         set_id: i64,
-        entities: Vec<i64>,
+        entities: &Bound<'_, PyAny>,
     ) -> PyResult<()> {
-        self.file_mut()?.put_entity_set(entity_type.to_rust(), set_id, &entities).into_py()
+        let entities_vec = extract_i64_vec(py, entities)?;
+        self.file_mut()?.put_entity_set(entity_type.to_rust(), set_id, &entities_vec).into_py()
+    }
+
+    /// Get all set IDs of a given type
+    ///
+    /// Args:
+    ///     entity_type: Type of set (NodeSet, EdgeSet, FaceSet, ElemSet, or SideSet)
+    ///
+    /// Returns:
+    ///     NumPy array of set IDs
+    #[cfg(feature = "numpy")]
+    fn get_set_ids<'py>(&self, py: Python<'py>, entity_type: &EntityType) -> PyResult<Bound<'py, numpy::PyArray1<i64>>> {
+        let vec = self.file_ref()?.set_ids(entity_type.to_rust()).into_py()?;
+        Ok(vec_to_numpy_i64(py, vec))
     }
 
     /// Get all set IDs of a given type
@@ -120,6 +143,7 @@ impl ExodusWriter {
     ///
     /// Returns:
     ///     List of set IDs
+    #[cfg(not(feature = "numpy"))]
     fn get_set_ids(&self, entity_type: &EntityType) -> PyResult<Vec<i64>> {
         self.file_ref()?.set_ids(entity_type.to_rust()).into_py()
     }
@@ -188,7 +212,18 @@ impl ExodusReader {
     /// Get node set IDs
     ///
     /// Returns:
+    ///     NumPy array of all node set IDs
+    #[cfg(feature = "numpy")]
+    fn get_node_set_ids<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, numpy::PyArray1<i64>>> {
+        let vec = self.file_ref().set_ids(exodus_rs::EntityType::NodeSet).into_py()?;
+        Ok(vec_to_numpy_i64(py, vec))
+    }
+
+    /// Get node set IDs
+    ///
+    /// Returns:
     ///     List of all node set IDs
+    #[cfg(not(feature = "numpy"))]
     fn get_node_set_ids(&self) -> PyResult<Vec<i64>> {
         self.file_ref().set_ids(exodus_rs::EntityType::NodeSet).into_py()
     }
@@ -196,7 +231,18 @@ impl ExodusReader {
     /// Get side set IDs
     ///
     /// Returns:
+    ///     NumPy array of all side set IDs
+    #[cfg(feature = "numpy")]
+    fn get_side_set_ids<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, numpy::PyArray1<i64>>> {
+        let vec = self.file_ref().set_ids(exodus_rs::EntityType::SideSet).into_py()?;
+        Ok(vec_to_numpy_i64(py, vec))
+    }
+
+    /// Get side set IDs
+    ///
+    /// Returns:
     ///     List of all side set IDs
+    #[cfg(not(feature = "numpy"))]
     fn get_side_set_ids(&self) -> PyResult<Vec<i64>> {
         self.file_ref().set_ids(exodus_rs::EntityType::SideSet).into_py()
     }
@@ -204,7 +250,18 @@ impl ExodusReader {
     /// Get element set IDs
     ///
     /// Returns:
+    ///     NumPy array of all element set IDs
+    #[cfg(feature = "numpy")]
+    fn get_elem_set_ids<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, numpy::PyArray1<i64>>> {
+        let vec = self.file_ref().set_ids(exodus_rs::EntityType::ElemSet).into_py()?;
+        Ok(vec_to_numpy_i64(py, vec))
+    }
+
+    /// Get element set IDs
+    ///
+    /// Returns:
     ///     List of all element set IDs
+    #[cfg(not(feature = "numpy"))]
     fn get_elem_set_ids(&self) -> PyResult<Vec<i64>> {
         self.file_ref().set_ids(exodus_rs::EntityType::ElemSet).into_py()
     }

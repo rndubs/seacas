@@ -5,6 +5,7 @@ use pyo3::prelude::*;
 use crate::error::IntoPyResult;
 use crate::file::{ExodusReader, ExodusWriter};
 use crate::types::{EntityType, TruthTable};
+use crate::numpy_utils::{extract_f64_vec, vec_to_numpy_f64};
 
 /// Variable operations for ExodusReader
 #[pymethods]
@@ -60,11 +61,41 @@ impl ExodusReader {
     ///     var_index: Variable index (0-based)
     ///
     /// Returns:
+    ///     NumPy array of variable values
+    ///
+    /// Example:
+    ///     >>> temp = reader.var(0, EntityType.NODAL, 0, 0)
+    ///     >>> print(f"Temperature at t=0: {temp}")
+    #[cfg(feature = "numpy")]
+    fn var<'py>(
+        &self,
+        py: Python<'py>,
+        step: usize,
+        var_type: EntityType,
+        entity_id: i64,
+        var_index: usize,
+    ) -> PyResult<Bound<'py, numpy::PyArray1<f64>>> {
+        let vec = self.file
+            .var(step, var_type.to_rust(), entity_id, var_index)
+            .into_py()?;
+        Ok(vec_to_numpy_f64(py, vec))
+    }
+
+    /// Read variable values at a time step
+    ///
+    /// Args:
+    ///     step: Time step index (0-based)
+    ///     var_type: Entity type
+    ///     entity_id: Entity ID (block ID for block variables, 0 for global/nodal)
+    ///     var_index: Variable index (0-based)
+    ///
+    /// Returns:
     ///     List of variable values
     ///
     /// Example:
     ///     >>> temp = reader.var(0, EntityType.NODAL, 0, 0)
     ///     >>> print(f"Temperature at t=0: {temp}")
+    #[cfg(not(feature = "numpy"))]
     fn var(
         &self,
         step: usize,
@@ -85,7 +116,25 @@ impl ExodusReader {
     ///     entity_id: Entity ID (block ID for block variables, 0 for global/nodal)
     ///
     /// Returns:
+    ///     NumPy array of all variable values
+    #[cfg(feature = "numpy")]
+    fn var_multi<'py>(&self, py: Python<'py>, step: usize, var_type: EntityType, entity_id: i64) -> PyResult<Bound<'py, numpy::PyArray1<f64>>> {
+        let vec = self.file
+            .var_multi(step, var_type.to_rust(), entity_id)
+            .into_py()?;
+        Ok(vec_to_numpy_f64(py, vec))
+    }
+
+    /// Read all variables for an entity at a time step
+    ///
+    /// Args:
+    ///     step: Time step index (0-based)
+    ///     var_type: Entity type
+    ///     entity_id: Entity ID (block ID for block variables, 0 for global/nodal)
+    ///
+    /// Returns:
     ///     Flat list of all variable values
+    #[cfg(not(feature = "numpy"))]
     fn var_multi(&self, step: usize, var_type: EntityType, entity_id: i64) -> PyResult<Vec<f64>> {
         self.file
             .var_multi(step, var_type.to_rust(), entity_id)
@@ -102,7 +151,35 @@ impl ExodusReader {
     ///     var_index: Variable index (0-based)
     ///
     /// Returns:
+    ///     NumPy array of variable values for all time steps
+    #[cfg(feature = "numpy")]
+    fn var_time_series<'py>(
+        &self,
+        py: Python<'py>,
+        start_step: usize,
+        end_step: usize,
+        var_type: EntityType,
+        entity_id: i64,
+        var_index: usize,
+    ) -> PyResult<Bound<'py, numpy::PyArray1<f64>>> {
+        let vec = self.file
+            .var_time_series(start_step, end_step, var_type.to_rust(), entity_id, var_index)
+            .into_py()?;
+        Ok(vec_to_numpy_f64(py, vec))
+    }
+
+    /// Read variable time series
+    ///
+    /// Args:
+    ///     start_step: Starting time step index (0-based)
+    ///     end_step: Ending time step index (exclusive)
+    ///     var_type: Entity type
+    ///     entity_id: Entity ID (block ID for block variables, 0 for global/nodal)
+    ///     var_index: Variable index (0-based)
+    ///
+    /// Returns:
     ///     Variable values for all time steps
+    #[cfg(not(feature = "numpy"))]
     fn var_time_series(
         &self,
         start_step: usize,
@@ -154,11 +231,39 @@ impl ExodusReader {
     ///     entity_id: Entity ID (e.g., assembly ID, block ID, set ID)
     ///
     /// Returns:
+    ///     NumPy array of reduction variable values
+    ///
+    /// Example:
+    ///     >>> values = reader.get_reduction_vars(0, EntityType.ASSEMBLY, 100)
+    ///     >>> print(f"Momentum: {values[0]}, Energy: {values[3]}")
+    #[cfg(feature = "numpy")]
+    fn get_reduction_vars<'py>(
+        &self,
+        py: Python<'py>,
+        step: usize,
+        var_type: EntityType,
+        entity_id: i64,
+    ) -> PyResult<Bound<'py, numpy::PyArray1<f64>>> {
+        let vec = self.file
+            .get_reduction_vars(step, var_type.to_rust(), entity_id)
+            .into_py()?;
+        Ok(vec_to_numpy_f64(py, vec))
+    }
+
+    /// Read reduction variable values for a time step
+    ///
+    /// Args:
+    ///     step: Time step index (0-based)
+    ///     var_type: Entity type
+    ///     entity_id: Entity ID (e.g., assembly ID, block ID, set ID)
+    ///
+    /// Returns:
     ///     List of reduction variable values
     ///
     /// Example:
     ///     >>> values = reader.get_reduction_vars(0, EntityType.ASSEMBLY, 100)
     ///     >>> print(f"Momentum: {values[0]}, Energy: {values[3]}")
+    #[cfg(not(feature = "numpy"))]
     fn get_reduction_vars(
         &self,
         step: usize,
@@ -220,20 +325,26 @@ impl ExodusWriter {
     ///     var_type: Entity type
     ///     entity_id: Entity ID (block ID for block variables, 0 for global/nodal)
     ///     var_index: Variable index (0-based)
-    ///     values: Variable values
+    ///     values: Variable values - accepts list or NumPy array
     ///
     /// Example:
+    ///     >>> # Using lists
     ///     >>> writer.put_var(0, EntityType.NODAL, 0, 0, [100.0, 200.0, 300.0])
+    ///     >>> # Using NumPy
+    ///     >>> import numpy as np
+    ///     >>> writer.put_var(0, EntityType.NODAL, 0, 0, np.array([100.0, 200.0, 300.0]))
     fn put_var(
         &mut self,
+        py: Python<'_>,
         step: usize,
         var_type: EntityType,
         entity_id: i64,
         var_index: usize,
-        values: Vec<f64>,
+        values: &Bound<'_, PyAny>,
     ) -> PyResult<()> {
+        let values_vec = extract_f64_vec(py, values)?;
         if let Some(ref mut file) = self.file {
-            file.put_var(step, var_type.to_rust(), entity_id, var_index, &values)
+            file.put_var(step, var_type.to_rust(), entity_id, var_index, &values_vec)
                 .into_py()
         } else {
             Err(PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(
@@ -248,7 +359,7 @@ impl ExodusWriter {
     ///     step: Time step index (0-based)
     ///     var_type: Entity type
     ///     entity_id: Entity ID (block ID for block variables, 0 for global/nodal)
-    ///     values: Flat list of all variable values
+    ///     values: Flat list/array of all variable values - accepts list or NumPy array
     ///
     /// Example:
     ///     >>> # Write 2 nodal variables for 3 nodes
@@ -256,13 +367,15 @@ impl ExodusWriter {
     ///     ...     [100.0, 200.0, 300.0, 1.0, 2.0, 3.0])
     fn put_var_multi(
         &mut self,
+        py: Python<'_>,
         step: usize,
         var_type: EntityType,
         entity_id: i64,
-        values: Vec<f64>,
+        values: &Bound<'_, PyAny>,
     ) -> PyResult<()> {
+        let values_vec = extract_f64_vec(py, values)?;
         if let Some(ref mut file) = self.file {
-            file.put_var_multi(step, var_type.to_rust(), entity_id, &values)
+            file.put_var_multi(step, var_type.to_rust(), entity_id, &values_vec)
                 .into_py()
         } else {
             Err(PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(
@@ -279,7 +392,7 @@ impl ExodusWriter {
     ///     var_type: Entity type
     ///     entity_id: Entity ID (block ID for block variables, 0 for global/nodal)
     ///     var_index: Variable index (0-based)
-    ///     values: Variable values for all time steps
+    ///     values: Variable values for all time steps - accepts list or NumPy array
     ///
     /// Example:
     ///     >>> # Write 5 time steps of a global variable
@@ -287,13 +400,15 @@ impl ExodusWriter {
     ///     ...     [10.0, 9.0, 8.0, 7.0, 6.0])
     fn put_var_time_series(
         &mut self,
+        py: Python<'_>,
         start_step: usize,
         end_step: usize,
         var_type: EntityType,
         entity_id: i64,
         var_index: usize,
-        values: Vec<f64>,
+        values: &Bound<'_, PyAny>,
     ) -> PyResult<()> {
+        let values_vec = extract_f64_vec(py, values)?;
         if let Some(ref mut file) = self.file {
             file.put_var_time_series(
                 start_step,
@@ -301,7 +416,7 @@ impl ExodusWriter {
                 var_type.to_rust(),
                 entity_id,
                 var_index,
-                &values,
+                &values_vec,
             )
             .into_py()
         } else {
@@ -365,20 +480,22 @@ impl ExodusWriter {
     ///     step: Time step index (0-based)
     ///     var_type: Entity type
     ///     entity_id: Entity ID (e.g., assembly ID, block ID, set ID)
-    ///     values: Variable values (one per reduction variable)
+    ///     values: Variable values (one per reduction variable) - accepts list or NumPy array
     ///
     /// Example:
     ///     >>> writer.put_reduction_vars(0, EntityType.ASSEMBLY, 100,
     ///     ...     [1.5, 2.3, 45.6])  # Momentum_X, Momentum_Y, Kinetic_Energy
     fn put_reduction_vars(
         &mut self,
+        py: Python<'_>,
         step: usize,
         var_type: EntityType,
         entity_id: i64,
-        values: Vec<f64>,
+        values: &Bound<'_, PyAny>,
     ) -> PyResult<()> {
+        let values_vec = extract_f64_vec(py, values)?;
         if let Some(ref mut file) = self.file {
-            file.put_reduction_vars(step, var_type.to_rust(), entity_id, &values)
+            file.put_reduction_vars(step, var_type.to_rust(), entity_id, &values_vec)
                 .into_py()
         } else {
             Err(PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(
