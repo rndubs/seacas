@@ -5,6 +5,7 @@ Integration tests combining multiple features
 import pytest
 import tempfile
 import os
+import numpy as np
 
 pytest.importorskip("exodus")
 
@@ -90,7 +91,7 @@ def test_complete_workflow():
         block_read = reader.get_block(1)
         assert block_read.topology == "QUAD4"
         conn = reader.get_connectivity(1)
-        assert conn == [1, 2, 3, 4]
+        np.testing.assert_array_equal(conn, [1, 2, 3, 4])
 
         # Verify node set
         node_set = reader.get_node_set(1)
@@ -171,8 +172,8 @@ def test_builder_and_reader_integration():
 
         conn1 = reader.get_connectivity(1)
         conn2 = reader.get_connectivity(2)
-        assert conn1 == [1, 2, 5, 4]
-        assert conn2 == [2, 3, 6, 5]
+        np.testing.assert_array_equal(conn1, [1, 2, 5, 4])
+        np.testing.assert_array_equal(conn2, [2, 3, 6, 5])
 
         reader.close()
 

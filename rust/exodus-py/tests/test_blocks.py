@@ -5,6 +5,7 @@ Tests for block operations
 import pytest
 import tempfile
 import os
+import numpy as np
 
 pytest.importorskip("exodus")
 
@@ -101,7 +102,7 @@ def test_elem_block_connectivity():
         reader = ExodusReader.open(tmp_path)
         conn_read = reader.get_connectivity(1)
         assert len(conn_read) == 4
-        assert conn_read == connectivity
+        np.testing.assert_array_equal(conn_read, connectivity)
         reader.close()
 
     finally:
