@@ -439,7 +439,18 @@ The **exodus-rs library is production-ready** for all use cases with:
 - Performance optimization (benchmarks now available)
 - Optional reduction variables feature
 
-**Overall Assessment:** 100% complete for production use. The core functionality is solid, well-tested, fully documented, and fully compatible with the official C Exodus library. The library is now more ergonomic than ever with automatic mode management.
+**Recent Additions:**
+
+*2025-11-19:*
+- ✅ **Spatial Search** - Nearest neighbor search for nodes and elements by spatial location with:
+  - Configurable distance limits (default 5x average element size)
+  - Time-history extraction for nodal and element variables
+  - Time slicing by index or time value
+  - Full Python bindings via PyO3
+  - Available in both Rust API and Python bindings
+  - Comprehensive test coverage in Rust
+
+**Overall Assessment:** 100% complete for production use. The core functionality is solid, well-tested, fully documented, and fully compatible with the official C Exodus library. The library is now more ergonomic than ever with automatic mode management and includes advanced spatial search capabilities.
 
 ---
 

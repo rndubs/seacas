@@ -55,6 +55,7 @@
 //! - [`geometry`] - Geometric utilities (normals, center of mass)
 //! - [`topology`] - Element topology and face definitions
 //! - [`sideset_utils`] - Utilities for converting nodesets to sidesets
+//! - [`search`] - Spatial search for nodes and elements by location
 
 #![deny(missing_docs)]
 #![deny(missing_debug_implementations)]
@@ -93,6 +94,9 @@ pub mod topology;
 // Sideset utilities
 pub mod sideset_utils;
 
+// Spatial search utilities
+pub mod search;
+
 // Re-exports for convenience
 pub use attribute::AttributeData;
 pub use builder::{BlockBuilder, MeshBuilder};
@@ -100,6 +104,7 @@ pub use coord::{CoordValue, Coordinates};
 pub use error::{EntityId, ExodusError, Result};
 pub use file::ExodusFile;
 pub use performance::{CacheConfig, ChunkConfig, NodeType, PerformanceConfig};
+pub use search::SpatialSearchResult;
 pub use set::SetIterator;
 pub use types::{
     Assembly, Attribute, AttributeType, Blob, Block, Compression, Connectivity,
