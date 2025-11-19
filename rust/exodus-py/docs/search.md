@@ -205,6 +205,6 @@ reader.close()
 
 ## See Also
 
-- [Variables](variables.md) - Working with time-dependent field data
-- [Coordinates](coordinates.md) - Accessing nodal coordinates
-- [Geometry](geometry.md) - Element volumes and centroids
+- **Variables** - Working with time-dependent field data (see User Guide)
+- **Coordinates** - Accessing nodal coordinates (see User Guide)
+- **Geometry** - Element volumes and centroids (see API Reference)
