@@ -20,6 +20,7 @@ mod variable;
 mod attribute;
 mod performance;
 mod geometry;
+mod search;
 
 // Re-exports
 use types::*;
@@ -72,6 +73,9 @@ fn exodus(m: &Bound<'_, PyModule>) -> PyResult<()> {
 
     // Register geometry functions
     geometry::register_geometry_functions(m)?;
+
+    // Register spatial search result type
+    m.add_class::<search::SpatialSearchResult>()?;
 
     Ok(())
 }
