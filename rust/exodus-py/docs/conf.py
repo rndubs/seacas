@@ -72,3 +72,12 @@ napoleon_attr_annotations = True
 autodoc_member_order = 'bysource'
 autodoc_typehints = 'description'
 autodoc_typehints_description_target = 'documented'
+
+# Add the exodus module to the Python path
+# The module is built in-place by maturin develop, which installs it in site-packages
+# so it should be importable without additional path manipulation
+import sys
+import os
+
+# Ensure the built exodus module can be imported
+# (maturin develop installs it in the virtualenv's site-packages)
