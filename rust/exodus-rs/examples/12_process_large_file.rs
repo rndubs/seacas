@@ -22,10 +22,11 @@ use std::env;
 use std::path::Path;
 use std::time::Instant;
 
-use exodus_rs::{
-    CreateMode, CreateOptions, EntityType, ExodusError, ExodusFile, FloatSize, InitParams, Int64Mode,
-};
 use exodus_rs::performance::PerformanceConfig;
+use exodus_rs::{
+    CreateMode, CreateOptions, EntityType, ExodusError, ExodusFile, FloatSize, InitParams,
+    Int64Mode,
+};
 
 /// Apply coordinate transformation to mesh coordinates
 ///
@@ -43,7 +44,10 @@ fn transform_coordinates(
     let translation = [1.0, 2.0, 3.0];
 
     // Transform X coordinates
-    let x_new: Vec<f64> = x.iter().map(|&xi| xi * scale_factor + translation[0]).collect();
+    let x_new: Vec<f64> = x
+        .iter()
+        .map(|&xi| xi * scale_factor + translation[0])
+        .collect();
 
     // Transform Y coordinates
     let y_new: Vec<f64> = if num_dim >= 2 {
@@ -118,7 +122,10 @@ fn process_exodus_file<P: AsRef<Path>>(
     // Get variable info
     let nodal_var_names = reader.variable_names(EntityType::Nodal)?;
     let num_nodal_vars = nodal_var_names.len();
-    println!("  Nodal Variables: {} - {:?}", num_nodal_vars, nodal_var_names);
+    println!(
+        "  Nodal Variables: {} - {:?}",
+        num_nodal_vars, nodal_var_names
+    );
 
     // Estimate memory usage
     let bytes_per_node = 8; // f64
@@ -322,7 +329,10 @@ fn print_usage(program: &str) {
     eprintln!("  {} input.exo output.exo --aggressive", program);
     eprintln!();
     eprintln!("  # Custom cache and chunk sizes");
-    eprintln!("  {} input.exo output.exo --cache-mb 256 --node-chunk 20000", program);
+    eprintln!(
+        "  {} input.exo output.exo --cache-mb 256 --node-chunk 20000",
+        program
+    );
     eprintln!();
     eprintln!("  # Full customization");
     eprintln!("  {} input.exo output.exo --scale 1.5 \\", program);
@@ -483,8 +493,7 @@ fn main() {
         }
     }
 
-    if let Err(e) = process_exodus_file(input_path, output_path, scale_factor, Some(perf_config))
-    {
+    if let Err(e) = process_exodus_file(input_path, output_path, scale_factor, Some(perf_config)) {
         eprintln!("\nERROR: {}", e);
         std::process::exit(1);
     }
