@@ -118,7 +118,7 @@ class TestNumpyVariables:
     def test_var_returns_numpy_array(self, mesh_with_vars):
         """Test that var() returns a 1D NumPy array"""
         reader = exodus.ExodusReader.open(mesh_with_vars)
-        data = reader.var(0, exodus.EntityType.NODAL, 0, 0)
+        data = reader.var(0, exodus.EntityType.Nodal, 0, 0)
 
         assert isinstance(data, np.ndarray)
         assert data.ndim == 1
@@ -127,7 +127,7 @@ class TestNumpyVariables:
     def test_var_list_backward_compat(self, mesh_with_vars):
         """Test that var_list() still works"""
         reader = exodus.ExodusReader.open(mesh_with_vars)
-        data = reader.var_list(0, exodus.EntityType.NODAL, 0, 0)
+        data = reader.var_list(0, exodus.EntityType.Nodal, 0, 0)
 
         assert isinstance(data, list)
 
@@ -136,7 +136,7 @@ class TestNumpyVariables:
         """Test that var_time_series() returns a 2D NumPy array"""
         reader = exodus.ExodusReader.open(mesh_with_vars)
         num_steps = reader.num_time_steps()
-        data = reader.var_time_series(0, num_steps, exodus.EntityType.NODAL, 0, 0)
+        data = reader.var_time_series(0, num_steps, exodus.EntityType.Nodal, 0, 0)
 
         assert isinstance(data, np.ndarray)
         assert data.ndim == 2
@@ -148,7 +148,7 @@ class TestNumpyVariables:
         """Test that var_time_series_list() still works"""
         reader = exodus.ExodusReader.open(mesh_with_vars)
         num_steps = reader.num_time_steps()
-        data = reader.var_time_series_list(0, num_steps, exodus.EntityType.NODAL, 0, 0)
+        data = reader.var_time_series_list(0, num_steps, exodus.EntityType.Nodal, 0, 0)
 
         assert isinstance(data, list)
 
@@ -159,7 +159,7 @@ class TestNumpyVariables:
         num_steps = reader.num_time_steps()
         params = reader.init_params()
 
-        data = reader.var_time_series(0, num_steps, exodus.EntityType.NODAL, 0, 0)
+        data = reader.var_time_series(0, num_steps, exodus.EntityType.Nodal, 0, 0)
 
         # Access specific time step (all nodes)
         step_0 = data[0, :]
@@ -189,19 +189,19 @@ class TestNumpyVariables:
         writer.put_init_params(params)
 
         # Define variables
-        writer.define_variables(exodus.EntityType.NODAL, ["Temperature"])
+        writer.define_variables(exodus.EntityType.Nodal, ["Temperature"])
 
         # Write time
         writer.put_time(0, 0.0)
 
         # Write variable as NumPy array
         temp = np.array([100.0, 200.0, 300.0, 400.0])
-        writer.put_var(0, exodus.EntityType.NODAL, 0, 0, temp)
+        writer.put_var(0, exodus.EntityType.Nodal, 0, 0, temp)
         writer.close()
 
         # Verify
         reader = exodus.ExodusReader.open(filename)
-        read_temp = reader.var(0, exodus.EntityType.NODAL, 0, 0)
+        read_temp = reader.var(0, exodus.EntityType.Nodal, 0, 0)
         np.testing.assert_array_equal(read_temp, temp)
 
 
@@ -268,7 +268,7 @@ class TestNumpyConnectivity:
         # Define block
         block = exodus.Block(
             id=100,
-            entity_type=exodus.EntityType.ELEM_BLOCK,
+            entity_type=exodus.EntityType.ElemBlock,
             topology="QUAD4",
             num_entries=1,
             num_nodes_per_entry=4,
@@ -315,10 +315,10 @@ class TestNumpyMemoryEfficiency:
         coords = reader.get_coords()
         assert coords.flags['C_CONTIGUOUS']
 
-        data = reader.var(0, exodus.EntityType.NODAL, 0, 0)
+        data = reader.var(0, exodus.EntityType.Nodal, 0, 0)
         assert data.flags['C_CONTIGUOUS']
 
-        time_series = reader.var_time_series(0, 10, exodus.EntityType.NODAL, 0, 0)
+        time_series = reader.var_time_series(0, 10, exodus.EntityType.Nodal, 0, 0)
         assert time_series.flags['C_CONTIGUOUS']
 
 
@@ -376,15 +376,15 @@ def mesh_with_vars(tmp_path):
     writer.put_coords(x, y, z)
 
     # Define variables
-    writer.define_variables(exodus.EntityType.NODAL, ["Temperature", "Pressure"])
+    writer.define_variables(exodus.EntityType.Nodal, ["Temperature", "Pressure"])
 
     # Write time steps
     for step in range(10):
         writer.put_time(step, float(step))
         temp = [100.0 + step * 10 + i for i in range(4)]
         pressure = [1.0 + step * 0.1 + i * 0.01 for i in range(4)]
-        writer.put_var(step, exodus.EntityType.NODAL, 0, 0, temp)
-        writer.put_var(step, exodus.EntityType.NODAL, 0, 1, pressure)
+        writer.put_var(step, exodus.EntityType.Nodal, 0, 0, temp)
+        writer.put_var(step, exodus.EntityType.Nodal, 0, 1, pressure)
 
     writer.close()
     return filename
@@ -416,7 +416,7 @@ def mesh_with_blocks(tmp_path):
     # Define block
     block = exodus.Block(
         id=100,
-        entity_type=exodus.EntityType.ELEM_BLOCK,
+        entity_type=exodus.EntityType.ElemBlock,
         topology="TRI3",
         num_entries=2,
         num_nodes_per_entry=3,
