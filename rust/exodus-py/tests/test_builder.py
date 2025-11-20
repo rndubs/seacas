@@ -61,8 +61,8 @@ def test_simple_mesh_builder():
             assert params.num_elem_blocks == 1
             assert params.num_dim == 2
 
-            # Check coordinates
-            x, y, z = reader.get_coords()
+            # Check coordinates (using backward-compatible list API)
+            x, y, z = reader.get_coords_list()
             assert len(x) == 4
             assert len(y) == 4
 

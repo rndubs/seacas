@@ -22,24 +22,30 @@ jobs:
     runs-on: ubuntu-latest
     # Only deploy on pushes to main branches (not PRs)
     if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    container:
+      image: quay.io/pypa/manylinux_2_28_x86_64
+      options: --user root
 
     strategy:
       matrix:
         python-version: ['3.11', '3.12', '3.13', '3.14']
+        include:
+          - python-version: '3.11'
+            python-tag: 'cp311-cp311'
+          - python-version: '3.12'
+            python-tag: 'cp312-cp312'
+          - python-version: '3.13'
+            python-tag: 'cp313-cp313'
+          - python-version: '3.14'
+            python-tag: 'cp314-cp314'
 
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
 
-    - name: Set up Python
-      uses: actions/setup-python@v5
-      with:
-        python-version: ${{ matrix.python-version }}
-
     - name: Install system dependencies
       run: |
-        sudo apt-get update
-        sudo apt-get install -y libhdf5-dev libnetcdf-dev pkg-config
+        yum install -y hdf5-devel netcdf-devel pkgconfig
 
     - name: Install Rust toolchain
       uses: dtolnay/rust-toolchain@stable
@@ -60,15 +66,23 @@ jobs:
         restore-keys: |
           ${{ runner.os }}-cargo-git-
 
-    - name: Install maturin
+    - name: Set up Python and install maturin
       run: |
+        # Use Python from the manylinux container
+        PYTHON_BIN=/opt/python/${{ matrix.python-tag }}/bin
+        export PATH="$PYTHON_BIN:$PATH"
+        python --version
         pip install --upgrade pip
         pip install maturin[patchelf]
 
     - name: Build wheel
       run: |
+        # Use the Python from the manylinux container
+        PYTHON_BIN=/opt/python/${{ matrix.python-tag }}/bin
+        export PATH="$PYTHON_BIN:$PATH"
         cd rust/exodus-py
-        maturin build --release --out dist
+        # Build with manylinux_2_28 compatibility inside the manylinux container
+        maturin build --release --out dist --compatibility manylinux_2_28
 
     - name: Extract version from pyproject.toml
       id: get_version
@@ -104,7 +118,7 @@ jobs:
 
           Or install directly from this release (replace cpXXX with your Python version):
           ```bash
-          pip install https://github.com/${{ github.repository }}/releases/download/exodus-py-v${{ steps.get_version.outputs.version }}/exodus_py-${{ steps.get_version.outputs.version }}-cpXXX-cpXXX-manylinux_2_34_x86_64.whl
+          pip install https://github.com/${{ github.repository }}/releases/download/exodus-py-v${{ steps.get_version.outputs.version }}/exodus_py-${{ steps.get_version.outputs.version }}-cpXXX-cpXXX-manylinux_2_28_x86_64.whl
           ```
         files: rust/exodus-py/dist/*.whl
         draft: false

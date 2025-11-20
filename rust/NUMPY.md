@@ -1,7 +1,7 @@
 # NumPy Zero-Copy Integration Plan for exodus-rs
 
 **Last Updated:** 2025-11-20
-**Status:** Phase 1 Complete - Rust Foundation Implemented
+**Status:** Phase 2 Complete - Python NumPy Bindings Implemented
 **Target:** First-class NumPy support with zero-copy access for ~100GB exodus files
 
 ---
@@ -18,11 +18,11 @@ This document outlines a comprehensive plan to add first-class NumPy support to 
 
 **Current State:**
 - ✅ exodus-rs: Complete implementation with ndarray integration
-- ✅ exodus-py: Complete PyO3 bindings, returns Python lists (not NumPy arrays)
-- ✅ numpy crate 0.27: Already declared as optional dependency
+- ✅ exodus-py: NumPy bindings complete - returns NumPy arrays
+- ✅ numpy crate 0.27: Enabled by default in exodus-py
 - ✅ **Phase 1 Complete**: Rust foundation with ndarray APIs (coords_array, var_time_series_array, connectivity_array)
-- ⏳ **Phase 2 In Progress**: Python NumPy bindings integration
-- ❌ Zero-copy Python support: Not yet implemented (Phase 2)
+- ✅ **Phase 2 Complete**: Python NumPy bindings integration
+- ⏳ **Phase 3 Next**: Optimization & Advanced Features
 
 **Expected Impact:**
 - Memory reduction: **50-75%** for read-heavy workloads (eliminate Python list copies)
@@ -205,10 +205,11 @@ Phase 1: Rust Foundation (1-2 sessions) ✅ COMPLETE
   └─> Add view types, ndarray integration, lifetime-based APIs
   └─> Status: Implemented 2025-11-20, 13/13 tests passing
 
-Phase 2: Python NumPy Bindings (1-2 sessions) ⏳ NEXT
+Phase 2: Python NumPy Bindings (1-2 sessions) ✅ COMPLETE
   └─> Enable zero-copy Rust→Python transfer, return NumPy arrays
+  └─> Status: Implemented 2025-11-20, all methods updated
 
-Phase 3: Optimization & Advanced Features (1 session) 📋 PLANNED
+Phase 3: Optimization & Advanced Features (1 session) ⏳ NEXT
   └─> Buffer pools, type optimization, performance tuning
 
 Phase 4: Testing & Documentation (1 session) 📋 PLANNED
@@ -216,7 +217,7 @@ Phase 4: Testing & Documentation (1 session) 📋 PLANNED
 ```
 
 **Total estimated effort:** 5-7 sessions
-**Progress:** Phase 1/4 complete (25%)
+**Progress:** Phase 2/4 complete (50%)
 
 ---
 
@@ -941,14 +942,24 @@ def test_memory_efficiency():
     assert coords1.nbytes == coords2.nbytes
 ```
 
-**Phase 2 Deliverables:**
+**Phase 2 Deliverables:** ✅ **COMPLETE** (2025-11-20)
 - ✅ numpy feature enabled by default in exodus-py
-- ✅ All read methods return NumPy arrays
-- ✅ All write methods accept NumPy arrays
-- ✅ Type stubs updated with numpy types
-- ✅ Migration guide written
-- ✅ 15-20 Python tests for NumPy integration
-- ✅ Backward compatibility methods (*_list variants)
+- ✅ All read methods return NumPy arrays (get_coords, var, var_time_series, get_connectivity)
+- ✅ All write methods accept NumPy arrays (put_coords, put_var, put_var_time_series, put_connectivity)
+- ✅ Backward compatibility methods (*_list variants for deprecated list returns)
+- ✅ Migration guide written (NUMPY_MIGRATION.md)
+- ✅ Python test suite for NumPy integration (test_numpy_integration.py with comprehensive fixtures)
+- ⏸️ Type stubs (.pyi files) - deferred to Phase 4 documentation
+
+**Implementation Details:**
+- Commit: TBD - Phase 2 NumPy Python bindings
+- Modified files:
+  - `rust/exodus-py/Cargo.toml` - enabled numpy feature by default
+  - `rust/exodus-py/src/coord.rs` - NumPy coordinate read/write
+  - `rust/exodus-py/src/variable.rs` - NumPy variable read/write
+  - `rust/exodus-py/src/block.rs` - NumPy connectivity read/write
+  - `rust/exodus-py/tests/test_numpy_integration.py` - comprehensive test suite
+  - `rust/exodus-py/NUMPY_MIGRATION.md` - migration guide with examples
 
 ---
 
@@ -1255,17 +1266,17 @@ python -m pydoc exodus
 - [x] Documentation with examples for all new methods
 - [-] BufferPool (deferred - not needed for initial implementation)
 
-## Phase 2: Python Bindings
-- [ ] Enable numpy feature in exodus-py
-- [ ] Update get_coords() to return NumPy
-- [ ] Update var() to return NumPy
-- [ ] Update var_time_series() to return NumPy
-- [ ] Update get_connectivity() to return NumPy
-- [ ] Add put_* methods accepting NumPy
-- [ ] Update type stubs (.pyi)
-- [ ] Write migration guide
-- [ ] Write Python tests (15+)
-- [ ] Add backward compatibility (*_list methods)
+## Phase 2: Python Bindings ✅ COMPLETE
+- [x] Enable numpy feature in exodus-py
+- [x] Update get_coords() to return NumPy
+- [x] Update var() to return NumPy
+- [x] Update var_time_series() to return NumPy
+- [x] Update get_connectivity() to return NumPy
+- [x] Add put_* methods accepting NumPy
+- [ ] Update type stubs (.pyi) - deferred to Phase 4
+- [x] Write migration guide
+- [x] Write Python tests (comprehensive test suite)
+- [x] Add backward compatibility (*_list methods)
 
 ## Phase 3: Optimization
 - [ ] Type-specific reads (f32/f64)
