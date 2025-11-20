@@ -9,12 +9,11 @@
 ///! - Scale scalar values by 10x
 ///! - Performance monitoring for different cache/chunk configurations
 ///! - CLI arguments for tuning HDF5 cache and chunking
-
 use clap::Parser;
+use exodus_rs::transformations::{rotate_symmetric_tensor, rotation_matrix_z};
 use exodus_rs::{
     CreateMode, CreateOptions, EntityType, ExodusError, ExodusFile, PerformanceConfig,
 };
-use exodus_rs::transformations::{rotate_symmetric_tensor, rotation_matrix_z};
 use std::f64::consts::PI;
 use std::time::{Duration, Instant};
 
@@ -82,13 +81,37 @@ impl TimingData {
         println!("\n{}", "=".repeat(70));
         println!("PERFORMANCE SUMMARY");
         println!("{}", "=".repeat(70));
-        println!("{:<30} {:>12.2} seconds", "Read metadata:", self.read_metadata.as_secs_f64());
-        println!("{:<30} {:>12.2} seconds", "Copy mesh:", self.copy_mesh.as_secs_f64());
-        println!("{:<30} {:>12.2} seconds", "Transform coordinates:", self.transform_coords.as_secs_f64());
-        println!("{:<30} {:>12.2} seconds", "Transform variables:", self.transform_variables.as_secs_f64());
-        println!("{:<30} {:>12.2} seconds", "Write output:", self.write_output.as_secs_f64());
+        println!(
+            "{:<30} {:>12.2} seconds",
+            "Read metadata:",
+            self.read_metadata.as_secs_f64()
+        );
+        println!(
+            "{:<30} {:>12.2} seconds",
+            "Copy mesh:",
+            self.copy_mesh.as_secs_f64()
+        );
+        println!(
+            "{:<30} {:>12.2} seconds",
+            "Transform coordinates:",
+            self.transform_coords.as_secs_f64()
+        );
+        println!(
+            "{:<30} {:>12.2} seconds",
+            "Transform variables:",
+            self.transform_variables.as_secs_f64()
+        );
+        println!(
+            "{:<30} {:>12.2} seconds",
+            "Write output:",
+            self.write_output.as_secs_f64()
+        );
         println!("{}", "-".repeat(70));
-        println!("{:<30} {:>12.2} seconds", "TOTAL:", self.total.as_secs_f64());
+        println!(
+            "{:<30} {:>12.2} seconds",
+            "TOTAL:",
+            self.total.as_secs_f64()
+        );
         println!("{}", "=".repeat(70));
     }
 }
@@ -199,7 +222,8 @@ fn main() -> Result<(), ExodusError> {
 
     for i in 0..num_nodes {
         let point = [coords.x[i], coords.y[i], coords.z[i]];
-        let rotated = exodus_rs::transformations::apply_rotation_to_vector(&rotation_matrix, &point);
+        let rotated =
+            exodus_rs::transformations::apply_rotation_to_vector(&rotation_matrix, &point);
         new_x.push(rotated[0] * args.mesh_scale);
         new_y.push(rotated[1] * args.mesh_scale);
         new_z.push(rotated[2] * args.mesh_scale);
@@ -280,7 +304,13 @@ fn main() -> Result<(), ExodusError> {
                 for (var_idx, _var_name) in elem_var_names.iter().enumerate() {
                     let values = input_file.var(step, EntityType::ElemBlock, *block_id, var_idx)?;
 
-                    output_file.put_var(step, EntityType::ElemBlock, *block_id, var_idx, &values)?;
+                    output_file.put_var(
+                        step,
+                        EntityType::ElemBlock,
+                        *block_id,
+                        var_idx,
+                        &values,
+                    )?;
                 }
             }
         }
@@ -292,13 +322,20 @@ fn main() -> Result<(), ExodusError> {
             let eta_sec = ((num_time_steps - step) as f64) / steps_per_sec;
             println!(
                 "  Step {}/{} ({:.1}%) - {:.1} steps/sec - ETA: {:.1} min",
-                step, num_time_steps, progress, steps_per_sec, eta_sec / 60.0
+                step,
+                num_time_steps,
+                progress,
+                steps_per_sec,
+                eta_sec / 60.0
             );
         }
     }
 
     timing.transform_variables = start.elapsed();
-    println!("  Duration: {:.2}s", timing.transform_variables.as_secs_f64());
+    println!(
+        "  Duration: {:.2}s",
+        timing.transform_variables.as_secs_f64()
+    );
 
     // Close files
     println!("\nStep 5: Finalizing output file...");
@@ -322,7 +359,9 @@ fn main() -> Result<(), ExodusError> {
 }
 
 /// Find indices of stress tensor components in variable names
-fn find_stress_tensor_indices(var_names: &[String]) -> Option<(usize, usize, usize, usize, usize, usize)> {
+fn find_stress_tensor_indices(
+    var_names: &[String],
+) -> Option<(usize, usize, usize, usize, usize, usize)> {
     let xx = var_names.iter().position(|n| n.contains("stress_xx"))?;
     let yy = var_names.iter().position(|n| n.contains("stress_yy"))?;
     let zz = var_names.iter().position(|n| n.contains("stress_zz"))?;
