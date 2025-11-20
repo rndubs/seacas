@@ -32,6 +32,8 @@ pub(crate) struct FileMetadata {
     pub dim_cache: HashMap<String, usize>,
     /// Current NetCDF define/data mode (only tracked for Write/Append modes)
     pub define_mode: DefineMode,
+    /// Performance configuration for HDF5/NetCDF optimization
+    pub performance: Option<crate::performance::PerformanceConfig>,
 }
 
 impl FileMetadata {
@@ -43,6 +45,7 @@ impl FileMetadata {
             num_dim: None,
             dim_cache: HashMap::new(),
             define_mode: DefineMode::Define,
+            performance: None,
         }
     }
 }
@@ -128,10 +131,14 @@ impl ExodusFile<mode::Write> {
         // Write global attributes to mark this as an Exodus file
         Self::write_global_attributes(&mut nc_file, &options)?;
 
+        // Create metadata and store performance config
+        let mut metadata = FileMetadata::new();
+        metadata.performance = perf_config;
+
         Ok(Self {
             nc_file,
             path: path.to_path_buf(),
-            metadata: FileMetadata::new(),
+            metadata,
             _mode: std::marker::PhantomData,
         })
     }

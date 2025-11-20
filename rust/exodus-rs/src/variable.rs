@@ -408,13 +408,27 @@ impl ExodusFile<mode::Write> {
                 .add_variable::<u8>(var_name_var, &[num_var_dim, "len_string"])?;
         }
 
+        // Get chunking configuration
+        let time_chunk = self.metadata.performance.as_ref()
+            .map(|p| p.chunks.time_chunk_size)
+            .unwrap_or(0);
+        let node_chunk = self.metadata.performance.as_ref()
+            .map(|p| p.chunks.node_chunk_size)
+            .unwrap_or(0);
+
         // Create the actual storage variables based on type
         match var_type {
             EntityType::Global => {
                 // Global vars: vals_glo_var(time_step, num_glo_var)
                 if self.nc_file.variable("vals_glo_var").is_none() {
-                    self.nc_file
+                    let mut var = self.nc_file
                         .add_variable::<f64>("vals_glo_var", &["time_step", num_var_dim])?;
+
+                    // Apply chunking for global variables
+                    // Chunk on time if configured (typically small variable count)
+                    if time_chunk > 0 {
+                        var.set_chunking(&[time_chunk, num_vars])?;
+                    }
                 }
             }
             EntityType::Nodal => {
@@ -422,8 +436,15 @@ impl ExodusFile<mode::Write> {
                 for i in 0..num_vars {
                     let var_name = format!("vals_nod_var{}", i + 1);
                     if self.nc_file.variable(&var_name).is_none() {
-                        self.nc_file
+                        let mut var = self.nc_file
                             .add_variable::<f64>(&var_name, &["time_step", "num_nodes"])?;
+
+                        // Apply chunking for nodal variables
+                        // Chunk on nodes (spatial dimension), optionally on time
+                        if node_chunk > 0 {
+                            let t_chunk = if time_chunk > 0 { time_chunk } else { 1 };
+                            var.set_chunking(&[t_chunk, node_chunk])?;
+                        }
                     }
                 }
             }
@@ -685,18 +706,43 @@ impl ExodusFile<mode::Write> {
     ) -> Result<()> {
         let var_name = self.get_var_name(var_type, entity_id, var_index)?;
 
+        // Get chunking configuration
+        let time_chunk = self.metadata.performance.as_ref()
+            .map(|p| p.chunks.time_chunk_size)
+            .unwrap_or(0);
+        let node_chunk = self.metadata.performance.as_ref()
+            .map(|p| p.chunks.node_chunk_size)
+            .unwrap_or(0);
+        let elem_chunk = self.metadata.performance.as_ref()
+            .map(|p| p.chunks.element_chunk_size)
+            .unwrap_or(0);
+
         match var_type {
             EntityType::Global => {
                 // Global vars: vals_glo_var(time_step, num_glo_var)
                 if self.nc_file.variable("vals_glo_var").is_none() {
-                    self.nc_file
+                    let mut var = self.nc_file
                         .add_variable::<f64>("vals_glo_var", &["time_step", "num_glo_var"])?;
+
+                    // Apply chunking for global variables
+                    if time_chunk > 0 {
+                        let num_glo_var = self.nc_file.dimension("num_glo_var")
+                            .map(|d| d.len())
+                            .unwrap_or(1);
+                        var.set_chunking(&[time_chunk, num_glo_var])?;
+                    }
                 }
             }
             EntityType::Nodal => {
                 // Nodal var{i}: vals_nod_var{i}(time_step, num_nodes)
-                self.nc_file
+                let mut var = self.nc_file
                     .add_variable::<f64>(&var_name, &["time_step", "num_nodes"])?;
+
+                // Apply chunking for nodal variables
+                if node_chunk > 0 {
+                    let t_chunk = if time_chunk > 0 { time_chunk } else { 1 };
+                    var.set_chunking(&[t_chunk, node_chunk])?;
+                }
             }
             EntityType::ElemBlock => {
                 // Element var: vals_elem_var{var_idx}eb{block_idx}(time_step, num_el_in_blk{block_idx})
@@ -710,8 +756,14 @@ impl ExodusFile<mode::Write> {
                     })?;
 
                 let dim_name = format!("num_el_in_blk{}", block_index + 1);
-                self.nc_file
+                let mut var = self.nc_file
                     .add_variable::<f64>(&var_name, &["time_step", &dim_name])?;
+
+                // Apply chunking for element variables
+                if elem_chunk > 0 {
+                    let t_chunk = if time_chunk > 0 { time_chunk } else { 1 };
+                    var.set_chunking(&[t_chunk, elem_chunk])?;
+                }
             }
             EntityType::EdgeBlock => {
                 let block_ids = self.block_ids(EntityType::EdgeBlock)?;
@@ -724,8 +776,14 @@ impl ExodusFile<mode::Write> {
                     })?;
 
                 let dim_name = format!("num_ed_in_blk{}", block_index + 1);
-                self.nc_file
+                let mut var = self.nc_file
                     .add_variable::<f64>(&var_name, &["time_step", &dim_name])?;
+
+                // Apply chunking for edge variables
+                if elem_chunk > 0 {
+                    let t_chunk = if time_chunk > 0 { time_chunk } else { 1 };
+                    var.set_chunking(&[t_chunk, elem_chunk])?;
+                }
             }
             EntityType::FaceBlock => {
                 let block_ids = self.block_ids(EntityType::FaceBlock)?;
@@ -738,8 +796,14 @@ impl ExodusFile<mode::Write> {
                     })?;
 
                 let dim_name = format!("num_fa_in_blk{}", block_index + 1);
-                self.nc_file
+                let mut var = self.nc_file
                     .add_variable::<f64>(&var_name, &["time_step", &dim_name])?;
+
+                // Apply chunking for face variables
+                if elem_chunk > 0 {
+                    let t_chunk = if time_chunk > 0 { time_chunk } else { 1 };
+                    var.set_chunking(&[t_chunk, elem_chunk])?;
+                }
             }
             EntityType::NodeSet => {
                 let set_ids = self.set_ids(EntityType::NodeSet)?;

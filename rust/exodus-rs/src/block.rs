@@ -136,6 +136,16 @@ impl ExodusFile<mode::Write> {
             .nc_file
             .add_variable::<i32>(&conn_var_name, &[&dim_name_entries, &dim_name_nodes])?;
 
+        // Apply chunking if configured
+        let chunk_size = self.metadata.performance.as_ref()
+            .map(|p| p.chunks.element_chunk_size)
+            .unwrap_or(0);
+        if chunk_size > 0 {
+            // Chunk along the elements dimension (first dimension)
+            // Second dimension is typically small (nodes per element), so use full size
+            conn_var.set_chunking(&[chunk_size, block.num_nodes_per_entry])?;
+        }
+
         // Set topology attribute
         conn_var.put_attribute("elem_type", block.topology.as_str())?;
 
@@ -153,8 +163,13 @@ impl ExodusFile<mode::Write> {
                 .add_dimension(&attr_dim_name, block.num_attributes)?;
 
             let attr_var_name = format!("attrib{}", block_index + 1);
-            self.nc_file
+            let mut attr_var = self.nc_file
                 .add_variable::<f64>(&attr_var_name, &[&dim_name_entries, &attr_dim_name])?;
+
+            // Apply same chunking to attributes as connectivity
+            if chunk_size > 0 {
+                attr_var.set_chunking(&[chunk_size, block.num_attributes])?;
+            }
         }
 
         Ok(())
