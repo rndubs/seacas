@@ -44,7 +44,11 @@ log_header() {
 # Check if exodus-py is installed
 check_exodus_py() {
     log_info "Checking if exodus-py is installed..."
-    if python3 -c "import exodus; print(f'exodus-py version: {exodus.__version__}')" 2>/dev/null; then
+
+    # Set python command (default to python3, may be overridden after install)
+    PYTHON_CMD="${PYTHON_CMD:-python3}"
+
+    if $PYTHON_CMD -c "import exodus; print(f'exodus-py version: {exodus.__version__}')" 2>/dev/null; then
         log_success "exodus-py is installed"
         return 0
     else
@@ -63,6 +67,13 @@ install_exodus_py() {
     if [ -f "install_and_test.sh" ]; then
         log_info "Running install_and_test.sh to build exodus-py..."
         bash install_and_test.sh
+
+        # Activate the test venv that was created
+        if [ -f "test-venv/bin/activate" ]; then
+            log_info "Activating exodus-py test environment..."
+            source test-venv/bin/activate
+            export PYTHON_CMD="python"
+        fi
     else
         # Fallback to manual build
         log_info "Building exodus-py wheel manually..."
@@ -119,7 +130,7 @@ generate_test_file() {
         log_info "Generating test file: $test_file"
         log_info "Parameters: ${nodes_x}x${nodes_y} nodes, $timesteps timesteps"
 
-        python3 "$SCRIPT_DIR/generate_large_exodus.py" \
+        $PYTHON_CMD "$SCRIPT_DIR/generate_large_exodus.py" \
             -o "$test_file" \
             --nodes-x "$nodes_x" \
             --nodes-y "$nodes_y" \
@@ -151,7 +162,7 @@ run_python_transform() {
     log_info "  Cache: ${cache_mb}MB, Node chunk: ${node_chunk}, Elem chunk: ${elem_chunk}, Time chunk: ${time_chunk}"
 
     local start_time=$(date +%s)
-    local transform_output=$(python3 "$SCRIPT_DIR/transform_large_mesh.py" \
+    local transform_output=$($PYTHON_CMD "$SCRIPT_DIR/transform_large_mesh.py" \
         -i "$input" \
         -o "$output" \
         --cache-mb "$cache_mb" \
