@@ -97,6 +97,10 @@ pub mod sideset_utils;
 // Spatial search utilities
 pub mod search;
 
+// NumPy integration views
+#[cfg(feature = "ndarray")]
+pub mod views;
+
 // Re-exports for convenience
 pub use attribute::AttributeData;
 pub use builder::{BlockBuilder, MeshBuilder};

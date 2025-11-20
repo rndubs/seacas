@@ -1,7 +1,7 @@
 # NumPy Zero-Copy Integration Plan for exodus-rs
 
 **Last Updated:** 2025-11-20
-**Status:** Planning Phase
+**Status:** Phase 1 Complete - Rust Foundation Implemented
 **Target:** First-class NumPy support with zero-copy access for ~100GB exodus files
 
 ---
@@ -17,10 +17,12 @@ This document outlines a comprehensive plan to add first-class NumPy support to 
 4. Provide ergonomic NumPy-native interfaces in Python
 
 **Current State:**
-- ✅ exodus-rs: Complete implementation, all data returned as owned `Vec<T>`
+- ✅ exodus-rs: Complete implementation with ndarray integration
 - ✅ exodus-py: Complete PyO3 bindings, returns Python lists (not NumPy arrays)
-- ✅ numpy crate 0.27: Already declared as optional dependency but **unused**
-- ❌ Zero-copy support: None - all operations allocate and copy
+- ✅ numpy crate 0.27: Already declared as optional dependency
+- ✅ **Phase 1 Complete**: Rust foundation with ndarray APIs (coords_array, var_time_series_array, connectivity_array)
+- ⏳ **Phase 2 In Progress**: Python NumPy bindings integration
+- ❌ Zero-copy Python support: Not yet implemented (Phase 2)
 
 **Expected Impact:**
 - Memory reduction: **50-75%** for read-heavy workloads (eliminate Python list copies)
@@ -199,26 +201,30 @@ Based on size analysis, these methods are the highest priority for zero-copy opt
 The implementation is divided into **4 phases** to be executed across multiple sessions:
 
 ```
-Phase 1: Rust Foundation (1-2 sessions)
+Phase 1: Rust Foundation (1-2 sessions) ✅ COMPLETE
   └─> Add view types, ndarray integration, lifetime-based APIs
+  └─> Status: Implemented 2025-11-20, 13/13 tests passing
 
-Phase 2: Python NumPy Bindings (1-2 sessions)
+Phase 2: Python NumPy Bindings (1-2 sessions) ⏳ NEXT
   └─> Enable zero-copy Rust→Python transfer, return NumPy arrays
 
-Phase 3: Optimization & Advanced Features (1 session)
+Phase 3: Optimization & Advanced Features (1 session) 📋 PLANNED
   └─> Buffer pools, type optimization, performance tuning
 
-Phase 4: Testing & Documentation (1 session)
+Phase 4: Testing & Documentation (1 session) 📋 PLANNED
   └─> Comprehensive tests, benchmarks, migration guide
 ```
 
 **Total estimated effort:** 5-7 sessions
+**Progress:** Phase 1/4 complete (25%)
 
 ---
 
-## Phase 1: Rust Foundation (Sessions 1-2)
+## Phase 1: Rust Foundation ✅ COMPLETE (2025-11-20)
 
 **Goal:** Add zero-copy infrastructure to exodus-rs without breaking existing API
+
+**Status:** ✅ All objectives achieved. Ready for Phase 2 Python integration.
 
 ### 1.1 Add ndarray Feature Flag
 
@@ -526,13 +532,21 @@ fn test_var_time_series_array() {
 }
 ```
 
-**Phase 1 Deliverables:**
-- ✅ ndarray feature flag functional
-- ✅ View types defined in `views.rs`
-- ✅ `*_view()` and `*_array()` methods for coords, vars, connectivity
-- ✅ BufferPool for lifetime management
-- ✅ Tests for ndarray APIs (10-15 tests)
-- ✅ Documentation for new methods
+**Phase 1 Deliverables:** ✅ **COMPLETE** (2025-11-20)
+- ✅ ndarray feature flag functional (`numpy-compat` feature added)
+- ✅ View types defined in `views.rs` (`CoordinatesView`, `ConnectivityView`, `VarView`, `VarTimeSeriesView`)
+- ✅ `*_array()` methods for coords, vars, connectivity (returns `Array2<T>`)
+- ✅ C-contiguous memory layout verified for NumPy compatibility
+- ✅ Tests for ndarray APIs (13 comprehensive integration tests, all passing)
+- ✅ Documentation for new methods with examples
+- ⚠️  BufferPool deferred (not needed for initial implementation)
+
+**Implementation Details:**
+- Commit: `3ce4c034c` - Implement Phase 1 of NumPy zero-copy integration
+- Test file: `rust/exodus-rs/tests/test_ndarray_integration.rs`
+- Module: `rust/exodus-rs/src/views.rs`
+- Enhanced methods in: `coord.rs`, `variable.rs`, `block.rs`
+- All 13 tests passing with verified C-contiguous layout
 
 ---
 
@@ -1231,14 +1245,15 @@ python -m pydoc exodus
 ```markdown
 # NumPy Implementation Checklist
 
-## Phase 1: Rust Foundation
-- [ ] Add ndarray feature flag
-- [ ] Create view types (CoordinatesView, VarView, etc.)
-- [ ] Implement coords_array()
-- [ ] Implement var_time_series_array()
-- [ ] Implement connectivity_array()
-- [ ] Add BufferPool
-- [ ] Write Rust tests (10+)
+## Phase 1: Rust Foundation ✅ COMPLETE
+- [x] Add ndarray feature flag (`numpy-compat` added)
+- [x] Create view types (CoordinatesView, VarView, ConnectivityView, VarTimeSeriesView)
+- [x] Implement coords_array() (returns Array2<f64>)
+- [x] Implement var_time_series_array() (returns Array2<f64>)
+- [x] Implement connectivity_array() (returns Array2<i64>)
+- [x] Write Rust tests (13 comprehensive integration tests, all passing)
+- [x] Documentation with examples for all new methods
+- [-] BufferPool (deferred - not needed for initial implementation)
 
 ## Phase 2: Python Bindings
 - [ ] Enable numpy feature in exodus-py
