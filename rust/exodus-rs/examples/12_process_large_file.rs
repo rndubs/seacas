@@ -25,6 +25,7 @@ use std::time::Instant;
 use exodus_rs::{
     CreateMode, CreateOptions, EntityType, ExodusError, ExodusFile, FloatSize, InitParams, Int64Mode,
 };
+use exodus_rs::performance::PerformanceConfig;
 
 /// Apply coordinate transformation to mesh coordinates
 ///
@@ -79,6 +80,7 @@ fn process_exodus_file<P: AsRef<Path>>(
     input_path: P,
     output_path: P,
     field_scale_factor: f64,
+    perf_config: Option<PerformanceConfig>,
 ) -> Result<(), ExodusError> {
     let input_path = input_path.as_ref();
     let output_path = output_path.as_ref();
@@ -86,6 +88,10 @@ fn process_exodus_file<P: AsRef<Path>>(
     println!("Processing Exodus file: {}", input_path.display());
     println!("Output file: {}", output_path.display());
     println!("Field scale factor: {}", field_scale_factor);
+
+    // Print performance configuration
+    let perf = perf_config.unwrap_or_else(PerformanceConfig::auto);
+    println!("\n{}", perf.summary());
     println!();
 
     let total_start = Instant::now();
@@ -144,6 +150,7 @@ fn process_exodus_file<P: AsRef<Path>>(
         mode: CreateMode::Clobber,
         float_size: FloatSize::Float64,
         int64_mode: Int64Mode::Int64,
+        performance: Some(perf),
         ..Default::default()
     };
     let mut writer = ExodusFile::create(output_path, options)?;
@@ -283,29 +290,177 @@ fn format_number(n: usize) -> String {
     result.chars().rev().collect()
 }
 
+fn print_usage(program: &str) {
+    eprintln!("Usage: {} INPUT.exo OUTPUT.exo [OPTIONS]", program);
+    eprintln!();
+    eprintln!("Arguments:");
+    eprintln!("  INPUT.exo       - Input Exodus file path");
+    eprintln!("  OUTPUT.exo      - Output Exodus file path");
+    eprintln!();
+    eprintln!("Options:");
+    eprintln!("  --scale FACTOR           - Scale factor for field values (default: 1.5)");
+    eprintln!();
+    eprintln!("Performance Tuning:");
+    eprintln!("  --auto                   - Auto-detect node type (default)");
+    eprintln!("  --conservative           - Conservative settings for login nodes");
+    eprintln!("  --aggressive             - Aggressive settings for compute nodes");
+    eprintln!("  --cache-mb SIZE          - HDF5 chunk cache size in MB (e.g., 128)");
+    eprintln!("  --cache-preemption VAL   - Cache preemption policy 0.0-1.0 (default: 0.75)");
+    eprintln!("                             0.0 = favor writes, 1.0 = favor reads");
+    eprintln!("  --node-chunk SIZE        - Nodes per chunk (e.g., 10000)");
+    eprintln!("  --elem-chunk SIZE        - Elements per chunk (e.g., 10000)");
+    eprintln!("  --time-chunk SIZE        - Time steps per chunk (default: 0 = no chunking)");
+    eprintln!();
+    eprintln!("Examples:");
+    eprintln!("  # Basic usage with auto-detection");
+    eprintln!("  {} input.exo output.exo", program);
+    eprintln!();
+    eprintln!("  # Custom scale factor");
+    eprintln!("  {} input.exo output.exo --scale 2.0", program);
+    eprintln!();
+    eprintln!("  # Aggressive performance for large compute node");
+    eprintln!("  {} input.exo output.exo --aggressive", program);
+    eprintln!();
+    eprintln!("  # Custom cache and chunk sizes");
+    eprintln!("  {} input.exo output.exo --cache-mb 256 --node-chunk 20000", program);
+    eprintln!();
+    eprintln!("  # Full customization");
+    eprintln!("  {} input.exo output.exo --scale 1.5 \\", program);
+    eprintln!("    --cache-mb 512 --cache-preemption 0.5 \\");
+    eprintln!("    --node-chunk 50000 --elem-chunk 50000 --time-chunk 0");
+}
+
 fn main() {
     let args: Vec<String> = env::args().collect();
 
     if args.len() < 3 {
-        eprintln!("Usage: {} INPUT.exo OUTPUT.exo [SCALE_FACTOR]", args[0]);
-        eprintln!();
-        eprintln!("Arguments:");
-        eprintln!("  INPUT.exo       - Input Exodus file path");
-        eprintln!("  OUTPUT.exo      - Output Exodus file path");
-        eprintln!("  SCALE_FACTOR    - Optional scale factor for field values (default: 1.5)");
-        eprintln!();
-        eprintln!("Example:");
-        eprintln!("  {} input.exo output.exo 2.0", args[0]);
+        print_usage(&args[0]);
         std::process::exit(1);
     }
 
+    // Parse positional arguments
     let input_path = &args[1];
     let output_path = &args[2];
-    let scale_factor = if args.len() > 3 {
-        args[3].parse::<f64>().unwrap_or(1.5)
-    } else {
-        1.5
-    };
+
+    // Parse optional arguments
+    let mut scale_factor = 1.5;
+    let mut perf_config = PerformanceConfig::auto();
+    let mut perf_preset: Option<&str> = None;
+
+    let mut i = 3;
+    while i < args.len() {
+        match args[i].as_str() {
+            "--scale" => {
+                if i + 1 < args.len() {
+                    scale_factor = args[i + 1].parse::<f64>().unwrap_or_else(|_| {
+                        eprintln!("ERROR: Invalid scale factor: {}", args[i + 1]);
+                        std::process::exit(1);
+                    });
+                    i += 2;
+                } else {
+                    eprintln!("ERROR: --scale requires a value");
+                    std::process::exit(1);
+                }
+            }
+            "--auto" => {
+                perf_preset = Some("auto");
+                i += 1;
+            }
+            "--conservative" => {
+                perf_preset = Some("conservative");
+                i += 1;
+            }
+            "--aggressive" => {
+                perf_preset = Some("aggressive");
+                i += 1;
+            }
+            "--cache-mb" => {
+                if i + 1 < args.len() {
+                    let cache_mb = args[i + 1].parse::<usize>().unwrap_or_else(|_| {
+                        eprintln!("ERROR: Invalid cache size: {}", args[i + 1]);
+                        std::process::exit(1);
+                    });
+                    perf_config = perf_config.with_cache_mb(cache_mb);
+                    i += 2;
+                } else {
+                    eprintln!("ERROR: --cache-mb requires a value");
+                    std::process::exit(1);
+                }
+            }
+            "--cache-preemption" => {
+                if i + 1 < args.len() {
+                    let preemption = args[i + 1].parse::<f64>().unwrap_or_else(|_| {
+                        eprintln!("ERROR: Invalid preemption value: {}", args[i + 1]);
+                        std::process::exit(1);
+                    });
+                    perf_config = perf_config.with_preemption(preemption);
+                    i += 2;
+                } else {
+                    eprintln!("ERROR: --cache-preemption requires a value");
+                    std::process::exit(1);
+                }
+            }
+            "--node-chunk" => {
+                if i + 1 < args.len() {
+                    let chunk_size = args[i + 1].parse::<usize>().unwrap_or_else(|_| {
+                        eprintln!("ERROR: Invalid node chunk size: {}", args[i + 1]);
+                        std::process::exit(1);
+                    });
+                    perf_config = perf_config.with_node_chunk_size(chunk_size);
+                    i += 2;
+                } else {
+                    eprintln!("ERROR: --node-chunk requires a value");
+                    std::process::exit(1);
+                }
+            }
+            "--elem-chunk" => {
+                if i + 1 < args.len() {
+                    let chunk_size = args[i + 1].parse::<usize>().unwrap_or_else(|_| {
+                        eprintln!("ERROR: Invalid element chunk size: {}", args[i + 1]);
+                        std::process::exit(1);
+                    });
+                    perf_config = perf_config.with_element_chunk_size(chunk_size);
+                    i += 2;
+                } else {
+                    eprintln!("ERROR: --elem-chunk requires a value");
+                    std::process::exit(1);
+                }
+            }
+            "--time-chunk" => {
+                if i + 1 < args.len() {
+                    let chunk_size = args[i + 1].parse::<usize>().unwrap_or_else(|_| {
+                        eprintln!("ERROR: Invalid time chunk size: {}", args[i + 1]);
+                        std::process::exit(1);
+                    });
+                    perf_config = perf_config.with_time_chunk_size(chunk_size);
+                    i += 2;
+                } else {
+                    eprintln!("ERROR: --time-chunk requires a value");
+                    std::process::exit(1);
+                }
+            }
+            "--help" | "-h" => {
+                print_usage(&args[0]);
+                std::process::exit(0);
+            }
+            other => {
+                eprintln!("ERROR: Unknown option: {}", other);
+                eprintln!();
+                print_usage(&args[0]);
+                std::process::exit(1);
+            }
+        }
+    }
+
+    // Apply preset if specified (overrides previous settings)
+    if let Some(preset) = perf_preset {
+        perf_config = match preset {
+            "auto" => PerformanceConfig::auto(),
+            "conservative" => PerformanceConfig::conservative(),
+            "aggressive" => PerformanceConfig::aggressive(),
+            _ => perf_config,
+        };
+    }
 
     if !Path::new(input_path).exists() {
         eprintln!("ERROR: Input file not found: {}", input_path);
@@ -328,7 +483,8 @@ fn main() {
         }
     }
 
-    if let Err(e) = process_exodus_file(input_path, output_path, scale_factor) {
+    if let Err(e) = process_exodus_file(input_path, output_path, scale_factor, Some(perf_config))
+    {
         eprintln!("\nERROR: {}", e);
         std::process::exit(1);
     }

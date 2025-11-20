@@ -3,7 +3,7 @@
 # Compile and run the Rust Exodus processing example
 #
 # Usage:
-#   ./run_rust_example.sh INPUT.exo OUTPUT.exo [SCALE_FACTOR]
+#   ./run_rust_example.sh INPUT.exo OUTPUT.exo [OPTIONS]
 #
 
 set -e  # Exit on error
@@ -20,21 +20,37 @@ NC='\033[0m' # No Color
 
 # Check if we have the required arguments
 if [ $# -lt 2 ]; then
-    echo "Usage: $0 INPUT.exo OUTPUT.exo [SCALE_FACTOR]"
+    echo "Usage: $0 INPUT.exo OUTPUT.exo [OPTIONS]"
     echo ""
     echo "Arguments:"
     echo "  INPUT.exo       - Input Exodus file path"
     echo "  OUTPUT.exo      - Output Exodus file path"
-    echo "  SCALE_FACTOR    - Optional scale factor for field values (default: 1.5)"
     echo ""
-    echo "Example:"
-    echo "  $0 input.exo output.exo 2.0"
+    echo "Options:"
+    echo "  --scale FACTOR           - Scale factor for field values (default: 1.5)"
+    echo "  --auto                   - Auto-detect node type (default)"
+    echo "  --conservative           - Conservative settings for login nodes"
+    echo "  --aggressive             - Aggressive settings for compute nodes"
+    echo "  --cache-mb SIZE          - HDF5 chunk cache size in MB"
+    echo "  --cache-preemption VAL   - Cache preemption policy 0.0-1.0"
+    echo "  --node-chunk SIZE        - Nodes per chunk"
+    echo "  --elem-chunk SIZE        - Elements per chunk"
+    echo "  --time-chunk SIZE        - Time steps per chunk"
+    echo ""
+    echo "Examples:"
+    echo "  $0 input.exo output.exo"
+    echo "  $0 input.exo output.exo --scale 2.0"
+    echo "  $0 input.exo output.exo --aggressive --cache-mb 256"
+    echo "  $0 input.exo output.exo --cache-mb 512 --node-chunk 50000"
     exit 1
 fi
 
 INPUT_FILE="$1"
 OUTPUT_FILE="$2"
-SCALE_FACTOR="${3:-1.5}"
+shift 2  # Remove INPUT and OUTPUT from arguments
+
+# Collect remaining arguments for the Rust program
+RUST_ARGS=("$@")
 
 # Check if input file exists
 if [ ! -f "$INPUT_FILE" ]; then
@@ -53,7 +69,9 @@ echo ""
 echo "Configuration:"
 echo "  Input:  $INPUT_FILE"
 echo "  Output: $OUTPUT_FILE"
-echo "  Scale:  $SCALE_FACTOR"
+if [ ${#RUST_ARGS[@]} -gt 0 ]; then
+    echo "  Options: ${RUST_ARGS[*]}"
+fi
 echo ""
 
 # Step 1: Compile the Rust example
@@ -117,7 +135,7 @@ OUTPUT_ABS="$(cd "$(dirname "$OUTPUT_FILE")" && pwd)/$(basename "$OUTPUT_FILE")"
 echo "Executing: $BINARY_PATH"
 echo ""
 
-time "$BINARY_PATH" "$INPUT_ABS" "$OUTPUT_ABS" "$SCALE_FACTOR"
+time "$BINARY_PATH" "$INPUT_ABS" "$OUTPUT_ABS" "${RUST_ARGS[@]}"
 
 EXIT_CODE=$?
 

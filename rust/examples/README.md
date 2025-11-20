@@ -77,13 +77,99 @@ chmod +x process_exodus_memory_efficient.py
 ### Rust Version (Recommended for Large Files)
 
 ```bash
-# Use the provided script (easiest)
-./run_rust_example.sh input.exo output.exo 2.0
+# Basic usage with auto-detected performance settings
+./run_rust_example.sh input.exo output.exo
+
+# Custom scale factor
+./run_rust_example.sh input.exo output.exo --scale 2.0
+
+# Aggressive performance for compute nodes with large memory
+./run_rust_example.sh input.exo output.exo --aggressive
+
+# Custom cache and chunk sizes for optimal performance
+./run_rust_example.sh input.exo output.exo --cache-mb 512 --node-chunk 50000
+
+# Full customization
+./run_rust_example.sh input.exo output.exo \
+  --scale 1.5 \
+  --cache-mb 256 \
+  --cache-preemption 0.5 \
+  --node-chunk 20000 \
+  --elem-chunk 20000
 
 # Or compile and run manually
 cd ../exodus-rs
 cargo build --release --example 12_process_large_file --features netcdf4
-./target/release/examples/12_process_large_file input.exo output.exo 2.0
+./target/release/examples/12_process_large_file input.exo output.exo --help
+```
+
+## Performance Tuning Options (Rust Only)
+
+The Rust version supports advanced HDF5/NetCDF performance tuning through command-line options:
+
+### Cache Configuration
+
+**`--cache-mb SIZE`** - HDF5 chunk cache size in megabytes
+- Default: Auto-detected (4 MB for login nodes, 128 MB for compute nodes)
+- Larger cache = better performance for repeated reads
+- Recommended: 10-20% of available RAM for very large files
+- Example: `--cache-mb 512` for a node with 4GB+ available RAM
+
+**`--cache-preemption VALUE`** - Cache eviction policy (0.0 to 1.0)
+- Default: 0.75 (balanced)
+- 0.0 = Favor writes (don't penalize write-only chunks)
+- 1.0 = Favor reads (aggressively evict write-only chunks)
+- Use 0.5 for write-heavy workloads, 0.75-1.0 for read-heavy
+
+### Chunk Configuration
+
+**`--node-chunk SIZE`** - Number of nodes per HDF5 chunk
+- Default: Auto-detected (1,000 for login, 10,000 for compute)
+- Larger chunks = less metadata, more memory per operation
+- Recommended: 5,000-50,000 for large meshes
+- Example: `--node-chunk 20000`
+
+**`--elem-chunk SIZE`** - Number of elements per HDF5 chunk
+- Default: Same as node-chunk
+- Tune separately if your mesh has very different node/element ratios
+
+**`--time-chunk SIZE`** - Time steps per chunk
+- Default: 0 (no chunking on time dimension)
+- Use 0 for mesh-oriented I/O (default for this example)
+- Use 1+ for time-series analysis workloads
+
+### Presets
+
+**`--auto`** - Auto-detect node type (default)
+- Detects if running on login vs compute node
+- Sets conservative or aggressive defaults accordingly
+
+**`--conservative`** - Conservative settings for shared resources
+- Cache: 4 MB
+- Node/Elem chunks: 1,000
+- Good for login nodes or limited memory
+
+**`--aggressive`** - Aggressive settings for dedicated resources
+- Cache: 128 MB
+- Node/Elem chunks: 10,000
+- Good for compute nodes with 256GB+ RAM
+
+### Tuning Guidelines
+
+1. **Start with auto-detection**: `./run_rust_example.sh input.exo output.exo`
+2. **Check performance summary** in the output to see what settings were used
+3. **For 100GB+ files on large nodes**: Try `--cache-mb 512 --node-chunk 50000`
+4. **For limited memory**: Try `--conservative --cache-mb 16`
+5. **Monitor memory usage** with `top` or `htop` during processing
+
+Example for your 100GB file scenario (250GB RAM available):
+```bash
+# Allocate ~20GB for cache, large chunks for efficiency
+./run_rust_example.sh input.exo output.exo \
+  --cache-mb 20480 \
+  --node-chunk 100000 \
+  --elem-chunk 100000 \
+  --cache-preemption 0.5
 ```
 
 ## Performance Comparison
