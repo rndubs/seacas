@@ -39,6 +39,7 @@ default = ["netcdf4"]
 # NetCDF-4 support (requires system HDF5/NetCDF libraries)
 netcdf4 = ["dep:netcdf"]
 ndarray = ["dep:ndarray"]
+numpy-compat = ["ndarray"]  # NumPy-compatible layout for zero-copy transfer
 parallel = ["dep:rayon"]
 serde = ["dep:serde"]
 
