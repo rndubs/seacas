@@ -6,7 +6,7 @@ use crate::file::{ExodusWriter, ExodusAppender, ExodusReader};
 use crate::types::Block;
 
 #[cfg(feature = "numpy")]
-use numpy::{PyArray1, PyArray2};
+use numpy::{PyArray1, PyArray2, PyArrayMethods};
 
 #[pymethods]
 impl ExodusWriter {
@@ -40,11 +40,11 @@ impl ExodusWriter {
     ///     >>> # One hex element with 8 nodes
     ///     >>> writer.put_connectivity(100, np.array([1, 2, 3, 4, 5, 6, 7, 8]))
     #[cfg(feature = "numpy")]
-    fn put_connectivity(&mut self, py: Python<'_>, block_id: i64, connectivity: Bound<'_, PyAny>) -> PyResult<()> {
+    fn put_connectivity(&mut self, _py: Python<'_>, block_id: i64, connectivity: Bound<'_, PyAny>) -> PyResult<()> {
         // Convert NumPy array or list to Vec
-        let conn_vec = if let Ok(arr) = connectivity.downcast::<PyArray1<i64>>() {
+        let conn_vec = if let Ok(arr) = connectivity.clone().cast_into::<PyArray1<i64>>() {
             arr.readonly().as_slice()?.to_vec()
-        } else if let Ok(arr) = connectivity.downcast::<PyArray2<i64>>() {
+        } else if let Ok(arr) = connectivity.clone().cast_into::<PyArray2<i64>>() {
             // Flatten 2D array to 1D
             arr.readonly().as_slice()?.to_vec()
         } else {
@@ -133,8 +133,23 @@ impl ExodusReader {
     ///     >>> print(conn.shape)  # (num_elements, nodes_per_elem)
     #[cfg(feature = "numpy")]
     fn get_connectivity<'py>(&self, py: Python<'py>, block_id: i64) -> PyResult<Bound<'py, PyArray2<i64>>> {
-        let arr = self.file_ref().connectivity_array(block_id).into_py()?;
-        Ok(PyArray2::from_owned_array_bound(py, arr))
+        use numpy::ndarray::Array2;
+
+        // Get block info to determine dimensions
+        let block = self.file_ref().block(block_id).into_py()?;
+        let num_elem = block.num_entries;
+        let nodes_per_elem = block.num_nodes_per_entry;
+
+        // Get flat connectivity data using existing list-based method
+        let conn_flat = self.file_ref().connectivity(block_id).into_py()?;
+
+        // Reshape flat data into 2D array (num_elem, nodes_per_elem)
+        let arr = Array2::from_shape_vec((num_elem, nodes_per_elem), conn_flat)
+            .map_err(|e| PyErr::new::<pyo3::exceptions::PyValueError, _>(
+                format!("Failed to reshape connectivity data: {}", e)
+            ))?;
+
+        Ok(PyArray2::from_owned_array(py, arr))
     }
 
     /// Read element connectivity as flat list (deprecated)

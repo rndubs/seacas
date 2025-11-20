@@ -7,7 +7,7 @@ use crate::file::{ExodusReader, ExodusWriter};
 use crate::types::{EntityType, TruthTable};
 
 #[cfg(feature = "numpy")]
-use numpy::{PyArray1, PyArray2};
+use numpy::{PyArray1, PyArray2, PyArrayMethods};
 
 /// Variable operations for ExodusReader
 #[pymethods]
@@ -80,7 +80,7 @@ impl ExodusReader {
         let data = self.file
             .var(step, var_type.to_rust(), entity_id, var_index)
             .into_py()?;
-        Ok(PyArray1::from_vec_bound(py, data))
+        Ok(PyArray1::from_vec(py, data))
     }
 
     /// Read variable values at a time step as list (deprecated)
@@ -153,10 +153,31 @@ impl ExodusReader {
         entity_id: i64,
         var_index: usize,
     ) -> PyResult<Bound<'py, PyArray2<f64>>> {
-        let arr = self.file
-            .var_time_series_array(start_step, end_step, var_type.to_rust(), entity_id, var_index)
+        use numpy::ndarray::Array2;
+
+        // Get flat vector of time series data using existing list-based method
+        let data = self.file
+            .var_time_series(start_step, end_step, var_type.to_rust(), entity_id, var_index)
             .into_py()?;
-        Ok(PyArray2::from_owned_array_bound(py, arr))
+
+        // Calculate dimensions
+        let num_steps = end_step - start_step;
+        if data.is_empty() {
+            // Return empty 2D array with correct shape
+            let arr = Array2::<f64>::zeros((num_steps, 0));
+            return Ok(PyArray2::from_owned_array(py, arr));
+        }
+
+        let num_entities = data.len() / num_steps;
+
+        // Reshape flat data into 2D array (num_steps, num_entities)
+        // Data is row-major: [step0_ent0, step0_ent1, ..., step1_ent0, step1_ent1, ...]
+        let arr = Array2::from_shape_vec((num_steps, num_entities), data)
+            .map_err(|e| PyErr::new::<pyo3::exceptions::PyValueError, _>(
+                format!("Failed to reshape data: {}", e)
+            ))?;
+
+        Ok(PyArray2::from_owned_array(py, arr))
     }
 
     /// Read variable time series as flat list (deprecated)
@@ -303,7 +324,7 @@ impl ExodusWriter {
     #[cfg(feature = "numpy")]
     fn put_var(
         &mut self,
-        py: Python<'_>,
+        _py: Python<'_>,
         step: usize,
         var_type: EntityType,
         entity_id: i64,
@@ -311,7 +332,7 @@ impl ExodusWriter {
         values: Bound<'_, PyAny>,
     ) -> PyResult<()> {
         // Convert NumPy array or list to Vec
-        let values_vec = if let Ok(arr) = values.downcast::<PyArray1<f64>>() {
+        let values_vec = if let Ok(arr) = values.clone().cast_into::<PyArray1<f64>>() {
             arr.readonly().as_slice()?.to_vec()
         } else {
             values.extract::<Vec<f64>>()?
@@ -394,7 +415,7 @@ impl ExodusWriter {
     #[cfg(feature = "numpy")]
     fn put_var_time_series(
         &mut self,
-        py: Python<'_>,
+        _py: Python<'_>,
         start_step: usize,
         end_step: usize,
         var_type: EntityType,
@@ -403,9 +424,9 @@ impl ExodusWriter {
         values: Bound<'_, PyAny>,
     ) -> PyResult<()> {
         // Convert NumPy array or list to Vec
-        let values_vec = if let Ok(arr) = values.downcast::<PyArray1<f64>>() {
+        let values_vec = if let Ok(arr) = values.clone().cast_into::<PyArray1<f64>>() {
             arr.readonly().as_slice()?.to_vec()
-        } else if let Ok(arr) = values.downcast::<PyArray2<f64>>() {
+        } else if let Ok(arr) = values.clone().cast_into::<PyArray2<f64>>() {
             // Flatten 2D array to 1D
             arr.readonly().as_slice()?.to_vec()
         } else {

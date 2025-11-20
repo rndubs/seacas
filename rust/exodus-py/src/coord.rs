@@ -5,7 +5,7 @@ use crate::error::IntoPyResult;
 use crate::file::{ExodusWriter, ExodusAppender, ExodusReader};
 
 #[cfg(feature = "numpy")]
-use numpy::{PyArray1, PyArray2, PyReadonlyArray1};
+use numpy::{PyArray1, PyArray2, PyArrayMethods};
 
 #[pymethods]
 impl ExodusWriter {
@@ -27,20 +27,20 @@ impl ExodusWriter {
     #[cfg(feature = "numpy")]
     fn put_coords(
         &mut self,
-        py: Python<'_>,
+        _py: Python<'_>,
         x: Bound<'_, PyAny>,
         y: Option<Bound<'_, PyAny>>,
         z: Option<Bound<'_, PyAny>>,
     ) -> PyResult<()> {
         // Convert NumPy arrays or lists to Vec
-        let x_vec = if let Ok(arr) = x.downcast::<PyArray1<f64>>() {
+        let x_vec = if let Ok(arr) = x.clone().cast_into::<PyArray1<f64>>() {
             arr.readonly().as_slice()?.to_vec()
         } else {
             x.extract::<Vec<f64>>()?
         };
 
         let y_vec = if let Some(y_any) = y {
-            if let Ok(arr) = y_any.downcast::<PyArray1<f64>>() {
+            if let Ok(arr) = y_any.clone().cast_into::<PyArray1<f64>>() {
                 Some(arr.readonly().as_slice()?.to_vec())
             } else {
                 Some(y_any.extract::<Vec<f64>>()?)
@@ -50,7 +50,7 @@ impl ExodusWriter {
         };
 
         let z_vec = if let Some(z_any) = z {
-            if let Ok(arr) = z_any.downcast::<PyArray1<f64>>() {
+            if let Ok(arr) = z_any.clone().cast_into::<PyArray1<f64>>() {
                 Some(arr.readonly().as_slice()?.to_vec())
             } else {
                 Some(z_any.extract::<Vec<f64>>()?)
@@ -107,20 +107,20 @@ impl ExodusAppender {
     #[cfg(feature = "numpy")]
     fn put_coords(
         &mut self,
-        py: Python<'_>,
+        _py: Python<'_>,
         x: Bound<'_, PyAny>,
         y: Option<Bound<'_, PyAny>>,
         z: Option<Bound<'_, PyAny>>,
     ) -> PyResult<()> {
         // Convert NumPy arrays or lists to Vec
-        let x_vec = if let Ok(arr) = x.downcast::<PyArray1<f64>>() {
+        let x_vec = if let Ok(arr) = x.clone().cast_into::<PyArray1<f64>>() {
             arr.readonly().as_slice()?.to_vec()
         } else {
             x.extract::<Vec<f64>>()?
         };
 
         let y_vec = if let Some(y_any) = y {
-            if let Ok(arr) = y_any.downcast::<PyArray1<f64>>() {
+            if let Ok(arr) = y_any.clone().cast_into::<PyArray1<f64>>() {
                 Some(arr.readonly().as_slice()?.to_vec())
             } else {
                 Some(y_any.extract::<Vec<f64>>()?)
@@ -130,7 +130,7 @@ impl ExodusAppender {
         };
 
         let z_vec = if let Some(z_any) = z {
-            if let Ok(arr) = z_any.downcast::<PyArray1<f64>>() {
+            if let Ok(arr) = z_any.clone().cast_into::<PyArray1<f64>>() {
                 Some(arr.readonly().as_slice()?.to_vec())
             } else {
                 Some(z_any.extract::<Vec<f64>>()?)
@@ -171,9 +171,23 @@ impl ExodusAppender {
     /// Returns:
     ///     NumPy array of shape (num_nodes, 3) with columns [x, y, z]
     #[cfg(feature = "numpy")]
-    fn get_coords<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyArray2<f64>>> {
-        let arr = self.file_ref()?.coords_array::<f64>().into_py()?;
-        Ok(PyArray2::from_owned_array_bound(py, arr))
+    fn get_coords(&self, py: Python<'_>) -> PyResult<Py<PyArray2<f64>>> {
+        use numpy::ndarray::Array2;
+
+        // Get coordinates using list-based method
+        let coords = self.file_ref()?.coords::<f64>().into_py()?;
+        let num_nodes = coords.x.len();
+
+        // Create 2D array with shape (num_nodes, 3) in row-major order
+        let mut arr = Array2::<f64>::zeros((num_nodes, 3));
+        for i in 0..num_nodes {
+            arr[[i, 0]] = coords.x[i];
+            arr[[i, 1]] = if !coords.y.is_empty() { coords.y[i] } else { 0.0 };
+            arr[[i, 2]] = if !coords.z.is_empty() { coords.z[i] } else { 0.0 };
+        }
+
+        // Convert to NumPy array
+        Ok(PyArray2::from_owned_array(py, arr).unbind())
     }
 
     /// Read nodal coordinates as lists (deprecated)
@@ -199,8 +213,22 @@ impl ExodusReader {
     ///     >>> x = coords[:, 0]  # X coordinates
     #[cfg(feature = "numpy")]
     fn get_coords<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyArray2<f64>>> {
-        let arr = self.file_ref().coords_array::<f64>().into_py()?;
-        Ok(PyArray2::from_owned_array_bound(py, arr))
+        use numpy::ndarray::Array2;
+
+        // Get coordinates using list-based method
+        let coords = self.file_ref().coords::<f64>().into_py()?;
+        let num_nodes = coords.x.len();
+
+        // Create 2D array with shape (num_nodes, 3) in row-major order
+        let mut arr = Array2::<f64>::zeros((num_nodes, 3));
+        for i in 0..num_nodes {
+            arr[[i, 0]] = coords.x[i];
+            arr[[i, 1]] = if !coords.y.is_empty() { coords.y[i] } else { 0.0 };
+            arr[[i, 2]] = if !coords.z.is_empty() { coords.z[i] } else { 0.0 };
+        }
+
+        // Convert to NumPy array
+        Ok(PyArray2::from_owned_array(py, arr))
     }
 
     /// Read nodal coordinates as lists (deprecated, for backward compatibility)
@@ -228,7 +256,7 @@ impl ExodusReader {
     #[cfg(feature = "numpy")]
     fn get_coord_x<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyArray1<f64>>> {
         let coords = self.file_ref().get_coord_x::<f64>().into_py()?;
-        Ok(PyArray1::from_vec_bound(py, coords))
+        Ok(PyArray1::from_vec(py, coords))
     }
 
     /// Read only X coordinates as list (deprecated)
@@ -250,7 +278,7 @@ impl ExodusReader {
     #[cfg(feature = "numpy")]
     fn get_coord_y<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyArray1<f64>>> {
         let coords = self.file_ref().get_coord_y::<f64>().into_py()?;
-        Ok(PyArray1::from_vec_bound(py, coords))
+        Ok(PyArray1::from_vec(py, coords))
     }
 
     /// Read only Y coordinates as list (deprecated)
@@ -269,7 +297,7 @@ impl ExodusReader {
     #[cfg(feature = "numpy")]
     fn get_coord_z<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyArray1<f64>>> {
         let coords = self.file_ref().get_coord_z::<f64>().into_py()?;
-        Ok(PyArray1::from_vec_bound(py, coords))
+        Ok(PyArray1::from_vec(py, coords))
     }
 
     /// Read only Z coordinates as list (deprecated)
