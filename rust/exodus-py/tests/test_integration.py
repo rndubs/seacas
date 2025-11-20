@@ -169,8 +169,8 @@ def test_builder_and_reader_integration():
         assert 1 in block_ids
         assert 2 in block_ids
 
-        conn1 = reader.get_connectivity(1)
-        conn2 = reader.get_connectivity(2)
+        conn1 = reader.get_connectivity_list(1)
+        conn2 = reader.get_connectivity_list(2)
         assert conn1 == [1, 2, 5, 4]
         assert conn2 == [2, 3, 6, 5]
 
