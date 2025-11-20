@@ -68,7 +68,9 @@ jobs:
     - name: Build wheel
       run: |
         cd rust/exodus-py
-        maturin build --release --out dist
+        # Use manylinux_2_28 for broader compatibility with enterprise Linux distributions
+        # (e.g., RHEL 8, Rocky Linux 8) which typically have glibc 2.28
+        maturin build --release --out dist --compatibility manylinux_2_28
 
     - name: Extract version from pyproject.toml
       id: get_version
@@ -104,7 +106,7 @@ jobs:
 
           Or install directly from this release (replace cpXXX with your Python version):
           ```bash
-          pip install https://github.com/${{ github.repository }}/releases/download/exodus-py-v${{ steps.get_version.outputs.version }}/exodus_py-${{ steps.get_version.outputs.version }}-cpXXX-cpXXX-manylinux_2_34_x86_64.whl
+          pip install https://github.com/${{ github.repository }}/releases/download/exodus-py-v${{ steps.get_version.outputs.version }}/exodus_py-${{ steps.get_version.outputs.version }}-cpXXX-cpXXX-manylinux_2_28_x86_64.whl
           ```
         files: rust/exodus-py/dist/*.whl
         draft: false
