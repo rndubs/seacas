@@ -5,11 +5,11 @@
 
 use crate::error::Result;
 use crate::file::ExodusFile;
-use crate::transformations::{
-    apply_rotation_to_vector, rotation_matrix_from_euler, rotation_matrix_x,
-    rotation_matrix_y, rotation_matrix_z, Matrix3x3,
-};
 use crate::mode;
+use crate::transformations::{
+    apply_rotation_to_vector, rotation_matrix_from_euler, rotation_matrix_x, rotation_matrix_y,
+    rotation_matrix_z, Matrix3x3,
+};
 use std::f64::consts::PI;
 
 /// Convert degrees to radians

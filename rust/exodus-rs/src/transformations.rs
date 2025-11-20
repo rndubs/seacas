@@ -66,11 +66,7 @@ pub fn rotation_matrix_x(angle_rad: f64) -> Matrix3x3 {
     let c = angle_rad.cos();
     let s = angle_rad.sin();
 
-    [
-        1.0, 0.0, 0.0,
-        0.0, c,   -s,
-        0.0, s,    c,
-    ]
+    [1.0, 0.0, 0.0, 0.0, c, -s, 0.0, s, c]
 }
 
 /// Create a rotation matrix for rotation around the Y axis
@@ -86,11 +82,7 @@ pub fn rotation_matrix_y(angle_rad: f64) -> Matrix3x3 {
     let c = angle_rad.cos();
     let s = angle_rad.sin();
 
-    [
-        c,   0.0, s,
-        0.0, 1.0, 0.0,
-        -s,  0.0, c,
-    ]
+    [c, 0.0, s, 0.0, 1.0, 0.0, -s, 0.0, c]
 }
 
 /// Create a rotation matrix for rotation around the Z axis
@@ -106,11 +98,7 @@ pub fn rotation_matrix_z(angle_rad: f64) -> Matrix3x3 {
     let c = angle_rad.cos();
     let s = angle_rad.sin();
 
-    [
-        c,   -s,  0.0,
-        s,    c,  0.0,
-        0.0, 0.0, 1.0,
-    ]
+    [c, -s, 0.0, s, c, 0.0, 0.0, 0.0, 1.0]
 }
 
 /// Multiply two 3x3 matrices: result = a * b
@@ -164,14 +152,14 @@ pub enum EulerSequence {
     /// Rotations are applied in the body frame
     Intrinsic {
         /// Axes of rotation in order
-        axes: [char; 3]
+        axes: [char; 3],
     },
 
     /// Extrinsic rotations (uppercase axes: 'X', 'Y', 'Z')
     /// Rotations are applied in the fixed frame
     Extrinsic {
         /// Axes of rotation in order
-        axes: [char; 3]
+        axes: [char; 3],
     },
 }
 
@@ -195,9 +183,10 @@ impl EulerSequence {
         let chars: Vec<char> = seq.chars().collect();
 
         if chars.is_empty() || chars.len() > 3 {
-            return Err(ExodusError::Other(
-                format!("Euler sequence must be 1-3 characters, got {}", chars.len())
-            ));
+            return Err(ExodusError::Other(format!(
+                "Euler sequence must be 1-3 characters, got {}",
+                chars.len()
+            )));
         }
 
         // Check if all uppercase (extrinsic) or all lowercase (intrinsic)
@@ -206,7 +195,7 @@ impl EulerSequence {
 
         if !all_upper && !all_lower {
             return Err(ExodusError::Other(
-                "Cannot mix intrinsic (lowercase) and extrinsic (uppercase) rotations".to_string()
+                "Cannot mix intrinsic (lowercase) and extrinsic (uppercase) rotations".to_string(),
             ));
         }
 
@@ -214,9 +203,10 @@ impl EulerSequence {
         for c in &chars {
             let upper = c.to_uppercase().next().unwrap();
             if upper != 'X' && upper != 'Y' && upper != 'Z' {
-                return Err(ExodusError::Other(
-                    format!("Invalid axis '{}', must be X/Y/Z or x/y/z", c)
-                ));
+                return Err(ExodusError::Other(format!(
+                    "Invalid axis '{}', must be X/Y/Z or x/y/z",
+                    c
+                )));
             }
         }
 
@@ -272,10 +262,12 @@ pub fn rotation_matrix_from_euler(seq: &str, angles: &[f64], degrees: bool) -> R
     // Validate angles length
     let seq_len = seq.len();
     if angles.len() != seq_len {
-        return Err(ExodusError::Other(
-            format!("Expected {} angles for sequence '{}', got {}",
-                    seq_len, seq, angles.len())
-        ));
+        return Err(ExodusError::Other(format!(
+            "Expected {} angles for sequence '{}', got {}",
+            seq_len,
+            seq,
+            angles.len()
+        )));
     }
 
     // Convert angles to radians if needed
@@ -294,11 +286,7 @@ pub fn rotation_matrix_from_euler(seq: &str, angles: &[f64], degrees: bool) -> R
     match euler_seq {
         EulerSequence::Extrinsic { axes } => {
             // Extrinsic rotations: compose right-to-left (apply in reverse order)
-            let mut result = [
-                1.0, 0.0, 0.0,
-                0.0, 1.0, 0.0,
-                0.0, 0.0, 1.0,
-            ]; // Identity matrix
+            let mut result = [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0]; // Identity matrix
 
             for i in (0..seq_len).rev() {
                 let matrix = match axes[i] {
@@ -314,11 +302,7 @@ pub fn rotation_matrix_from_euler(seq: &str, angles: &[f64], degrees: bool) -> R
         }
         EulerSequence::Intrinsic { axes } => {
             // Intrinsic rotations: compose left-to-right
-            let mut result = [
-                1.0, 0.0, 0.0,
-                0.0, 1.0, 0.0,
-                0.0, 0.0, 1.0,
-            ]; // Identity matrix
+            let mut result = [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0]; // Identity matrix
 
             for i in 0..seq_len {
                 let matrix = match axes[i] {
@@ -360,9 +344,8 @@ pub fn rotation_matrix_from_euler(seq: &str, angles: &[f64], degrees: bool) -> R
 pub fn rotate_symmetric_tensor(rotation: &Matrix3x3, tensor: &[f64; 6]) -> [f64; 6] {
     // Convert Voigt notation to full 3x3 matrix
     let t = [
-        tensor[0], tensor[3], tensor[5],
-        tensor[3], tensor[1], tensor[4],
-        tensor[5], tensor[4], tensor[2],
+        tensor[0], tensor[3], tensor[5], tensor[3], tensor[1], tensor[4], tensor[5], tensor[4],
+        tensor[2],
     ];
 
     // Compute R * T
@@ -488,11 +471,7 @@ mod tests {
     #[test]
     fn test_multiply_matrices() {
         // Identity * Identity = Identity
-        let identity = [
-            1.0, 0.0, 0.0,
-            0.0, 1.0, 0.0,
-            0.0, 0.0, 1.0,
-        ];
+        let identity = [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0];
         let result = multiply_matrices(&identity, &identity);
         for i in 0..9 {
             assert_relative_eq!(result[i], identity[i], epsilon = 1e-10);
@@ -502,11 +481,7 @@ mod tests {
     #[test]
     fn test_rotate_symmetric_tensor() {
         // Identity rotation should not change tensor
-        let identity = [
-            1.0, 0.0, 0.0,
-            0.0, 1.0, 0.0,
-            0.0, 0.0, 1.0,
-        ];
+        let identity = [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0];
         let tensor = [1.0, 2.0, 3.0, 0.5, 0.6, 0.7];
         let result = rotate_symmetric_tensor(&identity, &tensor);
         for i in 0..6 {
