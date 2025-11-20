@@ -153,30 +153,12 @@ impl ExodusReader {
         entity_id: i64,
         var_index: usize,
     ) -> PyResult<Bound<'py, PyArray2<f64>>> {
-        use numpy::ndarray::Array2;
-
-        // Get flat vector of time series data using existing list-based method
-        let data = self.file
-            .var_time_series(start_step, end_step, var_type.to_rust(), entity_id, var_index)
+        // Use optimized var_time_series_array() method from Rust
+        let arr = self.file
+            .var_time_series_array(start_step, end_step, var_type.to_rust(), entity_id, var_index)
             .into_py()?;
 
-        // Calculate dimensions
-        let num_steps = end_step - start_step;
-        if data.is_empty() {
-            // Return empty 2D array with correct shape
-            let arr = Array2::<f64>::zeros((num_steps, 0));
-            return Ok(PyArray2::from_owned_array(py, arr));
-        }
-
-        let num_entities = data.len() / num_steps;
-
-        // Reshape flat data into 2D array (num_steps, num_entities)
-        // Data is row-major: [step0_ent0, step0_ent1, ..., step1_ent0, step1_ent1, ...]
-        let arr = Array2::from_shape_vec((num_steps, num_entities), data)
-            .map_err(|e| PyErr::new::<pyo3::exceptions::PyValueError, _>(
-                format!("Failed to reshape data: {}", e)
-            ))?;
-
+        // Convert to NumPy array (zero-copy transfer)
         Ok(PyArray2::from_owned_array(py, arr))
     }
 

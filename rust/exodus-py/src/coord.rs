@@ -174,7 +174,7 @@ impl ExodusAppender {
     fn get_coords(&self, py: Python<'_>) -> PyResult<Py<PyArray2<f64>>> {
         use numpy::ndarray::Array2;
 
-        // Get coordinates using list-based method
+        // Get coordinates using list-based method (coords_array not available for Append mode)
         let coords = self.file_ref()?.coords::<f64>().into_py()?;
         let num_nodes = coords.x.len();
 
@@ -213,21 +213,10 @@ impl ExodusReader {
     ///     >>> x = coords[:, 0]  # X coordinates
     #[cfg(feature = "numpy")]
     fn get_coords<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyArray2<f64>>> {
-        use numpy::ndarray::Array2;
+        // Use optimized coords_array() method from Rust
+        let arr = self.file_ref().coords_array().into_py()?;
 
-        // Get coordinates using list-based method
-        let coords = self.file_ref().coords::<f64>().into_py()?;
-        let num_nodes = coords.x.len();
-
-        // Create 2D array with shape (num_nodes, 3) in row-major order
-        let mut arr = Array2::<f64>::zeros((num_nodes, 3));
-        for i in 0..num_nodes {
-            arr[[i, 0]] = coords.x[i];
-            arr[[i, 1]] = if !coords.y.is_empty() { coords.y[i] } else { 0.0 };
-            arr[[i, 2]] = if !coords.z.is_empty() { coords.z[i] } else { 0.0 };
-        }
-
-        // Convert to NumPy array
+        // Convert to NumPy array (zero-copy transfer)
         Ok(PyArray2::from_owned_array(py, arr))
     }
 

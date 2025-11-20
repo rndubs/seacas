@@ -133,22 +133,10 @@ impl ExodusReader {
     ///     >>> print(conn.shape)  # (num_elements, nodes_per_elem)
     #[cfg(feature = "numpy")]
     fn get_connectivity<'py>(&self, py: Python<'py>, block_id: i64) -> PyResult<Bound<'py, PyArray2<i64>>> {
-        use numpy::ndarray::Array2;
+        // Use optimized connectivity_array() method from Rust
+        let arr = self.file_ref().connectivity_array(block_id).into_py()?;
 
-        // Get block info to determine dimensions
-        let block = self.file_ref().block(block_id).into_py()?;
-        let num_elem = block.num_entries;
-        let nodes_per_elem = block.num_nodes_per_entry;
-
-        // Get flat connectivity data using existing list-based method
-        let conn_flat = self.file_ref().connectivity(block_id).into_py()?;
-
-        // Reshape flat data into 2D array (num_elem, nodes_per_elem)
-        let arr = Array2::from_shape_vec((num_elem, nodes_per_elem), conn_flat)
-            .map_err(|e| PyErr::new::<pyo3::exceptions::PyValueError, _>(
-                format!("Failed to reshape connectivity data: {}", e)
-            ))?;
-
+        // Convert to NumPy array (zero-copy transfer)
         Ok(PyArray2::from_owned_array(py, arr))
     }
 
