@@ -82,14 +82,14 @@ def test_complete_workflow():
         assert params_read.num_elems == 1
 
         # Verify coordinates
-        x, y, z = reader.get_coords()
+        x, y, z = reader.get_coords_list()
         assert len(x) == 4
         assert x == pytest.approx([0.0, 1.0, 1.0, 0.0], abs=1e-6)
 
         # Verify element block
         block_read = reader.get_block(1)
         assert block_read.topology == "QUAD4"
-        conn = reader.get_connectivity(1)
+        conn = reader.get_connectivity_list(1)
         assert conn == [1, 2, 3, 4]
 
         # Verify node set
@@ -160,7 +160,7 @@ def test_builder_and_reader_integration():
         assert params.num_elem_blocks == 2
 
         # Verify coordinates
-        x, y, z = reader.get_coords()
+        x, y, z = reader.get_coords_list()
         assert len(x) == 6
         assert x == pytest.approx([0.0, 1.0, 2.0, 0.0, 1.0, 2.0], abs=1e-6)
 
