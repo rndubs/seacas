@@ -1,6 +1,6 @@
 # Rust Exodus Library - Implementation Status
 
-**Last Updated:** 2025-11-17
+**Last Updated:** 2025-11-20
 **Repository:** `./rust/exodus-rs/`
 
 ## Executive Summary
@@ -21,7 +21,7 @@
 | **Test Suite** | ✅ 268/268 | All tests passing (10% more than previously claimed) |
 | **Python Bindings** | ✅ 71/71 tests | Fully functional |
 | **Documentation** | ✅ Complete | ~2,500 lines (guides, API docs) |
-| **Examples** | ✅ 11/11 | All working |
+| **Examples** | ✅ 12/12 | All working |
 | **Benchmarks** | ✅ 100% | All 4 compile and ready to run |
 | **File Format** | ✅ Verified | Valid NetCDF-4/Exodus II (ncdump validated) |
 | **C Compatibility** | ✅ Verified | 100% C-compatible (80/80 tests with C library) |
@@ -450,7 +450,19 @@ The **exodus-rs library is production-ready** for all use cases with:
   - Available in both Rust API and Python bindings
   - Comprehensive test coverage in Rust
 
-**Overall Assessment:** 100% complete for production use. The core functionality is solid, well-tested, fully documented, and fully compatible with the official C Exodus library. The library is now more ergonomic than ever with automatic mode management and includes advanced spatial search capabilities.
+*2025-11-20:*
+- ✅ **Mesh Transformations** - Comprehensive spatial transformations for meshes and field data:
+  - **Coordinate transformations**: translate, rotate (axis-aligned), scale (uniform/non-uniform)
+  - **Euler angle rotations**: Support for intrinsic and extrinsic rotation sequences (scipy-compatible)
+  - **Field data support**: Utilities for transforming vector and tensor fields (stress, strain, displacement)
+  - **Memory-efficient**: Process large time-history datasets one time step at a time
+  - **Low-level utilities**: Direct access to rotation matrices and tensor transformations
+  - See `TRANSFORMATIONS.md` for complete usage guide
+  - Example: `examples/11_mesh_transformations.rs`
+  - Tests: 4 comprehensive transformation tests (all passing)
+  - API: High-level methods on `ExodusFile<Append>` + low-level `transformations` module
+
+**Overall Assessment:** 100% complete for production use. The core functionality is solid, well-tested, fully documented, and fully compatible with the official C Exodus library. The library is now more ergonomic than ever with automatic mode management and includes advanced spatial search and mesh transformation capabilities.
 
 ---
 
