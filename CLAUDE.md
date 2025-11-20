@@ -1,11 +1,20 @@
 # Development Guide for exodus-rs
 
-This document provides detailed development instructions for working on the exodus-rs crate.
+This document provides detailed development instructions for working on rust and python development for the Exodus library.
 
-The crate can be found in ./rust/exodus-rs/.
+The rust crate can be found in ./rust/exodus-rs/.
+
+The python bindings use PyO3 to expose rust features to a python package, which is all located in ./rust/exodus-py/.
 
 Development status is tracked in the ./rust/RUST.md file.
 Ensure that completed tasks are marked off from the progress tracker in that file after they have been completed.
+
+DO NOT WRITE MARKDOWN FILES WITH A SESSION SUMMARY UNLESS PROMPTED TO DO SO.
+
+# Requirements
+
+- new rust features should be formatted with cargo, linted with clippy, compiled, and tested
+- new python features should include documentation (when appropirate), new tests, and the test and build step should be done with `./rust/exodus-py/install_and_test.sh`
 
 ## Prerequisites
 
