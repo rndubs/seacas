@@ -299,11 +299,9 @@ impl ExodusFile<mode::Append> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use crate::types::{CreateMode, CreateOptions, InitParams};
     use crate::ExodusFile;
     use approx::assert_relative_eq;
-    use std::f64::consts::PI;
     use tempfile::NamedTempFile;
 
     #[test]
