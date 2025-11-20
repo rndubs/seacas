@@ -12,7 +12,7 @@
 
 use clap::Parser;
 use exodus_rs::{
-    CreateMode, CreateOptions, EntityType, ExodusError, ExodusFile, InitParams, PerformanceConfig,
+    CreateMode, CreateOptions, EntityType, ExodusError, ExodusFile, PerformanceConfig,
 };
 use exodus_rs::transformations::{rotate_symmetric_tensor, rotation_matrix_z};
 use std::f64::consts::PI;
@@ -120,11 +120,11 @@ fn main() -> Result<(), ExodusError> {
     println!("Step 1: Reading metadata from input file...");
     let start = Instant::now();
 
-    let input_file = ExodusFile::open_read(&args.input)?;
+    let input_file = ExodusFile::open(&args.input)?;
     let params = input_file.init_params()?;
     let coords = input_file.coords::<f64>()?;
     let coord_names = input_file.coord_names()?;
-    let block_ids = input_file.block_ids()?;
+    let block_ids = input_file.block_ids(EntityType::ElemBlock)?;
     let nodal_var_names = input_file.variable_names(EntityType::Nodal)?;
     let elem_var_names = input_file.variable_names(EntityType::ElemBlock)?;
     let num_time_steps = input_file.num_time_steps()?;
@@ -160,7 +160,8 @@ fn main() -> Result<(), ExodusError> {
 
     // Initialize with same parameters
     output_file.init(&params)?;
-    output_file.put_coord_names(&coord_names)?;
+    let coord_names_str: Vec<&str> = coord_names.iter().map(|s| s.as_str()).collect();
+    output_file.put_coord_names(&coord_names_str)?;
 
     // Copy element blocks
     for block_id in &block_ids {
@@ -173,10 +174,12 @@ fn main() -> Result<(), ExodusError> {
 
     // Define variables
     if !nodal_var_names.is_empty() {
-        output_file.define_variables(EntityType::Nodal, &nodal_var_names)?;
+        let nodal_names_str: Vec<&str> = nodal_var_names.iter().map(|s| s.as_str()).collect();
+        output_file.define_variables(EntityType::Nodal, &nodal_names_str)?;
     }
     if !elem_var_names.is_empty() {
-        output_file.define_variables(EntityType::ElemBlock, &elem_var_names)?;
+        let elem_names_str: Vec<&str> = elem_var_names.iter().map(|s| s.as_str()).collect();
+        output_file.define_variables(EntityType::ElemBlock, &elem_names_str)?;
     }
 
     timing.copy_mesh = start.elapsed();
@@ -221,57 +224,64 @@ fn main() -> Result<(), ExodusError> {
 
         // Transform nodal variables (scale scalars)
         for (var_idx, _var_name) in nodal_var_names.iter().enumerate() {
-            let mut values = input_file.var::<f64>(step, EntityType::Nodal, 0, var_idx + 1)?;
+            let mut values = input_file.var(step, EntityType::Nodal, 0, var_idx)?;
             for val in &mut values {
                 *val *= args.scalar_scale;
             }
-            output_file.put_var(step, EntityType::Nodal, 0, var_idx + 1, &values)?;
+            output_file.put_var(step, EntityType::Nodal, 0, var_idx, &values)?;
         }
 
         // Transform element variables
         for block_id in &block_ids {
-            for (var_idx, _var_name) in elem_var_names.iter().enumerate() {
-                let mut values = input_file.var::<f64>(step, EntityType::ElemBlock, *block_id, var_idx + 1)?;
+            if let Some((xx, yy, zz, xy, yz, xz)) = &stress_var_indices {
+                // Read all stress components for this block
+                let stress_xx = input_file.var(step, EntityType::ElemBlock, *block_id, *xx)?;
+                let stress_yy = input_file.var(step, EntityType::ElemBlock, *block_id, *yy)?;
+                let stress_zz = input_file.var(step, EntityType::ElemBlock, *block_id, *zz)?;
+                let stress_xy = input_file.var(step, EntityType::ElemBlock, *block_id, *xy)?;
+                let stress_yz = input_file.var(step, EntityType::ElemBlock, *block_id, *yz)?;
+                let stress_xz = input_file.var(step, EntityType::ElemBlock, *block_id, *xz)?;
 
-                // If this variable is part of stress tensor, rotate it
-                if let Some((xx, yy, zz, xy, yz, xz)) = &stress_var_indices {
-                    if var_idx == *xx || var_idx == *yy || var_idx == *zz ||
-                       var_idx == *xy || var_idx == *yz || var_idx == *xz {
-                        // Read all stress components for this element
-                        let stress_xx = input_file.var::<f64>(step, EntityType::ElemBlock, *block_id, xx + 1)?;
-                        let stress_yy = input_file.var::<f64>(step, EntityType::ElemBlock, *block_id, yy + 1)?;
-                        let stress_zz = input_file.var::<f64>(step, EntityType::ElemBlock, *block_id, zz + 1)?;
-                        let stress_xy = input_file.var::<f64>(step, EntityType::ElemBlock, *block_id, xy + 1)?;
-                        let stress_yz = input_file.var::<f64>(step, EntityType::ElemBlock, *block_id, yz + 1)?;
-                        let stress_xz = input_file.var::<f64>(step, EntityType::ElemBlock, *block_id, xz + 1)?;
+                // Transform each element's stress tensor
+                let mut rotated_xx = Vec::with_capacity(stress_xx.len());
+                let mut rotated_yy = Vec::with_capacity(stress_yy.len());
+                let mut rotated_zz = Vec::with_capacity(stress_zz.len());
+                let mut rotated_xy = Vec::with_capacity(stress_xy.len());
+                let mut rotated_yz = Vec::with_capacity(stress_yz.len());
+                let mut rotated_xz = Vec::with_capacity(stress_xz.len());
 
-                        // Transform each element's stress tensor
-                        for elem_idx in 0..values.len() {
-                            let tensor = [
-                                stress_xx[elem_idx],
-                                stress_yy[elem_idx],
-                                stress_zz[elem_idx],
-                                stress_xy[elem_idx],
-                                stress_yz[elem_idx],
-                                stress_xz[elem_idx],
-                            ];
-                            let rotated = rotate_symmetric_tensor(&rotation_matrix, &tensor);
-
-                            // Update the value for this component
-                            values[elem_idx] = match var_idx {
-                                _ if var_idx == *xx => rotated[0],
-                                _ if var_idx == *yy => rotated[1],
-                                _ if var_idx == *zz => rotated[2],
-                                _ if var_idx == *xy => rotated[3],
-                                _ if var_idx == *yz => rotated[4],
-                                _ if var_idx == *xz => rotated[5],
-                                _ => values[elem_idx],
-                            };
-                        }
-                    }
+                for elem_idx in 0..stress_xx.len() {
+                    let tensor = [
+                        stress_xx[elem_idx],
+                        stress_yy[elem_idx],
+                        stress_zz[elem_idx],
+                        stress_xy[elem_idx],
+                        stress_yz[elem_idx],
+                        stress_xz[elem_idx],
+                    ];
+                    let rotated = rotate_symmetric_tensor(&rotation_matrix, &tensor);
+                    rotated_xx.push(rotated[0]);
+                    rotated_yy.push(rotated[1]);
+                    rotated_zz.push(rotated[2]);
+                    rotated_xy.push(rotated[3]);
+                    rotated_yz.push(rotated[4]);
+                    rotated_xz.push(rotated[5]);
                 }
 
-                output_file.put_var(step, EntityType::ElemBlock, *block_id, var_idx + 1, &values)?;
+                // Write rotated stress components
+                output_file.put_var(step, EntityType::ElemBlock, *block_id, *xx, &rotated_xx)?;
+                output_file.put_var(step, EntityType::ElemBlock, *block_id, *yy, &rotated_yy)?;
+                output_file.put_var(step, EntityType::ElemBlock, *block_id, *zz, &rotated_zz)?;
+                output_file.put_var(step, EntityType::ElemBlock, *block_id, *xy, &rotated_xy)?;
+                output_file.put_var(step, EntityType::ElemBlock, *block_id, *yz, &rotated_yz)?;
+                output_file.put_var(step, EntityType::ElemBlock, *block_id, *xz, &rotated_xz)?;
+            } else {
+                // No stress tensor found, just copy variables
+                for (var_idx, _var_name) in elem_var_names.iter().enumerate() {
+                    let values = input_file.var(step, EntityType::ElemBlock, *block_id, var_idx)?;
+
+                    output_file.put_var(step, EntityType::ElemBlock, *block_id, var_idx, &values)?;
+                }
             }
         }
 
