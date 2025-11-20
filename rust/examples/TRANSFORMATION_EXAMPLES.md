@@ -15,9 +15,48 @@ These examples demonstrate:
 
 - **`generate_large_exodus.py`**: Python script to generate large test files
 - **`transform_large_mesh.py`**: Python transformation script with performance monitoring
+- **`benchmark_transformations.sh`**: Automated benchmark suite comparing Python vs Rust performance
 - **`../exodus-rs/examples/13_transform_large_mesh.rs`**: Rust transformation example
 
 ## Quick Start
+
+### Automated Benchmark (Recommended)
+
+The easiest way to test both Python and Rust implementations is to use the automated benchmark script:
+
+```bash
+# Run benchmark with default settings (50x50 nodes, 100 timesteps)
+./rust/examples/benchmark_transformations.sh
+
+# Run with custom test file parameters
+./rust/examples/benchmark_transformations.sh benchmark_test.exo 100 100 200
+
+# The script will:
+# 1. Check and install exodus-py if needed
+# 2. Build the Rust example
+# 3. Generate a test file (if not exists)
+# 4. Run transformations with 2 cache sizes and 2 chunk configurations
+# 5. Display a comparison table and save results to CSV
+```
+
+**Example Output:**
+```
+================================================================================
+BENCHMARK RESULTS
+================================================================================
+
+Cache (MB)      Node Chunk      Time Chunk      | Python (s)      Rust (s)        | Speedup
+--------------------------------------------------------------------------------
+64              5000            5               | 12.34           8.92            | 1.38x
+64              20000           20              | 11.87           7.45            | 1.59x
+256             5000            5               | 10.23           7.12            | 1.44x
+256             20000           20              | 9.56            5.89            | 1.62x
+================================================================================
+```
+
+### Manual Usage
+
+You can also run the scripts individually:
 
 ### 1. Generate a Large Test File
 
@@ -267,6 +306,64 @@ Output file: transformed.exo
 - Ensure sufficient disk space (2-3x input file size)
 - Check filesystem permissions
 - Verify input file is valid: `ncdump -h input.exo`
+
+## Customizing the Benchmark Script
+
+The `benchmark_transformations.sh` script can be easily customized to test additional configurations.
+
+### Adding More Cache Strategies
+
+Edit the `cache_strategies` array in the script:
+
+```bash
+# Change from:
+local cache_strategies=(64 256)
+
+# To test more cache sizes:
+local cache_strategies=(32 64 128 256 512)
+```
+
+### Adding More Chunking Strategies
+
+Edit the `chunk_strategies` array (format: "node_chunk,elem_chunk,time_chunk"):
+
+```bash
+# Change from:
+local chunk_strategies=(
+    "5000,4000,5"
+    "20000,15000,20"
+)
+
+# To test more chunking configurations:
+local chunk_strategies=(
+    "5000,4000,5"
+    "10000,8000,10"
+    "20000,15000,20"
+    "40000,30000,40"
+)
+```
+
+### Customizing Test File Size
+
+By default, the benchmark uses a small test file (50x50 nodes, 100 timesteps) for quick testing.
+To test with larger files:
+
+```bash
+# Syntax: ./benchmark_transformations.sh <output_file> <nodes_x> <nodes_y> <timesteps>
+
+# Medium file (~1GB)
+./benchmark_transformations.sh medium_test.exo 150 150 1000
+
+# Large file (~10GB)
+./benchmark_transformations.sh large_test.exo 274 274 5000
+```
+
+### Output Files
+
+The benchmark script produces:
+- **Console output**: Real-time progress and final results table
+- **CSV file**: `benchmark_results_YYYYMMDD_HHMMSS.csv` with detailed results
+- **Temporary output files**: Automatically cleaned up after each run
 
 ## Advanced Usage
 
