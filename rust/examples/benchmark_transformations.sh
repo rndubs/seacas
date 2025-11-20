@@ -140,6 +140,8 @@ generate_test_file() {
         local file_size=$(du -h "$test_file" | cut -f1)
         log_success "Test file generated: $file_size"
     fi
+
+    cd "$SCRIPT_DIR"
 }
 
 # Extract total time from output
