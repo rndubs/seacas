@@ -1,4 +1,12 @@
 #!/usr/bin/env python3
+# /// script
+# requires-python = ">=3.9"
+# dependencies = [
+#     "numpy",
+#     "tqdm",
+#     "scipy",
+# ]
+# ///
 """
 Performance benchmarks comparing NumPy arrays vs Python lists for exodus-py operations.
 
@@ -23,6 +31,7 @@ from dataclasses import dataclass
 from typing import Callable, Dict, List, Optional, Tuple
 
 import numpy as np
+from tqdm import tqdm
 
 # Add the python directory to the path for imports
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'python'))
@@ -232,7 +241,7 @@ def create_benchmark_mesh(config: MeshConfig, filename: str) -> str:
     writer.define_variables(EntityType.Nodal, ["Temperature", "Pressure", "Velocity"])
 
     # Write time steps with variable data
-    for step in range(config.num_time_steps):
+    for step in tqdm(range(config.num_time_steps), desc="Writing time steps", unit="step"):
         time_val = step * 0.1
         writer.put_time(step, time_val)
 
@@ -423,7 +432,7 @@ def benchmark_time_history_read(filename: str, num_runs: int = 5) -> BenchmarkRe
 
     # Benchmark NumPy version
     numpy_times = []
-    for _ in range(num_runs):
+    for _ in tqdm(range(num_runs), desc="  Time history (NumPy)", unit="run"):
         gc.collect()
         start = time.perf_counter()
         data_np = reader.var_time_series(0, num_steps, EntityType.Nodal, 0, 0)
@@ -433,7 +442,7 @@ def benchmark_time_history_read(filename: str, num_runs: int = 5) -> BenchmarkRe
 
     # Benchmark list version
     list_times = []
-    for _ in range(num_runs):
+    for _ in tqdm(range(num_runs), desc="  Time history (list) ", unit="run"):
         gc.collect()
         start = time.perf_counter()
         data_list = reader.var_time_series_list(0, num_steps, EntityType.Nodal, 0, 0)
@@ -477,7 +486,7 @@ def benchmark_single_node_time_history(filename: str, num_runs: int = 5) -> Benc
 
     # Benchmark NumPy version - extract single node history using array slicing
     numpy_times = []
-    for _ in range(num_runs):
+    for _ in tqdm(range(num_runs), desc="  Single node (NumPy) ", unit="run"):
         gc.collect()
         start = time.perf_counter()
         data_np = reader.var_time_series(0, num_steps, EntityType.Nodal, 0, 0)
@@ -493,7 +502,7 @@ def benchmark_single_node_time_history(filename: str, num_runs: int = 5) -> Benc
 
     # Benchmark list version - extract single node history
     list_times = []
-    for _ in range(num_runs):
+    for _ in tqdm(range(num_runs), desc="  Single node (list)  ", unit="run"):
         gc.collect()
         start = time.perf_counter()
         data_list = reader.var_time_series_list(0, num_steps, EntityType.Nodal, 0, 0)
