@@ -1,5 +1,5 @@
 [workspace]
-members = ["exodus-rs", "exodus-py"]
+members = ["exodus-rs", "exodus-py", "compat-tests/rust-to-c", "compat-tests/c-to-rust"]
 resolver = "2"
 
 # Centralized dependency versions to ensure compatibility across crates.

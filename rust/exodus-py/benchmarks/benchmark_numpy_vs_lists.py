@@ -115,6 +115,22 @@ MESH_CONFIGS = {
         num_node_sets=10,
         nodes_per_set=1_000
     ),
+    'super': MeshConfig(
+        name='super',
+        num_nodes=1_000_000,
+        num_elems=900_000,
+        num_time_steps=1_000,
+        num_node_sets=100,
+        nodes_per_set=10_000
+    ),
+    'mega': MeshConfig(
+        name='mega',
+        num_nodes=10_000_000,
+        num_elems=9_000_000,
+        num_time_steps=100_000,
+        num_node_sets=100,
+        nodes_per_set=100_000
+    ),
 }
 
 
