@@ -426,3 +426,232 @@ fn test_array_memory_layout() {
     assert_eq!(coords.shape(), &[num_nodes, 3]);
     assert_eq!(coords.strides(), &[3, 1]); // Row-major strides
 }
+
+#[test]
+fn test_coords_array_1d() {
+    // Test 1D mesh edge case for coords_array()
+    let tmp = NamedTempFile::new().unwrap();
+
+    // Create 1D mesh
+    {
+        let mut file = ExodusFile::<mode::Write>::create(
+            tmp.path(),
+            exodus_rs::CreateOptions {
+                mode: CreateMode::Clobber,
+                ..Default::default()
+            },
+        )
+        .unwrap();
+
+        file.init(&InitParams {
+            num_dim: 1,
+            num_nodes: 5,
+            num_elems: 4,
+            num_elem_blocks: 1,
+            num_node_sets: 0,
+            num_side_sets: 0,
+            title: "1D Mesh".to_string(),
+            ..Default::default()
+        })
+        .unwrap();
+
+        let x = vec![0.0, 0.25, 0.5, 0.75, 1.0];
+        file.put_coords(&x, None, None).unwrap();
+    }
+
+    // Read and verify
+    let file = ExodusFile::<mode::Read>::open(tmp.path()).unwrap();
+    let coords = file.coords_array().unwrap();
+
+    assert_eq!(coords.shape(), &[5, 3]);
+    // X coordinates should match
+    for i in 0..5 {
+        assert!((coords[[i, 0]] - (i as f64) * 0.25).abs() < 1e-10);
+        // Y and Z coordinates should be 0 for 1D mesh
+        assert!((coords[[i, 1]] - 0.0).abs() < 1e-10);
+        assert!((coords[[i, 2]] - 0.0).abs() < 1e-10);
+    }
+}
+
+#[test]
+fn test_connectivity_array_empty_block() {
+    // Test empty connectivity array edge case
+    let tmp = NamedTempFile::new().unwrap();
+
+    // Create file with empty block
+    {
+        let mut file = ExodusFile::<mode::Write>::create(
+            tmp.path(),
+            exodus_rs::CreateOptions {
+                mode: CreateMode::Clobber,
+                ..Default::default()
+            },
+        )
+        .unwrap();
+
+        file.init(&InitParams {
+            num_dim: 3,
+            num_nodes: 4,
+            num_elems: 0, // No elements
+            num_elem_blocks: 1,
+            num_node_sets: 0,
+            num_side_sets: 0,
+            title: "Empty Block Mesh".to_string(),
+            ..Default::default()
+        })
+        .unwrap();
+
+        // Write some coordinates
+        let x = vec![0.0, 1.0, 1.0, 0.0];
+        let y = vec![0.0, 0.0, 1.0, 1.0];
+        let z = vec![0.0, 0.0, 0.0, 0.0];
+        file.put_coords(&x, Some(&y), Some(&z)).unwrap();
+
+        // Write empty element block
+        file.put_block(&Block {
+            id: 1,
+            entity_type: EntityType::ElemBlock,
+            topology: "QUAD4".to_string(),
+            num_entries: 0, // No elements in this block
+            num_nodes_per_entry: 4,
+            num_edges_per_entry: 0,
+            num_faces_per_entry: 0,
+            num_attributes: 0,
+        })
+        .unwrap();
+    }
+
+    // Read and verify empty connectivity array
+    let file = ExodusFile::<mode::Read>::open(tmp.path()).unwrap();
+    let conn = file.connectivity_array(1).unwrap();
+
+    // Empty block should return array with shape (0, 0)
+    assert_eq!(conn.shape(), &[0, 0]);
+}
+
+#[test]
+fn test_var_time_series_single_step() {
+    // Test var_time_series_array with a single time step
+    let (tmp, num_nodes, _, _) = create_test_file_with_vars();
+
+    let file = ExodusFile::<mode::Read>::open(tmp.path()).unwrap();
+
+    // Read only a single step
+    let temps = file
+        .var_time_series_array(1, 2, EntityType::Nodal, 0, 0)
+        .unwrap();
+
+    assert_eq!(temps.shape(), &[1, num_nodes]);
+
+    // Verify values for step 1
+    for node in 0..num_nodes {
+        let expected = 20.0 + 10.0 + (node as f64); // step 1
+        assert!((temps[[0, node]] - expected).abs() < 1e-10);
+    }
+}
+
+#[test]
+fn test_var_time_series_all_steps() {
+    // Test reading all time steps at once
+    let (tmp, num_nodes, _, num_steps) = create_test_file_with_vars();
+
+    let file = ExodusFile::<mode::Read>::open(tmp.path()).unwrap();
+
+    // Read all steps
+    let pressure = file
+        .var_time_series_array(0, num_steps, EntityType::Nodal, 0, 1)
+        .unwrap();
+
+    assert_eq!(pressure.shape(), &[num_steps, num_nodes]);
+    assert!(pressure.is_standard_layout());
+
+    // Verify some values
+    for step in 0..num_steps {
+        for node in 0..num_nodes {
+            let expected = 100.0 - (step as f64) * 5.0 + (node as f64) * 0.1;
+            assert!(
+                (pressure[[step, node]] - expected).abs() < 1e-10,
+                "Pressure mismatch at step={}, node={}",
+                step,
+                node
+            );
+        }
+    }
+}
+
+#[test]
+fn test_connectivity_array_multiple_blocks() {
+    // Test connectivity_array with multiple element blocks
+    let tmp = NamedTempFile::new().unwrap();
+
+    {
+        let mut file = ExodusFile::<mode::Write>::create(
+            tmp.path(),
+            exodus_rs::CreateOptions {
+                mode: CreateMode::Clobber,
+                ..Default::default()
+            },
+        )
+        .unwrap();
+
+        file.init(&InitParams {
+            num_dim: 2,
+            num_nodes: 9,
+            num_elems: 4,
+            num_elem_blocks: 2,
+            num_node_sets: 0,
+            num_side_sets: 0,
+            title: "Multi-block Mesh".to_string(),
+            ..Default::default()
+        })
+        .unwrap();
+
+        // Write coordinates (3x3 grid)
+        let x = vec![0.0, 1.0, 2.0, 0.0, 1.0, 2.0, 0.0, 1.0, 2.0];
+        let y = vec![0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 2.0, 2.0, 2.0];
+        file.put_coords(&x, Some(&y), None).unwrap();
+
+        // Block 1: 2 QUAD4 elements
+        file.put_block(&Block {
+            id: 1,
+            entity_type: EntityType::ElemBlock,
+            topology: "QUAD4".to_string(),
+            num_entries: 2,
+            num_nodes_per_entry: 4,
+            num_edges_per_entry: 0,
+            num_faces_per_entry: 0,
+            num_attributes: 0,
+        })
+        .unwrap();
+        file.put_connectivity(1, &[1, 2, 5, 4, 2, 3, 6, 5]).unwrap();
+
+        // Block 2: 2 QUAD4 elements
+        file.put_block(&Block {
+            id: 2,
+            entity_type: EntityType::ElemBlock,
+            topology: "QUAD4".to_string(),
+            num_entries: 2,
+            num_nodes_per_entry: 4,
+            num_edges_per_entry: 0,
+            num_faces_per_entry: 0,
+            num_attributes: 0,
+        })
+        .unwrap();
+        file.put_connectivity(2, &[4, 5, 8, 7, 5, 6, 9, 8]).unwrap();
+    }
+
+    let file = ExodusFile::<mode::Read>::open(tmp.path()).unwrap();
+
+    // Read block 1 connectivity
+    let conn1 = file.connectivity_array(1).unwrap();
+    assert_eq!(conn1.shape(), &[2, 4]);
+    assert_eq!(conn1[[0, 0]], 1);
+    assert_eq!(conn1[[0, 3]], 4);
+    assert_eq!(conn1[[1, 0]], 2);
+
+    // Read block 2 connectivity
+    let conn2 = file.connectivity_array(2).unwrap();
+    assert_eq!(conn2.shape(), &[2, 4]);
+    assert_eq!(conn2[[0, 0]], 4);
+    assert_eq!(conn2[[1, 3]], 8);
+}

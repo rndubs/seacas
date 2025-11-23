@@ -322,6 +322,378 @@ class TestNumpyMemoryEfficiency:
         assert time_series.flags['C_CONTIGUOUS']
 
 
+class TestNumpyCoordinatesComplete:
+    """Additional tests for complete coordinate coverage"""
+
+    @requires_phase1
+    def test_get_coord_y_returns_numpy(self, simple_mesh_file):
+        """Test that get_coord_y() returns NumPy array"""
+        reader = exodus.ExodusReader.open(simple_mesh_file)
+        y = reader.get_coord_y()
+
+        assert isinstance(y, np.ndarray)
+        assert y.ndim == 1
+        assert y.dtype == np.float64
+        assert len(y) == reader.init_params().num_nodes
+
+    @requires_phase1
+    def test_get_coord_z_returns_numpy(self, simple_mesh_file):
+        """Test that get_coord_z() returns NumPy array"""
+        reader = exodus.ExodusReader.open(simple_mesh_file)
+        z = reader.get_coord_z()
+
+        assert isinstance(z, np.ndarray)
+        assert z.ndim == 1
+        assert z.dtype == np.float64
+        assert len(z) == reader.init_params().num_nodes
+
+    @requires_phase1
+    def test_all_coord_components_match(self, simple_mesh_file):
+        """Verify individual coord getters match combined getter"""
+        reader = exodus.ExodusReader.open(simple_mesh_file)
+
+        # Get combined
+        coords = reader.get_coords()
+
+        # Get individual components
+        x = reader.get_coord_x()
+        y = reader.get_coord_y()
+        z = reader.get_coord_z()
+
+        # Verify they match
+        np.testing.assert_array_equal(coords[:, 0], x)
+        np.testing.assert_array_equal(coords[:, 1], y)
+        np.testing.assert_array_equal(coords[:, 2], z)
+
+    @requires_phase1
+    def test_put_coords_numpy_f32(self, tmp_path):
+        """Test that put_coords() accepts float32 NumPy arrays"""
+        filename = str(tmp_path / "test_f32.exo")
+
+        writer = exodus.ExodusWriter.create(filename)
+        params = exodus.InitParams(
+            title="Float32 Test",
+            num_dim=3,
+            num_nodes=4,
+            num_elems=0,
+            num_elem_blocks=0,
+            num_node_sets=0,
+            num_side_sets=0
+        )
+        writer.put_init_params(params)
+
+        # Write coordinates as float32 NumPy arrays
+        x = np.array([0.0, 1.0, 1.0, 0.0], dtype=np.float32)
+        y = np.array([0.0, 0.0, 1.0, 1.0], dtype=np.float32)
+        z = np.array([0.0, 0.0, 0.0, 0.0], dtype=np.float32)
+
+        writer.put_coords(x, y, z)
+        writer.close()
+
+        # Verify written correctly
+        reader = exodus.ExodusReader.open(filename)
+        coords = reader.get_coords()
+        np.testing.assert_array_almost_equal(coords[:, 0], x.astype(np.float64))
+
+
+class TestNumpyVariablesComplete:
+    """Additional tests for complete variable coverage"""
+
+    @requires_phase1
+    def test_put_var_time_series_1d_numpy(self, tmp_path):
+        """Test that put_var_time_series() accepts 1D NumPy array"""
+        filename = str(tmp_path / "test_ts_write.exo")
+
+        writer = exodus.ExodusWriter.create(filename)
+        params = exodus.InitParams(
+            title="Time Series Write Test",
+            num_dim=2,
+            num_nodes=4,
+            num_elems=0,
+            num_elem_blocks=0,
+            num_node_sets=0,
+            num_side_sets=0,
+            num_time_steps=3
+        )
+        writer.put_init_params(params)
+
+        # Write coordinates
+        x = [0.0, 1.0, 1.0, 0.0]
+        y = [0.0, 0.0, 1.0, 1.0]
+        z = [0.0, 0.0, 0.0, 0.0]
+        writer.put_coords(x, y, z)
+
+        # Define global variable
+        writer.define_variables(exodus.EntityType.Global, ["Energy"])
+
+        # Write time steps and variable using NumPy array
+        for step in range(3):
+            writer.put_time(step, float(step))
+
+        # Write all time steps at once using 1D NumPy array (flattened)
+        energy_values = np.array([10.0, 20.0, 30.0])  # One value per time step
+        writer.put_var_time_series(0, 3, exodus.EntityType.Global, 0, 0, energy_values)
+        writer.close()
+
+        # Verify
+        reader = exodus.ExodusReader.open(filename)
+        ts = reader.var_time_series(0, 3, exodus.EntityType.Global, 0, 0)
+        assert ts.shape[0] == 3  # 3 time steps
+        np.testing.assert_array_almost_equal(ts.flatten(), energy_values)
+
+    @requires_phase1
+    def test_put_var_numpy_int_array(self, tmp_path):
+        """Test that put_var() converts integer NumPy arrays to float"""
+        filename = str(tmp_path / "test_int.exo")
+
+        writer = exodus.ExodusWriter.create(filename)
+        params = exodus.InitParams(
+            title="Integer Test",
+            num_dim=2,
+            num_nodes=4,
+            num_elems=0,
+            num_elem_blocks=0,
+            num_node_sets=0,
+            num_side_sets=0,
+            num_time_steps=1
+        )
+        writer.put_init_params(params)
+
+        # Write coordinates
+        writer.put_coords([0.0, 1.0, 1.0, 0.0], [0.0, 0.0, 1.0, 1.0], [0.0, 0.0, 0.0, 0.0])
+
+        # Define variable
+        writer.define_variables(exodus.EntityType.Nodal, ["Count"])
+        writer.put_time(0, 0.0)
+
+        # Write variable as int NumPy array
+        count = np.array([1, 2, 3, 4], dtype=np.int32)
+        writer.put_var(0, exodus.EntityType.Nodal, 0, 0, count)
+        writer.close()
+
+        # Verify
+        reader = exodus.ExodusReader.open(filename)
+        read_count = reader.var(0, exodus.EntityType.Nodal, 0, 0)
+        np.testing.assert_array_equal(read_count, count.astype(np.float64))
+
+    @requires_phase1
+    def test_var_time_series_slicing(self, mesh_with_vars):
+        """Test that 2D time series array supports advanced slicing"""
+        reader = exodus.ExodusReader.open(mesh_with_vars)
+        data = reader.var_time_series(0, 10, exodus.EntityType.Nodal, 0, 0)
+
+        # Slice time steps 2-5, all nodes
+        subset = data[2:5, :]
+        assert subset.shape == (3, 4)
+
+        # Slice all time steps, nodes 1-3
+        node_subset = data[:, 1:3]
+        assert node_subset.shape == (10, 2)
+
+        # Fancy indexing
+        specific = data[[0, 5, 9], :]
+        assert specific.shape == (3, 4)
+
+
+class TestNumpyConnectivityComplete:
+    """Additional tests for complete connectivity coverage"""
+
+    @requires_phase1
+    def test_put_connectivity_2d_numpy(self, tmp_path):
+        """Test that put_connectivity() accepts 2D NumPy array"""
+        filename = str(tmp_path / "test_conn_2d.exo")
+
+        writer = exodus.ExodusWriter.create(filename)
+        params = exodus.InitParams(
+            title="2D Connectivity Test",
+            num_dim=2,
+            num_nodes=6,
+            num_elems=2,
+            num_elem_blocks=1,
+            num_node_sets=0,
+            num_side_sets=0
+        )
+        writer.put_init_params(params)
+
+        # Write coords
+        x = np.array([0.0, 1.0, 0.5, 1.0, 2.0, 1.5])
+        y = np.array([0.0, 0.0, 1.0, 0.0, 0.0, 1.0])
+        z = np.zeros(6)
+        writer.put_coords(x, y, z)
+
+        # Define block
+        block = exodus.Block(
+            id=100,
+            entity_type=exodus.EntityType.ElemBlock,
+            topology="TRI3",
+            num_entries=2,
+            num_nodes_per_entry=3,
+            num_edges_per_entry=0,
+            num_faces_per_entry=0,
+            num_attributes=0
+        )
+        writer.put_block(block)
+
+        # Write connectivity as 2D NumPy array (num_elems, nodes_per_elem)
+        conn_2d = np.array([[1, 2, 3], [4, 5, 6]], dtype=np.int64)
+        writer.put_connectivity(100, conn_2d.flatten())  # Flatten for API
+        writer.close()
+
+        # Verify
+        reader = exodus.ExodusReader.open(filename)
+        read_conn = reader.get_connectivity(100)
+        np.testing.assert_array_equal(read_conn, conn_2d)
+
+    @requires_phase1
+    def test_get_connectivity_values_correct(self, mesh_with_blocks):
+        """Verify connectivity values are 1-indexed node IDs"""
+        reader = exodus.ExodusReader.open(mesh_with_blocks)
+        block_ids = reader.get_block_ids()
+        conn = reader.get_connectivity(block_ids[0])
+
+        # All node indices should be >= 1 (1-indexed)
+        assert np.all(conn >= 1)
+
+        # All node indices should be <= num_nodes
+        params = reader.init_params()
+        assert np.all(conn <= params.num_nodes)
+
+    @requires_phase1
+    def test_get_connectivity_element_access(self, mesh_with_blocks):
+        """Test accessing individual elements from connectivity array"""
+        reader = exodus.ExodusReader.open(mesh_with_blocks)
+        block_ids = reader.get_block_ids()
+        conn = reader.get_connectivity(block_ids[0])
+
+        # Access single element nodes
+        elem0_nodes = conn[0, :]
+        assert len(elem0_nodes) == 3  # TRI3 has 3 nodes
+
+        # Verify node IDs are integers
+        assert elem0_nodes.dtype == np.int64
+
+
+class TestNumpyEdgeCases:
+    """Test edge cases and error handling for NumPy integration"""
+
+    @requires_phase1
+    def test_coords_2d_mesh_z_zeros(self, tmp_path):
+        """Test that 2D mesh returns zeros for z coordinates"""
+        filename = str(tmp_path / "test_2d.exo")
+
+        writer = exodus.ExodusWriter.create(filename)
+        params = exodus.InitParams(
+            title="2D Mesh",
+            num_dim=2,
+            num_nodes=4,
+            num_elems=0,
+            num_elem_blocks=0,
+            num_node_sets=0,
+            num_side_sets=0
+        )
+        writer.put_init_params(params)
+
+        x = [0.0, 1.0, 1.0, 0.0]
+        y = [0.0, 0.0, 1.0, 1.0]
+        z = [0.0, 0.0, 0.0, 0.0]
+        writer.put_coords(x, y, z)
+        writer.close()
+
+        reader = exodus.ExodusReader.open(filename)
+        coords = reader.get_coords()
+
+        # Z column should be all zeros
+        np.testing.assert_array_equal(coords[:, 2], np.zeros(4))
+
+    @requires_phase1
+    def test_1d_mesh_coords_array(self, tmp_path):
+        """Test that 1D mesh returns proper coords array"""
+        filename = str(tmp_path / "test_1d.exo")
+
+        writer = exodus.ExodusWriter.create(filename)
+        params = exodus.InitParams(
+            title="1D Mesh",
+            num_dim=1,
+            num_nodes=5,
+            num_elems=0,
+            num_elem_blocks=0,
+            num_node_sets=0,
+            num_side_sets=0
+        )
+        writer.put_init_params(params)
+
+        x = [0.0, 0.25, 0.5, 0.75, 1.0]
+        writer.put_coords(x, None, None)
+        writer.close()
+
+        reader = exodus.ExodusReader.open(filename)
+        coords = reader.get_coords()
+
+        assert coords.shape == (5, 3)
+        np.testing.assert_array_almost_equal(coords[:, 0], x)
+        # Y and Z should be zeros
+        np.testing.assert_array_equal(coords[:, 1], np.zeros(5))
+        np.testing.assert_array_equal(coords[:, 2], np.zeros(5))
+
+    @requires_phase1
+    def test_empty_mesh_coords(self, tmp_path):
+        """Test coords array for empty mesh (0 nodes)"""
+        filename = str(tmp_path / "test_empty.exo")
+
+        writer = exodus.ExodusWriter.create(filename)
+        params = exodus.InitParams(
+            title="Empty Mesh",
+            num_dim=3,
+            num_nodes=0,
+            num_elems=0,
+            num_elem_blocks=0,
+            num_node_sets=0,
+            num_side_sets=0
+        )
+        writer.put_init_params(params)
+        writer.close()
+
+        reader = exodus.ExodusReader.open(filename)
+        coords = reader.get_coords()
+
+        assert coords.shape == (0, 3)
+        assert coords.dtype == np.float64
+
+    @requires_phase1
+    def test_large_array_c_contiguous(self, tmp_path):
+        """Test that large arrays maintain C-contiguous layout"""
+        filename = str(tmp_path / "test_large.exo")
+
+        num_nodes = 10000
+
+        writer = exodus.ExodusWriter.create(filename)
+        params = exodus.InitParams(
+            title="Large Mesh",
+            num_dim=3,
+            num_nodes=num_nodes,
+            num_elems=0,
+            num_elem_blocks=0,
+            num_node_sets=0,
+            num_side_sets=0
+        )
+        writer.put_init_params(params)
+
+        x = np.linspace(0, 100, num_nodes)
+        y = np.linspace(0, 100, num_nodes)
+        z = np.linspace(0, 100, num_nodes)
+        writer.put_coords(x, y, z)
+        writer.close()
+
+        reader = exodus.ExodusReader.open(filename)
+        coords = reader.get_coords()
+
+        assert coords.shape == (num_nodes, 3)
+        assert coords.flags['C_CONTIGUOUS']
+        np.testing.assert_array_almost_equal(coords[:, 0], x)
+        np.testing.assert_array_almost_equal(coords[:, 1], y)
+        np.testing.assert_array_almost_equal(coords[:, 2], z)
+
+
 # Fixtures
 
 @pytest.fixture
