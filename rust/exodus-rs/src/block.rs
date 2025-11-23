@@ -136,13 +136,18 @@ impl ExodusFile<mode::Write> {
             .nc_file
             .add_variable::<i32>(&conn_var_name, &[&dim_name_entries, &dim_name_nodes])?;
 
-        // Apply chunking if configured
-        let chunk_size = self
+        // Apply chunking if configured (clamp to dimension size to avoid NC_EBADCHUNK)
+        let requested_chunk = self
             .metadata
             .performance
             .as_ref()
             .map(|p| p.chunks.element_chunk_size)
             .unwrap_or(0);
+        let chunk_size = if requested_chunk > 0 && block.num_entries > 0 {
+            requested_chunk.min(block.num_entries)
+        } else {
+            0
+        };
         if chunk_size > 0 {
             // Chunk along the elements dimension (first dimension)
             // Second dimension is typically small (nodes per element), so use full size
@@ -170,7 +175,7 @@ impl ExodusFile<mode::Write> {
                 .nc_file
                 .add_variable::<f64>(&attr_var_name, &[&dim_name_entries, &attr_dim_name])?;
 
-            // Apply same chunking to attributes as connectivity
+            // Apply same chunking to attributes as connectivity (chunk_size already clamped above)
             if chunk_size > 0 {
                 attr_var.set_chunking(&[chunk_size, block.num_attributes])?;
             }
