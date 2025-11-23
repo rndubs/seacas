@@ -181,7 +181,7 @@ fn create_element_variables() -> Result<(), Box<dyn std::error::Error>> {
         num_attributes: 0,
     };
     file.put_block(&block2)?;
-    file.put_connectivity(200, &vec![7, 8, 11, 10, 8, 9, 12, 11])?;
+    file.put_connectivity(200, &[7, 8, 11, 10, 8, 9, 12, 11])?;
 
     // Define element variables
     let var_names = vec!["stress_xx", "stress_yy", "strain_energy"];

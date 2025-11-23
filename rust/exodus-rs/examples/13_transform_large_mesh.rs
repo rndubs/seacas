@@ -1,14 +1,14 @@
-///! Transform large exodus meshes with performance monitoring
-///!
-///! This example demonstrates applying transformations (rotation, translation, scaling)
-///! to large Exodus files with comprehensive performance tuning options.
-///!
-///! Features:
-///! - Rotate mesh and stress tensors by 90 degrees around Z axis
-///! - Scale mesh by 5x
-///! - Scale scalar values by 10x
-///! - Performance monitoring for different cache/chunk configurations
-///! - CLI arguments for tuning HDF5 cache and chunking
+//! Transform large exodus meshes with performance monitoring
+//!
+//! This example demonstrates applying transformations (rotation, translation, scaling)
+//! to large Exodus files with comprehensive performance tuning options.
+//!
+//! Features:
+//! - Rotate mesh and stress tensors by 90 degrees around Z axis
+//! - Scale mesh by 5x
+//! - Scale scalar values by 10x
+//! - Performance monitoring for different cache/chunk configurations
+//! - CLI arguments for tuning HDF5 cache and chunking
 use clap::Parser;
 use exodus_rs::transformations::{rotate_symmetric_tensor, rotation_matrix_z};
 use exodus_rs::{

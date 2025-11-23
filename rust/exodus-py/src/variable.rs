@@ -1,5 +1,8 @@
 //! Variable and time step operations for Exodus files
 
+// Allow functions with many parameters (needed for PyO3 API compatibility)
+#![allow(clippy::too_many_arguments)]
+
 use pyo3::prelude::*;
 
 use crate::error::IntoPyResult;

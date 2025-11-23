@@ -222,7 +222,7 @@ mod integration_tests {
                 num_attributes: 0,
             };
             file.put_block(&block).unwrap();
-            file.put_connectivity(1, &vec![1, 2, 3, 4]).unwrap();
+            file.put_connectivity(1, &[1, 2, 3, 4]).unwrap();
 
             // Define variables
             file.define_variables(EntityType::Global, &["time", "energy"])
@@ -412,7 +412,7 @@ mod integration_tests {
                 num_attributes: 0,
             };
             file.put_block(&block2).unwrap();
-            file.put_connectivity(20, &vec![9, 10, 11, 12]).unwrap();
+            file.put_connectivity(20, &[9, 10, 11, 12]).unwrap();
             file.put_name(EntityType::ElemBlock, 1, "TetBlock").unwrap();
 
             // Block 3: Wedge6
@@ -694,10 +694,10 @@ mod integration_tests {
                 num_attributes: 0,
             };
             file.put_block(&block).unwrap();
-            file.put_connectivity(1, &vec![1, 2, 3, 4]).unwrap();
+            file.put_connectivity(1, &[1, 2, 3, 4]).unwrap();
 
             // Attempt invalid operation (wrong connectivity length)
-            let result = file.put_connectivity(1, &vec![1, 2]);
+            let result = file.put_connectivity(1, &[1, 2]);
             assert!(result.is_err());
 
             // Continue with valid operations

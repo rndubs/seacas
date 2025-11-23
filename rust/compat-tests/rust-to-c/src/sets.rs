@@ -1,13 +1,17 @@
 //! Set generation for compatibility testing
 
 use anyhow::Result;
-use exodus_rs::{Block, CreateMode, CreateOptions, EntityType, ExodusFile, InitParams, Set, Topology};
+use exodus_rs::{
+    Block, CreateMode, CreateOptions, EntityType, ExodusFile, InitParams, Set, Topology,
+};
 use std::path::Path;
 
 /// Generate a mesh with node sets
 pub fn generate_node_sets(path: &Path) -> Result<()> {
-    let mut opts = CreateOptions::default();
-    opts.mode = CreateMode::Clobber;
+    let opts = CreateOptions {
+        mode: CreateMode::Clobber,
+        ..Default::default()
+    };
 
     let mut file = ExodusFile::create(path, opts)?;
 
@@ -26,7 +30,6 @@ pub fn generate_node_sets(path: &Path) -> Result<()> {
     // 3x3 grid of nodes
     let x_coords = vec![0.0_f64, 1.0, 2.0, 0.0, 1.0, 2.0, 0.0, 1.0, 2.0];
     let y_coords = vec![0.0_f64, 0.0, 0.0, 1.0, 1.0, 1.0, 2.0, 2.0, 2.0];
-    let z_coords: Vec<f64> = vec![];
 
     file.put_coords(&x_coords, Some(&y_coords), None)?;
 
@@ -73,8 +76,10 @@ pub fn generate_node_sets(path: &Path) -> Result<()> {
 
 /// Generate a mesh with side sets
 pub fn generate_side_sets(path: &Path) -> Result<()> {
-    let mut opts = CreateOptions::default();
-    opts.mode = CreateMode::Clobber;
+    let opts = CreateOptions {
+        mode: CreateMode::Clobber,
+        ..Default::default()
+    };
 
     let mut file = ExodusFile::create(path, opts)?;
 
@@ -92,7 +97,6 @@ pub fn generate_side_sets(path: &Path) -> Result<()> {
 
     let x_coords = vec![0.0_f64, 1.0, 1.0, 0.0];
     let y_coords = vec![0.0_f64, 0.0, 1.0, 1.0];
-    let z_coords: Vec<f64> = vec![];
     file.put_coords(&x_coords, Some(&y_coords), None)?;
 
     let block = Block {
@@ -123,8 +127,10 @@ pub fn generate_side_sets(path: &Path) -> Result<()> {
 
 /// Generate a mesh with element sets
 pub fn generate_element_sets(path: &Path) -> Result<()> {
-    let mut opts = CreateOptions::default();
-    opts.mode = CreateMode::Clobber;
+    let opts = CreateOptions {
+        mode: CreateMode::Clobber,
+        ..Default::default()
+    };
 
     let mut file = ExodusFile::create(path, opts)?;
 
@@ -142,7 +148,6 @@ pub fn generate_element_sets(path: &Path) -> Result<()> {
 
     let x_coords = vec![0.0_f64, 1.0, 2.0, 0.0, 1.0, 2.0, 0.0, 1.0, 2.0];
     let y_coords = vec![0.0_f64, 0.0, 0.0, 1.0, 1.0, 1.0, 2.0, 2.0, 2.0];
-    let z_coords: Vec<f64> = vec![];
     file.put_coords(&x_coords, Some(&y_coords), None)?;
 
     let block = Block {
@@ -178,8 +183,10 @@ pub fn generate_element_sets(path: &Path) -> Result<()> {
 
 /// Generate a mesh with all set types
 pub fn generate_all_sets(path: &Path) -> Result<()> {
-    let mut opts = CreateOptions::default();
-    opts.mode = CreateMode::Clobber;
+    let opts = CreateOptions {
+        mode: CreateMode::Clobber,
+        ..Default::default()
+    };
 
     let mut file = ExodusFile::create(path, opts)?;
 
@@ -199,7 +206,6 @@ pub fn generate_all_sets(path: &Path) -> Result<()> {
 
     let x_coords = vec![0.0_f64, 1.0, 2.0, 0.0, 1.0, 2.0, 0.0, 1.0, 2.0];
     let y_coords = vec![0.0_f64, 0.0, 0.0, 1.0, 1.0, 1.0, 2.0, 2.0, 2.0];
-    let z_coords: Vec<f64> = vec![];
     file.put_coords(&x_coords, Some(&y_coords), None)?;
 
     let block = Block {
@@ -213,9 +219,7 @@ pub fn generate_all_sets(path: &Path) -> Result<()> {
         num_attributes: 0,
     };
     file.put_block(&block)?;
-    let connectivity = vec![
-        1_i64, 2, 5, 4, 2, 3, 6, 5, 4, 5, 8, 7, 5, 6, 9, 8,
-    ];
+    let connectivity = vec![1_i64, 2, 5, 4, 2, 3, 6, 5, 4, 5, 8, 7, 5, 6, 9, 8];
     file.put_connectivity(1, &connectivity)?;
 
     // Node set

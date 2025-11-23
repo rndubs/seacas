@@ -8,8 +8,10 @@ use std::path::Path;
 
 /// Generate mesh with global variables
 pub fn generate_global_variables(path: &Path) -> Result<()> {
-    let mut opts = CreateOptions::default();
-    opts.mode = CreateMode::Clobber;
+    let opts = CreateOptions {
+        mode: CreateMode::Clobber,
+        ..Default::default()
+    };
 
     let mut file = ExodusFile::create(path, opts)?;
 
@@ -51,8 +53,8 @@ pub fn generate_global_variables(path: &Path) -> Result<()> {
         file.put_time(step, time)?;
 
         // Write global variable values
-        file.put_var(step, EntityType::Global, 0, 0, &[time])?;  // time_value
-        file.put_var(step, EntityType::Global, 0, 1, &[step as f64])?;  // step_count
+        file.put_var(step, EntityType::Global, 0, 0, &[time])?; // time_value
+        file.put_var(step, EntityType::Global, 0, 1, &[step as f64])?; // step_count
     }
 
     Ok(())
@@ -60,8 +62,10 @@ pub fn generate_global_variables(path: &Path) -> Result<()> {
 
 /// Generate mesh with nodal variables
 pub fn generate_nodal_variables(path: &Path) -> Result<()> {
-    let mut opts = CreateOptions::default();
-    opts.mode = CreateMode::Clobber;
+    let opts = CreateOptions {
+        mode: CreateMode::Clobber,
+        ..Default::default()
+    };
 
     let mut file = ExodusFile::create(path, opts)?;
 
@@ -125,8 +129,10 @@ pub fn generate_nodal_variables(path: &Path) -> Result<()> {
 
 /// Generate mesh with element variables
 pub fn generate_element_variables(path: &Path) -> Result<()> {
-    let mut opts = CreateOptions::default();
-    opts.mode = CreateMode::Clobber;
+    let opts = CreateOptions {
+        mode: CreateMode::Clobber,
+        ..Default::default()
+    };
 
     let mut file = ExodusFile::create(path, opts)?;
 
@@ -180,8 +186,10 @@ pub fn generate_element_variables(path: &Path) -> Result<()> {
 
 /// Generate mesh with all variable types
 pub fn generate_all_variables(path: &Path) -> Result<()> {
-    let mut opts = CreateOptions::default();
-    opts.mode = CreateMode::Clobber;
+    let opts = CreateOptions {
+        mode: CreateMode::Clobber,
+        ..Default::default()
+    };
 
     let mut file = ExodusFile::create(path, opts)?;
 

@@ -8,8 +8,10 @@ fn benchmark_file_create(c: &mut Criterion) {
     group.bench_function("create_small", |b| {
         b.iter(|| {
             let temp = NamedTempFile::new().unwrap();
-            let mut opts = CreateOptions::default();
-            opts.mode = CreateMode::Clobber;
+            let opts = CreateOptions {
+                mode: CreateMode::Clobber,
+                ..Default::default()
+            };
             let _file = black_box(ExodusFile::create(temp.path(), opts).unwrap());
         })
     });
@@ -27,8 +29,10 @@ fn benchmark_file_init(c: &mut Criterion) {
             |b, &num_nodes| {
                 b.iter(|| {
                     let temp = NamedTempFile::new().unwrap();
-                    let mut opts = CreateOptions::default();
-                    opts.mode = CreateMode::Clobber;
+                    let opts = CreateOptions {
+                        mode: CreateMode::Clobber,
+                        ..Default::default()
+                    };
                     let mut file = ExodusFile::create(temp.path(), opts).unwrap();
 
                     let params = InitParams {
@@ -40,7 +44,8 @@ fn benchmark_file_init(c: &mut Criterion) {
                         ..Default::default()
                     };
 
-                    black_box(file.init(&params).unwrap());
+                    let _: () = file.init(&params).unwrap();
+                    black_box(());
                 })
             },
         );
@@ -53,8 +58,10 @@ fn benchmark_file_open(c: &mut Criterion) {
     // Create a test file
     let temp = NamedTempFile::new().unwrap();
     {
-        let mut opts = CreateOptions::default();
-        opts.mode = CreateMode::Clobber;
+        let opts = CreateOptions {
+            mode: CreateMode::Clobber,
+            ..Default::default()
+        };
         let mut file = ExodusFile::create(temp.path(), opts).unwrap();
         let params = InitParams {
             title: "Benchmark".to_string(),

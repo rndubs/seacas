@@ -4,7 +4,9 @@
 //! and can be read by the C Exodus library.
 
 use anyhow::Result;
-use exodus_rs::{Block, CreateMode, CreateOptions, EntityType, ExodusFile, InitParams, QaRecord, Topology};
+use exodus_rs::{
+    Block, CreateMode, CreateOptions, EntityType, ExodusFile, InitParams, QaRecord, Topology,
+};
 use std::path::Path;
 
 /// Generate a file with QA records

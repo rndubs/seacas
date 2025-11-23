@@ -60,10 +60,7 @@ impl ExodusReader {
     ///     ...     print(f"{qa.code_name} {qa.code_version}")
     fn get_qa_records(&self) -> PyResult<Vec<QaRecord>> {
         let rust_records = self.file.qa_records().into_py()?;
-        Ok(rust_records
-            .iter()
-            .map(|qa| QaRecord::from_rust(qa))
-            .collect())
+        Ok(rust_records.iter().map(QaRecord::from_rust).collect())
     }
 
     /// Read information records

@@ -6,8 +6,10 @@ use std::path::Path;
 
 /// Generate a mesh with multiple element blocks of different types
 pub fn generate_multiple_blocks(path: &Path) -> Result<()> {
-    let mut opts = CreateOptions::default();
-    opts.mode = CreateMode::Clobber;
+    let opts = CreateOptions {
+        mode: CreateMode::Clobber,
+        ..Default::default()
+    };
 
     let mut file = ExodusFile::create(path, opts)?;
 
@@ -29,8 +31,6 @@ pub fn generate_multiple_blocks(path: &Path) -> Result<()> {
     // Tri 1:  nodes 2,5,6
     let x_coords = vec![0.0_f64, 1.0, 1.0, 0.0, 2.0, 2.0, 1.5];
     let y_coords = vec![0.0_f64, 0.0, 1.0, 1.0, 0.0, 1.0, 1.5];
-    let z_coords: Vec<f64> = vec![];
-
     file.put_coords(&x_coords, Some(&y_coords), None)?;
 
     // Block 1: Quads

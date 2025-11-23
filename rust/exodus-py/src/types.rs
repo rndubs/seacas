@@ -1,5 +1,10 @@
 //! Core type bindings for Exodus II data structures
 
+// Allow to_rust methods to take &self (needed for PyO3 compatibility)
+#![allow(clippy::wrong_self_convention)]
+// Allow constructors with many fields
+#![allow(clippy::too_many_arguments)]
+
 use exodus_rs::types as rs;
 use pyo3::prelude::*;
 use pyo3::types::PyDict;

@@ -1,5 +1,5 @@
 use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion};
-use exodus_rs::{Block, CreateMode, CreateOptions, EntityType, ExodusFile, InitParams, Topology};
+use exodus_rs::{Block, CreateMode, CreateOptions, EntityType, ExodusFile, InitParams};
 use tempfile::NamedTempFile;
 
 fn benchmark_write_connectivity(c: &mut Criterion) {
@@ -17,12 +17,11 @@ fn benchmark_write_connectivity(c: &mut Criterion) {
 
                 b.iter(|| {
                     let temp = NamedTempFile::new().unwrap();
-                    let mut file = ExodusFile::create(temp.path(), {
-                        let mut opts = CreateOptions::default();
-                        opts.mode = CreateMode::Clobber;
-                        opts
-                    })
-                    .unwrap();
+                    let opts = CreateOptions {
+                        mode: CreateMode::Clobber,
+                        ..Default::default()
+                    };
+                    let mut file = ExodusFile::create(temp.path(), opts).unwrap();
 
                     let params = InitParams {
                         title: "Benchmark".to_string(),
@@ -46,7 +45,8 @@ fn benchmark_write_connectivity(c: &mut Criterion) {
                     };
                     file.put_block(&block).unwrap();
 
-                    black_box(file.put_connectivity(1, &connectivity).unwrap());
+                    let _: () = file.put_connectivity(1, &connectivity).unwrap();
+                    black_box(());
                 })
             },
         );
@@ -67,12 +67,11 @@ fn benchmark_read_connectivity(c: &mut Criterion) {
         // Setup: create a file with connectivity
         let temp = NamedTempFile::new().unwrap();
         {
-            let mut file = ExodusFile::create(temp.path(), {
-                let mut opts = CreateOptions::default();
-                opts.mode = CreateMode::Clobber;
-                opts
-            })
-            .unwrap();
+            let opts = CreateOptions {
+                mode: CreateMode::Clobber,
+                ..Default::default()
+            };
+            let mut file = ExodusFile::create(temp.path(), opts).unwrap();
             let params = InitParams {
                 title: "Benchmark".to_string(),
                 num_dim: 3,
@@ -126,12 +125,11 @@ fn benchmark_multiple_blocks(c: &mut Criterion) {
 
                 b.iter(|| {
                     let temp = NamedTempFile::new().unwrap();
-                    let mut file = ExodusFile::create(temp.path(), {
-                        let mut opts = CreateOptions::default();
-                        opts.mode = CreateMode::Clobber;
-                        opts
-                    })
-                    .unwrap();
+                    let opts = CreateOptions {
+                        mode: CreateMode::Clobber,
+                        ..Default::default()
+                    };
+                    let mut file = ExodusFile::create(temp.path(), opts).unwrap();
 
                     let params = InitParams {
                         title: "Benchmark".to_string(),

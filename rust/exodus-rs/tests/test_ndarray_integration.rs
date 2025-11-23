@@ -4,7 +4,7 @@
 
 #![cfg(all(test, feature = "ndarray"))]
 
-use exodus_rs::{mode, Block, CreateMode, EntityType, ExodusFile, InitParams, Topology};
+use exodus_rs::{mode, Block, CreateMode, EntityType, ExodusFile, InitParams};
 use tempfile::NamedTempFile;
 
 /// Create a basic test file with mesh data

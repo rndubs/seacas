@@ -131,9 +131,7 @@ impl ExodusWriter {
     #[staticmethod]
     #[pyo3(signature = (path, options=None))]
     fn create(path: &str, options: Option<CreateOptions>) -> PyResult<Self> {
-        let opts = options
-            .map(|o| o.to_rust())
-            .unwrap_or_else(|| exodus_rs::types::CreateOptions::default());
+        let opts = options.map(|o| o.to_rust()).unwrap_or_default();
 
         let file = RustExodusFile::create(path, opts).into_py()?;
         Ok(ExodusWriter { file: Some(file) })
