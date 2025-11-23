@@ -5,7 +5,7 @@
 
 use anyhow::{Context, Result};
 use clap::Parser;
-use exodus_rs::{EntityType, ExodusFile, mode};
+use exodus_rs::{mode, EntityType, ExodusFile};
 use std::path::PathBuf;
 
 #[derive(Parser)]
@@ -77,10 +77,14 @@ fn verify_file(path: &PathBuf, verbose: bool) -> Result<bool> {
     println!("Verifying file: {}\n", path.display());
 
     // Test: Open file
-    let file = ExodusFile::<mode::Read>::open(path)
-        .context("Failed to open file");
+    let file = ExodusFile::<mode::Read>::open(path).context("Failed to open file");
 
-    results.test("Open Exodus file", file.as_ref().map(|_| ()).map_err(|e| anyhow::anyhow!("{}", e)));
+    results.test(
+        "Open Exodus file",
+        file.as_ref()
+            .map(|_| ())
+            .map_err(|e| anyhow::anyhow!("{}", e)),
+    );
 
     if file.is_err() {
         println!("\n\x1b[31mFATAL: Could not open file\x1b[0m\n");
@@ -91,7 +95,13 @@ fn verify_file(path: &PathBuf, verbose: bool) -> Result<bool> {
 
     // Test: Read initialization parameters
     let init_result = file.init_params().context("Failed to read init parameters");
-    results.test("Read initialization parameters", init_result.as_ref().map(|_| ()).map_err(|e| anyhow::anyhow!("{}", e)));
+    results.test(
+        "Read initialization parameters",
+        init_result
+            .as_ref()
+            .map(|_| ())
+            .map_err(|e| anyhow::anyhow!("{}", e)),
+    );
 
     if let Ok(params) = &init_result {
         if verbose {
@@ -107,9 +117,10 @@ fn verify_file(path: &PathBuf, verbose: bool) -> Result<bool> {
         // Test: Verify title is non-empty and contains expected text
         let title_check = if params.title.is_empty() {
             Err(anyhow::anyhow!("Title is empty"))
-        } else if params.title.contains("compatibility") ||
-                  params.title.contains("C-generated") ||
-                  params.title.contains("Rust-generated") {
+        } else if params.title.contains("compatibility")
+            || params.title.contains("C-generated")
+            || params.title.contains("Rust-generated")
+        {
             Ok(())
         } else {
             Err(anyhow::anyhow!("Title does not contain expected text"))
@@ -120,7 +131,13 @@ fn verify_file(path: &PathBuf, verbose: bool) -> Result<bool> {
 
         // Test: Read coordinates
         let coord_result = file.coords::<f64>().context("Failed to read coordinates");
-        results.test("Read coordinates", coord_result.as_ref().map(|_| ()).map_err(|e| anyhow::anyhow!("{}", e)));
+        results.test(
+            "Read coordinates",
+            coord_result
+                .as_ref()
+                .map(|_| ())
+                .map_err(|e| anyhow::anyhow!("{}", e)),
+        );
 
         if let Ok(coords) = &coord_result {
             if verbose && !coords.x.is_empty() {
@@ -139,8 +156,16 @@ fn verify_file(path: &PathBuf, verbose: bool) -> Result<bool> {
 
         // Test: Read element blocks
         if params.num_elem_blocks > 0 {
-            let blocks_result = file.block_ids(EntityType::ElemBlock).context("Failed to read block IDs");
-            results.test("Read element block IDs", blocks_result.as_ref().map(|_| ()).map_err(|e| anyhow::anyhow!("{}", e)));
+            let blocks_result = file
+                .block_ids(EntityType::ElemBlock)
+                .context("Failed to read block IDs");
+            results.test(
+                "Read element block IDs",
+                blocks_result
+                    .as_ref()
+                    .map(|_| ())
+                    .map_err(|e| anyhow::anyhow!("{}", e)),
+            );
 
             if let Ok(block_ids) = &blocks_result {
                 if verbose {
@@ -148,8 +173,10 @@ fn verify_file(path: &PathBuf, verbose: bool) -> Result<bool> {
 
                     for &block_id in block_ids {
                         if let Ok(block) = file.block(block_id) {
-                            println!("  Block {}: {:?}, {} elements",
-                                     block_id, block.topology, block.num_entries);
+                            println!(
+                                "  Block {}: {:?}, {} elements",
+                                block_id, block.topology, block.num_entries
+                            );
                         }
                     }
                 }

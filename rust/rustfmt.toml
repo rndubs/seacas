@@ -1,0 +1,24 @@
+# Rust formatting configuration for the exodus workspace
+# This ensures consistent formatting across different rustfmt versions
+# Only stable options are used to avoid nightly-only warnings
+
+# Use the 2021 edition style
+edition = "2021"
+
+# Maximum line width
+max_width = 100
+
+# Use block indent for function parameters
+fn_params_layout = "Tall"
+
+# Sort imports alphabetically
+reorder_imports = true
+
+# Use Unix-style line endings
+newline_style = "Unix"
+
+# Use field init shorthand where possible
+use_field_init_shorthand = true
+
+# Use try! shorthand (?)
+use_try_shorthand = true

@@ -1,8 +1,13 @@
 //! Core type bindings for Exodus II data structures
 
+// Allow to_rust methods to take &self (needed for PyO3 compatibility)
+#![allow(clippy::wrong_self_convention)]
+// Allow constructors with many fields
+#![allow(clippy::too_many_arguments)]
+
+use exodus_rs::types as rs;
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
-use exodus_rs::types as rs;
 
 /// Entity types in Exodus II
 #[pyclass]
@@ -687,11 +692,7 @@ impl NodeSet {
     }
 
     fn __repr__(&self) -> String {
-        format!(
-            "NodeSet(id={}, num_nodes={})",
-            self.id,
-            self.nodes.len()
-        )
+        format!("NodeSet(id={}, num_nodes={})", self.id, self.nodes.len())
     }
 }
 
@@ -747,11 +748,7 @@ impl SideSet {
     }
 
     fn __repr__(&self) -> String {
-        format!(
-            "SideSet(id={}, num_sides={})",
-            self.id,
-            self.elements.len()
-        )
+        format!("SideSet(id={}, num_sides={})", self.id, self.elements.len())
     }
 }
 

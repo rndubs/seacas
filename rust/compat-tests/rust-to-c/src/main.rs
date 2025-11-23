@@ -9,11 +9,11 @@ use std::path::PathBuf;
 
 mod basic_mesh;
 mod element_blocks;
-mod sets;
-mod variables;
-mod qa_info;
 mod maps;
 mod naming;
+mod qa_info;
+mod sets;
+mod variables;
 
 #[derive(Parser)]
 #[command(name = "exodus-rust-writer")]
@@ -107,8 +107,7 @@ fn main() -> Result<()> {
     let cli = Cli::parse();
 
     // Create output directory if it doesn't exist
-    std::fs::create_dir_all(&cli.output_dir)
-        .context("Failed to create output directory")?;
+    std::fs::create_dir_all(&cli.output_dir).context("Failed to create output directory")?;
 
     if cli.verbose {
         println!("Output directory: {}", cli.output_dir.display());

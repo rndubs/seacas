@@ -160,7 +160,7 @@ fn create_mixed_mesh() -> Result<(), Box<dyn std::error::Error>> {
         num_attributes: 0,
     };
     file.put_block(&tet_block)?;
-    file.put_connectivity(1, &vec![1, 2, 3, 4])?;
+    file.put_connectivity(1, &[1, 2, 3, 4])?;
 
     // Block 2: Hexahedra
     let hex_block = Block {

@@ -45,8 +45,8 @@ def test_read_sample_mesh():
         assert params.num_elems == 900
         assert params.num_elem_blocks == 1
 
-        # Read coordinates
-        x_coords, y_coords, z_coords = reader.get_coords()
+        # Read coordinates (use get_coords_list for backward compatible format)
+        x_coords, y_coords, z_coords = reader.get_coords_list()
         assert len(x_coords) == params.num_nodes
         assert len(y_coords) == params.num_nodes
         assert len(z_coords) == params.num_nodes
@@ -73,10 +73,10 @@ def test_read_sample_mesh():
             assert block.num_entries == 900
             assert block.num_nodes_per_entry == 4
 
-            # Read connectivity
+            # Read connectivity (returns 2D array with shape (num_elements, nodes_per_element))
             connectivity = reader.get_connectivity(block_id)
-            assert len(connectivity) == block.num_entries * block.num_nodes_per_entry
-            print(f"  First element connectivity: {connectivity[:block.num_nodes_per_entry]}")
+            assert connectivity.shape == (block.num_entries, block.num_nodes_per_entry)
+            print(f"  First element connectivity: {connectivity[0]}")
 
         # Check for node sets
         nodeset_ids = reader.get_node_set_ids()

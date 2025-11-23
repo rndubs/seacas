@@ -13,33 +13,34 @@ readme = "README.md"
 
 [dependencies]
 # Error handling
-thiserror = "1.0"
+thiserror = { workspace = true }
 
 # NetCDF backend (will be required in Phase 1)
-netcdf = { version = "0.11", optional = true }
+netcdf = { workspace = true, optional = true }
 
-# Optional: ndarray support
-ndarray = { version = "0.16", optional = true }
+# Optional: ndarray support (version managed by workspace for numpy compatibility)
+ndarray = { workspace = true, optional = true }
 
 # Optional: parallel I/O
-rayon = { version = "1.8", optional = true }
+rayon = { workspace = true, optional = true }
 
 # Optional: serde support for types
-serde = { version = "1.0", optional = true, features = ["derive"] }
+serde = { workspace = true, optional = true }
 
 [dev-dependencies]
 # Testing
-approx = "0.5"        # Floating point comparisons
-tempfile = "3.8"      # Temporary test files
-proptest = "1.4"      # Property-based testing
-criterion = "0.5"     # Benchmarking
-clap = { version = "4.5", features = ["derive"] }  # CLI argument parsing for examples
+approx = { workspace = true }
+tempfile = { workspace = true }
+proptest = { workspace = true }
+criterion = { workspace = true }
+clap = { workspace = true }
 
 [features]
 default = ["netcdf4"]
 # NetCDF-4 support (requires system HDF5/NetCDF libraries)
 netcdf4 = ["dep:netcdf"]
 ndarray = ["dep:ndarray"]
+numpy-compat = ["ndarray"]  # NumPy-compatible layout for zero-copy transfer
 parallel = ["dep:rayon"]
 serde = ["dep:serde"]
 

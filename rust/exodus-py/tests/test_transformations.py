@@ -87,7 +87,7 @@ def test_translate(simple_mesh_file):
     appender.translate([10.0, 20.0, 30.0])
 
     # Read back coordinates
-    x, y, z = appender.get_coords()
+    x, y, z = appender.get_coords_list()
 
     # First point should have moved from (0,0,0) to (10,20,30)
     assert abs(x[0] - 10.0) < 1e-10
@@ -110,7 +110,7 @@ def test_rotate_x(simple_mesh_file):
     # Point (0, 1, 0) should become (0, 0, 1)
     appender.rotate_x(90.0)
 
-    x, y, z = appender.get_coords()
+    x, y, z = appender.get_coords_list()
 
     # Find the point that was at (0, 1, 0) - that's index 3
     # After 90° rotation around X: (0, 1, 0) -> (0, 0, 1)
@@ -129,7 +129,7 @@ def test_rotate_y(simple_mesh_file):
     # Point (1, 0, 0) should become (0, 0, -1)
     appender.rotate_y(90.0)
 
-    x, y, z = appender.get_coords()
+    x, y, z = appender.get_coords_list()
 
     # Find the point that was at (1, 0, 0) - that's index 1
     # After 90° rotation around Y: (1, 0, 0) -> (0, 0, -1)
@@ -148,7 +148,7 @@ def test_rotate_z(point_on_x_axis):
     # Point (1, 0, 0) should become (0, 1, 0)
     appender.rotate_z(90.0)
 
-    x, y, z = appender.get_coords()
+    x, y, z = appender.get_coords_list()
 
     # After 90° rotation around Z: (1, 0, 0) -> (0, 1, 0)
     assert abs(x[0] - 0.0) < 1e-10
@@ -165,7 +165,7 @@ def test_rotate_euler_extrinsic(point_on_x_axis):
     # Single 90-degree rotation around Z (extrinsic)
     appender.rotate_euler("Z", [90.0], degrees=True)
 
-    x, y, z = appender.get_coords()
+    x, y, z = appender.get_coords_list()
 
     # After 90° rotation around Z: (1, 0, 0) -> (0, 1, 0)
     assert abs(x[0] - 0.0) < 1e-10
@@ -182,7 +182,7 @@ def test_rotate_euler_intrinsic(point_on_x_axis):
     # Single 90-degree rotation around z (intrinsic)
     appender.rotate_euler("z", [90.0], degrees=True)
 
-    x, y, z = appender.get_coords()
+    x, y, z = appender.get_coords_list()
 
     # After 90° rotation around z: (1, 0, 0) -> (0, 1, 0)
     assert abs(x[0] - 0.0) < 1e-10
@@ -199,7 +199,7 @@ def test_rotate_euler_radians(point_on_x_axis):
     # 90-degree rotation using radians
     appender.rotate_euler("Z", [math.pi / 2], degrees=False)
 
-    x, y, z = appender.get_coords()
+    x, y, z = appender.get_coords_list()
 
     # After 90° rotation around Z: (1, 0, 0) -> (0, 1, 0)
     assert abs(x[0] - 0.0) < 1e-10
@@ -225,7 +225,7 @@ def test_apply_rotation(point_on_x_axis):
 
     appender.apply_rotation(matrix)
 
-    x, y, z = appender.get_coords()
+    x, y, z = appender.get_coords_list()
 
     # After 90° rotation around Z: (1, 0, 0) -> (0, 1, 0)
     assert abs(x[0] - 0.0) < 1e-10
@@ -242,7 +242,7 @@ def test_scale_uniform(simple_mesh_file):
     # Scale by factor of 2
     appender.scale_uniform(2.0)
 
-    x, y, z = appender.get_coords()
+    x, y, z = appender.get_coords_list()
 
     # Point at (1, 0, 0) should become (2, 0, 0)
     assert abs(x[1] - 2.0) < 1e-10
@@ -264,7 +264,7 @@ def test_scale_non_uniform(simple_mesh_file):
     # Scale by different factors: 2x in X, 3x in Y, 0.5x in Z
     appender.scale([2.0, 3.0, 0.5])
 
-    x, y, z = appender.get_coords()
+    x, y, z = appender.get_coords_list()
 
     # Point at (1, 1, 1) should become (2, 3, 0.5)
     assert abs(x[6] - 2.0) < 1e-10
@@ -287,7 +287,7 @@ def test_combined_transformations(simple_mesh_file):
     # Then rotate
     appender.rotate_z(90.0)
 
-    x, y, z = appender.get_coords()
+    x, y, z = appender.get_coords_list()
 
     # Original point at (0, 0, 0)
     # After translate: (1, 0, 0)
@@ -322,7 +322,7 @@ def test_euler_xyz_sequence():
         appender = ExodusAppender.append(path)
         appender.rotate_euler("XYZ", [90.0, 90.0, 90.0], degrees=True)
 
-        x, y, z = appender.get_coords()
+        x, y, z = appender.get_coords_list()
 
         # The result should be deterministic (verify it doesn't crash)
         assert len(x) == 1

@@ -1,9 +1,9 @@
 //! ID map, naming, and property operations for Exodus files
 
-use pyo3::prelude::*;
 use crate::error::IntoPyResult as _;
-use crate::file::{ExodusWriter, ExodusAppender, ExodusReader};
+use crate::file::{ExodusAppender, ExodusReader, ExodusWriter};
 use exodus_rs::EntityType;
+use pyo3::prelude::*;
 
 #[pymethods]
 impl ExodusWriter {
@@ -18,11 +18,16 @@ impl ExodusWriter {
             "elem" => EntityType::ElemMap,
             "edge" => EntityType::EdgeMap,
             "face" => EntityType::FaceMap,
-            _ => return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(
-                format!("Invalid entity_type: {}", entity_type)
-            )),
+            _ => {
+                return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(format!(
+                    "Invalid entity_type: {}",
+                    entity_type
+                )))
+            }
         };
-        let file = self.file.as_mut().ok_or_else(|| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>("File has been closed"))?;
+        let file = self.file.as_mut().ok_or_else(|| {
+            PyErr::new::<pyo3::exceptions::PyRuntimeError, _>("File has been closed")
+        })?;
         file.put_id_map(entity_type, &id_map).into_py()
     }
 
@@ -31,7 +36,9 @@ impl ExodusWriter {
     /// Args:
     ///     order (list[int]): Array specifying element processing order
     fn put_elem_order_map(&mut self, order: Vec<i64>) -> PyResult<()> {
-        let file = self.file.as_mut().ok_or_else(|| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>("File has been closed"))?;
+        let file = self.file.as_mut().ok_or_else(|| {
+            PyErr::new::<pyo3::exceptions::PyRuntimeError, _>("File has been closed")
+        })?;
         file.put_elem_order_map(&order).into_py()
     }
 
@@ -43,7 +50,9 @@ impl ExodusWriter {
     ///     name (str): Name to assign (max 32 characters)
     fn put_name(&mut self, entity_type: &str, entity_index: usize, name: &str) -> PyResult<()> {
         let entity_type = parse_entity_type(entity_type)?;
-        let file = self.file.as_mut().ok_or_else(|| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>("File has been closed"))?;
+        let file = self.file.as_mut().ok_or_else(|| {
+            PyErr::new::<pyo3::exceptions::PyRuntimeError, _>("File has been closed")
+        })?;
         file.put_name(entity_type, entity_index, name).into_py()
     }
 
@@ -54,7 +63,9 @@ impl ExodusWriter {
     ///     names (list[str]): Array of names (max 32 characters each)
     fn put_names(&mut self, entity_type: &str, names: Vec<String>) -> PyResult<()> {
         let entity_type = parse_entity_type(entity_type)?;
-        let file = self.file.as_mut().ok_or_else(|| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>("File has been closed"))?;
+        let file = self.file.as_mut().ok_or_else(|| {
+            PyErr::new::<pyo3::exceptions::PyRuntimeError, _>("File has been closed")
+        })?;
         let names_refs: Vec<&str> = names.iter().map(|s| s.as_str()).collect();
         file.put_names(entity_type, &names_refs).into_py()
     }
@@ -66,10 +77,19 @@ impl ExodusWriter {
     ///     entity_id (int): Entity ID (not index)
     ///     prop_name (str): Property name
     ///     value (int): Property value
-    fn put_property(&mut self, entity_type: &str, entity_id: i64, prop_name: &str, value: i64) -> PyResult<()> {
+    fn put_property(
+        &mut self,
+        entity_type: &str,
+        entity_id: i64,
+        prop_name: &str,
+        value: i64,
+    ) -> PyResult<()> {
         let entity_type = parse_entity_type(entity_type)?;
-        let file = self.file.as_mut().ok_or_else(|| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>("File has been closed"))?;
-        file.put_property(entity_type, entity_id, prop_name, value).into_py()
+        let file = self.file.as_mut().ok_or_else(|| {
+            PyErr::new::<pyo3::exceptions::PyRuntimeError, _>("File has been closed")
+        })?;
+        file.put_property(entity_type, entity_id, prop_name, value)
+            .into_py()
     }
 
     /// Set property array for all entities of a type
@@ -78,10 +98,18 @@ impl ExodusWriter {
     ///     entity_type (str): Type of entity
     ///     prop_name (str): Property name
     ///     values (list[int]): Array of property values
-    fn put_property_array(&mut self, entity_type: &str, prop_name: &str, values: Vec<i64>) -> PyResult<()> {
+    fn put_property_array(
+        &mut self,
+        entity_type: &str,
+        prop_name: &str,
+        values: Vec<i64>,
+    ) -> PyResult<()> {
         let entity_type = parse_entity_type(entity_type)?;
-        let file = self.file.as_mut().ok_or_else(|| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>("File has been closed"))?;
-        file.put_property_array(entity_type, prop_name, &values).into_py()
+        let file = self.file.as_mut().ok_or_else(|| {
+            PyErr::new::<pyo3::exceptions::PyRuntimeError, _>("File has been closed")
+        })?;
+        file.put_property_array(entity_type, prop_name, &values)
+            .into_py()
     }
 }
 
@@ -90,49 +118,49 @@ impl ExodusAppender {
     /// Read entity ID map (NOTE: Not available in Append mode)
     fn get_id_map(&self, _entity_type: &str) -> PyResult<Vec<i64>> {
         Err(PyErr::new::<pyo3::exceptions::PyNotImplementedError, _>(
-            "get_id_map not available in Append mode - use ExodusReader instead"
+            "get_id_map not available in Append mode - use ExodusReader instead",
         ))
     }
 
     /// Read element order map (NOTE: Not available in Append mode)
     fn get_elem_order_map(&self) -> PyResult<Vec<i64>> {
         Err(PyErr::new::<pyo3::exceptions::PyNotImplementedError, _>(
-            "get_elem_order_map not available in Append mode - use ExodusReader instead"
+            "get_elem_order_map not available in Append mode - use ExodusReader instead",
         ))
     }
 
     /// Get name for a single entity (NOTE: Not available in Append mode)
     fn get_name(&self, _entity_type: &str, _entity_index: usize) -> PyResult<String> {
         Err(PyErr::new::<pyo3::exceptions::PyNotImplementedError, _>(
-            "get_name not available in Append mode - use ExodusReader instead"
+            "get_name not available in Append mode - use ExodusReader instead",
         ))
     }
 
     /// Get all names for entity type (NOTE: Not available in Append mode)
     fn get_names(&self, _entity_type: &str) -> PyResult<Vec<String>> {
         Err(PyErr::new::<pyo3::exceptions::PyNotImplementedError, _>(
-            "get_names not available in Append mode - use ExodusReader instead"
+            "get_names not available in Append mode - use ExodusReader instead",
         ))
     }
 
     /// Get property value for a single entity (NOTE: Not available in Append mode)
     fn get_property(&self, _entity_type: &str, _entity_id: i64, _prop_name: &str) -> PyResult<i64> {
         Err(PyErr::new::<pyo3::exceptions::PyNotImplementedError, _>(
-            "get_property not available in Append mode - use ExodusReader instead"
+            "get_property not available in Append mode - use ExodusReader instead",
         ))
     }
 
     /// Get property array for all entities of a type (NOTE: Not available in Append mode)
     fn get_property_array(&self, _entity_type: &str, _prop_name: &str) -> PyResult<Vec<i64>> {
         Err(PyErr::new::<pyo3::exceptions::PyNotImplementedError, _>(
-            "get_property_array not available in Append mode - use ExodusReader instead"
+            "get_property_array not available in Append mode - use ExodusReader instead",
         ))
     }
 
     /// Get all property names for an entity type (NOTE: Not available in Append mode)
     fn get_property_names(&self, _entity_type: &str) -> PyResult<Vec<String>> {
         Err(PyErr::new::<pyo3::exceptions::PyNotImplementedError, _>(
-            "get_property_names not available in Append mode - use ExodusReader instead"
+            "get_property_names not available in Append mode - use ExodusReader instead",
         ))
     }
 }
@@ -152,9 +180,12 @@ impl ExodusReader {
             "elem" => EntityType::ElemMap,
             "edge" => EntityType::EdgeMap,
             "face" => EntityType::FaceMap,
-            _ => return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(
-                format!("Invalid entity_type: {}", entity_type)
-            )),
+            _ => {
+                return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(format!(
+                    "Invalid entity_type: {}",
+                    entity_type
+                )))
+            }
         };
         self.file.id_map(entity_type).into_py()
     }
@@ -203,7 +234,9 @@ impl ExodusReader {
     ///     int: Property value
     fn get_property(&self, entity_type: &str, entity_id: i64, prop_name: &str) -> PyResult<i64> {
         let entity_type = parse_entity_type(entity_type)?;
-        self.file.property(entity_type, entity_id, prop_name).into_py()
+        self.file
+            .property(entity_type, entity_id, prop_name)
+            .into_py()
     }
 
     /// Get property array for all entities of a type
@@ -247,8 +280,9 @@ fn parse_entity_type(entity_type: &str) -> PyResult<EntityType> {
         "edge_map" => Ok(EntityType::EdgeMap),
         "face_map" => Ok(EntityType::FaceMap),
         "elem_map" => Ok(EntityType::ElemMap),
-        _ => Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(
-            format!("Invalid entity_type: {}", entity_type)
-        )),
+        _ => Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(format!(
+            "Invalid entity_type: {}",
+            entity_type
+        ))),
     }
 }

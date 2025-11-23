@@ -1,9 +1,9 @@
 //! High-level builder API for creating Exodus meshes
 
-use pyo3::prelude::*;
-use exodus_rs::{BlockBuilder as RustBlockBuilder};
 use crate::error::IntoPyResult;
 use crate::types::CreateOptions;
+use exodus_rs::BlockBuilder as RustBlockBuilder;
+use pyo3::prelude::*;
 
 /// Python wrapper for BlockBuilder
 ///
@@ -179,7 +179,12 @@ impl MeshBuilder {
     ///     ...     z=[]
     ///     ... )
     #[pyo3(signature = (x, y=Vec::new(), z=Vec::new()))]
-    fn coordinates(mut slf: PyRefMut<'_, Self>, x: Vec<f64>, y: Vec<f64>, z: Vec<f64>) -> PyRefMut<'_, Self> {
+    fn coordinates(
+        mut slf: PyRefMut<'_, Self>,
+        x: Vec<f64>,
+        y: Vec<f64>,
+        z: Vec<f64>,
+    ) -> PyRefMut<'_, Self> {
         slf.coords = Some((x, y, z));
         slf
     }
@@ -234,7 +239,13 @@ impl MeshBuilder {
     ///
     /// Example:
     ///     >>> builder.qa_record("MyApp", "1.0.0", "2025-01-15", "14:30:00").write("output.exo")
-    fn qa_record(mut slf: PyRefMut<'_, Self>, code_name: String, version: String, date: String, time: String) -> PyRefMut<'_, Self> {
+    fn qa_record(
+        mut slf: PyRefMut<'_, Self>,
+        code_name: String,
+        version: String,
+        date: String,
+        time: String,
+    ) -> PyRefMut<'_, Self> {
         slf.qa_records.push((code_name, version, date, time));
         slf
     }
@@ -296,27 +307,32 @@ impl MeshBuilder {
     fn write(&self, path: String) -> PyResult<()> {
         // Build the Rust MeshBuilder
         let mut rust_builder = exodus_rs::MeshBuilder::new(self.title.clone());
-        
+
         if let Some(num_dim) = self.num_dim {
             rust_builder = rust_builder.dimensions(num_dim);
         }
-        
+
         if let Some((ref x, ref y, ref z)) = self.coords {
             rust_builder = rust_builder.coordinates(x.clone(), y.clone(), z.clone());
         }
-        
+
         for block in &self.blocks {
             rust_builder = rust_builder.add_block(block.clone());
         }
-        
+
         for (code_name, version, date, time) in &self.qa_records {
-            rust_builder = rust_builder.qa_record(code_name.clone(), version.clone(), date.clone(), time.clone());
+            rust_builder = rust_builder.qa_record(
+                code_name.clone(),
+                version.clone(),
+                date.clone(),
+                time.clone(),
+            );
         }
-        
+
         for info in &self.info_records {
             rust_builder = rust_builder.info(info.clone());
         }
-        
+
         rust_builder.write(path).into_py()?;
         Ok(())
     }
@@ -334,28 +350,35 @@ impl MeshBuilder {
     fn write_with_options(&self, path: String, options: &CreateOptions) -> PyResult<()> {
         // Build the Rust MeshBuilder
         let mut rust_builder = exodus_rs::MeshBuilder::new(self.title.clone());
-        
+
         if let Some(num_dim) = self.num_dim {
             rust_builder = rust_builder.dimensions(num_dim);
         }
-        
+
         if let Some((ref x, ref y, ref z)) = self.coords {
             rust_builder = rust_builder.coordinates(x.clone(), y.clone(), z.clone());
         }
-        
+
         for block in &self.blocks {
             rust_builder = rust_builder.add_block(block.clone());
         }
-        
+
         for (code_name, version, date, time) in &self.qa_records {
-            rust_builder = rust_builder.qa_record(code_name.clone(), version.clone(), date.clone(), time.clone());
+            rust_builder = rust_builder.qa_record(
+                code_name.clone(),
+                version.clone(),
+                date.clone(),
+                time.clone(),
+            );
         }
-        
+
         for info in &self.info_records {
             rust_builder = rust_builder.info(info.clone());
         }
-        
-        rust_builder.write_with_options(path, options.to_rust()).into_py()?;
+
+        rust_builder
+            .write_with_options(path, options.to_rust())
+            .into_py()?;
         Ok(())
     }
 

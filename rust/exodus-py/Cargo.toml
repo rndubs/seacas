@@ -19,23 +19,23 @@ crate-type = ["cdylib"]
 # All tests are Python integration tests in tests/ - run with: pytest tests/
 
 [dependencies]
-# PyO3 for Python bindings
-pyo3 = { version = "0.27", features = ["extension-module", "multiple-pymethods"] }
+# PyO3 for Python bindings (version managed by workspace)
+pyo3 = { workspace = true }
 
 # Exodus-rs library (local dependency)
-exodus-rs = { path = "../exodus-rs", features = ["netcdf4"] }
+exodus-rs = { path = "../exodus-rs", features = ["netcdf4", "ndarray"] }
 
-# NumPy integration (optional)
-numpy = { version = "0.27", optional = true }
+# NumPy integration - optional but enabled by default (version managed by workspace)
+numpy = { workspace = true, optional = true }
 
 [dev-dependencies]
 # Testing
-approx = "0.5"
-tempfile = "3.8"
+approx = { workspace = true }
+tempfile = { workspace = true }
 
 [features]
-default = []
-numpy = ["dep:numpy"]
+default = ["numpy"]
+numpy = ["dep:numpy", "exodus-rs/ndarray"]
 
 [package.metadata.maturin]
 # Maturin build configuration
