@@ -487,20 +487,66 @@ impl ExodusFile<mode::Write> {
 
     /// Create coordinate variables
     fn create_coord_variables(&mut self) -> Result<()> {
+        // Get chunking configuration from performance config
+        let requested_chunk = self
+            .metadata
+            .performance
+            .as_ref()
+            .map(|p| p.chunks.node_chunk_size)
+            .unwrap_or(0); // 0 means use default/no chunking
+
+        // Get actual num_nodes to clamp chunk size (chunk can't exceed dimension)
+        let num_nodes = self
+            .metadata
+            .dim_cache
+            .get("num_nodes")
+            .copied()
+            .unwrap_or(0);
+
+        // Clamp chunk size: must be > 0 and <= dimension size
+        // Only apply chunking if data is large enough to benefit from it
+        let chunk_size = if requested_chunk > 0 && num_nodes > 0 {
+            requested_chunk.min(num_nodes)
+        } else {
+            0
+        };
+
         // Create coordx variable
-        self.nc_file
+        let mut var_x = self
+            .nc_file
             .add_variable::<f64>("coordx", &["num_nodes"])
             .map_err(ExodusError::NetCdf)?;
 
+        // Apply chunking if specified and valid
+        if chunk_size > 0 {
+            var_x
+                .set_chunking(&[chunk_size])
+                .map_err(ExodusError::NetCdf)?;
+        }
+
         // Create coordy variable
-        self.nc_file
+        let mut var_y = self
+            .nc_file
             .add_variable::<f64>("coordy", &["num_nodes"])
             .map_err(ExodusError::NetCdf)?;
 
+        if chunk_size > 0 {
+            var_y
+                .set_chunking(&[chunk_size])
+                .map_err(ExodusError::NetCdf)?;
+        }
+
         // Create coordz variable
-        self.nc_file
+        let mut var_z = self
+            .nc_file
             .add_variable::<f64>("coordz", &["num_nodes"])
             .map_err(ExodusError::NetCdf)?;
+
+        if chunk_size > 0 {
+            var_z
+                .set_chunking(&[chunk_size])
+                .map_err(ExodusError::NetCdf)?;
+        }
 
         Ok(())
     }

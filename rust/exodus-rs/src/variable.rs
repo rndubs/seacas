@@ -438,22 +438,71 @@ impl ExodusFile<mode::Write> {
                 .add_variable::<u8>(var_name_var, &[num_var_dim, "len_string"])?;
         }
 
+        // Get chunking configuration (raw requested values)
+        let time_chunk_req = self
+            .metadata
+            .performance
+            .as_ref()
+            .map(|p| p.chunks.time_chunk_size)
+            .unwrap_or(0);
+        let node_chunk_req = self
+            .metadata
+            .performance
+            .as_ref()
+            .map(|p| p.chunks.node_chunk_size)
+            .unwrap_or(0);
+
+        // Get dimension sizes for clamping (chunk size can't exceed dimension)
+        let num_nodes = self
+            .metadata
+            .dim_cache
+            .get("num_nodes")
+            .copied()
+            .unwrap_or(0);
+
         // Create the actual storage variables based on type
         match var_type {
             EntityType::Global => {
                 // Global vars: vals_glo_var(time_step, num_glo_var)
                 if self.nc_file.variable("vals_glo_var").is_none() {
-                    self.nc_file
+                    let mut var = self
+                        .nc_file
                         .add_variable::<f64>("vals_glo_var", &["time_step", num_var_dim])?;
+
+                    // Apply chunking for global variables (clamp to actual size)
+                    // Chunk on time if configured (typically small variable count)
+                    if time_chunk_req > 0 && num_vars > 0 {
+                        let clamped_num_vars = num_vars.min(num_vars); // num_vars is the dim size
+                        var.set_chunking(&[time_chunk_req.max(1), clamped_num_vars])?;
+                    }
                 }
             }
             EntityType::Nodal => {
                 // Nodal vars: vals_nod_var{i}(time_step, num_nodes)
+                // Clamp node_chunk to actual num_nodes
+                let node_chunk = if node_chunk_req > 0 && num_nodes > 0 {
+                    node_chunk_req.min(num_nodes)
+                } else {
+                    0
+                };
+
                 for i in 0..num_vars {
                     let var_name = format!("vals_nod_var{}", i + 1);
                     if self.nc_file.variable(&var_name).is_none() {
-                        self.nc_file
+                        let mut var = self
+                            .nc_file
                             .add_variable::<f64>(&var_name, &["time_step", "num_nodes"])?;
+
+                        // Apply chunking for nodal variables
+                        // Chunk on nodes (spatial dimension), optionally on time
+                        if node_chunk > 0 {
+                            let t_chunk = if time_chunk_req > 0 {
+                                time_chunk_req
+                            } else {
+                                1
+                            };
+                            var.set_chunking(&[t_chunk, node_chunk])?;
+                        }
                     }
                 }
             }
@@ -715,18 +764,80 @@ impl ExodusFile<mode::Write> {
     ) -> Result<()> {
         let var_name = self.get_var_name(var_type, entity_id, var_index)?;
 
+        // Get chunking configuration (raw requested values)
+        let time_chunk_req = self
+            .metadata
+            .performance
+            .as_ref()
+            .map(|p| p.chunks.time_chunk_size)
+            .unwrap_or(0);
+        let node_chunk_req = self
+            .metadata
+            .performance
+            .as_ref()
+            .map(|p| p.chunks.node_chunk_size)
+            .unwrap_or(0);
+        let elem_chunk_req = self
+            .metadata
+            .performance
+            .as_ref()
+            .map(|p| p.chunks.element_chunk_size)
+            .unwrap_or(0);
+
+        // Get dimension sizes from cache for clamping
+        let num_nodes = self
+            .metadata
+            .dim_cache
+            .get("num_nodes")
+            .copied()
+            .unwrap_or(0);
+
+        // Helper to clamp chunk size to dimension
+        let clamp_chunk = |req: usize, dim_size: usize| -> usize {
+            if req > 0 && dim_size > 0 {
+                req.min(dim_size)
+            } else {
+                0
+            }
+        };
+
         match var_type {
             EntityType::Global => {
                 // Global vars: vals_glo_var(time_step, num_glo_var)
                 if self.nc_file.variable("vals_glo_var").is_none() {
-                    self.nc_file
+                    // Get dimension length before creating variable to avoid borrow conflict
+                    let num_glo_var = self
+                        .nc_file
+                        .dimension("num_glo_var")
+                        .map(|d| d.len())
+                        .unwrap_or(1);
+
+                    let mut var = self
+                        .nc_file
                         .add_variable::<f64>("vals_glo_var", &["time_step", "num_glo_var"])?;
+
+                    // Apply chunking for global variables (clamp to dimension size)
+                    if time_chunk_req > 0 && num_glo_var > 0 {
+                        var.set_chunking(&[time_chunk_req.max(1), num_glo_var])?;
+                    }
                 }
             }
             EntityType::Nodal => {
                 // Nodal var{i}: vals_nod_var{i}(time_step, num_nodes)
-                self.nc_file
+                let mut var = self
+                    .nc_file
                     .add_variable::<f64>(&var_name, &["time_step", "num_nodes"])?;
+
+                // Apply chunking for nodal variables (clamp to num_nodes)
+                let node_chunk = clamp_chunk(node_chunk_req, num_nodes);
+                if node_chunk > 0 {
+                    let t_chunk = if time_chunk_req > 0 {
+                        time_chunk_req
+                    } else {
+                        1
+                    };
+                    var.set_chunking(&[t_chunk, node_chunk])?;
+                }
             }
             EntityType::ElemBlock => {
                 // Element var: vals_elem_var{var_idx}eb{block_idx}(time_step, num_el_in_blk{block_idx})
@@ -740,8 +851,27 @@ impl ExodusFile<mode::Write> {
                     })?;
 
                 let dim_name = format!("num_el_in_blk{}", block_index + 1);
-                self.nc_file
+                // Get block dimension size for clamping
+                let block_dim_size = self
+                    .nc_file
+                    .dimension(&dim_name)
+                    .map(|d| d.len())
+                    .unwrap_or(0);
+
+                let mut var = self
+                    .nc_file
                     .add_variable::<f64>(&var_name, &["time_step", &dim_name])?;
+
+                // Apply chunking for element variables (clamp to block size)
+                let elem_chunk = clamp_chunk(elem_chunk_req, block_dim_size);
+                if elem_chunk > 0 {
+                    let t_chunk = if time_chunk_req > 0 {
+                        time_chunk_req
+                    } else {
+                        1
+                    };
+                    var.set_chunking(&[t_chunk, elem_chunk])?;
+                }
             }
             EntityType::EdgeBlock => {
                 let block_ids = self.block_ids(EntityType::EdgeBlock)?;
@@ -754,8 +884,27 @@ impl ExodusFile<mode::Write> {
                     })?;
 
                 let dim_name = format!("num_ed_in_blk{}", block_index + 1);
-                self.nc_file
+                // Get block dimension size for clamping
+                let block_dim_size = self
+                    .nc_file
+                    .dimension(&dim_name)
+                    .map(|d| d.len())
+                    .unwrap_or(0);
+
+                let mut var = self
+                    .nc_file
                     .add_variable::<f64>(&var_name, &["time_step", &dim_name])?;
+
+                // Apply chunking for edge variables (clamp to block size)
+                let elem_chunk = clamp_chunk(elem_chunk_req, block_dim_size);
+                if elem_chunk > 0 {
+                    let t_chunk = if time_chunk_req > 0 {
+                        time_chunk_req
+                    } else {
+                        1
+                    };
+                    var.set_chunking(&[t_chunk, elem_chunk])?;
+                }
             }
             EntityType::FaceBlock => {
                 let block_ids = self.block_ids(EntityType::FaceBlock)?;
@@ -768,8 +917,27 @@ impl ExodusFile<mode::Write> {
                     })?;
 
                 let dim_name = format!("num_fa_in_blk{}", block_index + 1);
-                self.nc_file
+                // Get block dimension size for clamping
+                let block_dim_size = self
+                    .nc_file
+                    .dimension(&dim_name)
+                    .map(|d| d.len())
+                    .unwrap_or(0);
+
+                let mut var = self
+                    .nc_file
                     .add_variable::<f64>(&var_name, &["time_step", &dim_name])?;
+
+                // Apply chunking for face variables (clamp to block size)
+                let elem_chunk = clamp_chunk(elem_chunk_req, block_dim_size);
+                if elem_chunk > 0 {
+                    let t_chunk = if time_chunk_req > 0 {
+                        time_chunk_req
+                    } else {
+                        1
+                    };
+                    var.set_chunking(&[t_chunk, elem_chunk])?;
+                }
             }
             EntityType::NodeSet => {
                 let set_ids = self.set_ids(EntityType::NodeSet)?;
