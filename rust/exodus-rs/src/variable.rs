@@ -48,10 +48,26 @@ impl<M: FileMode> ExodusFile<M> {
         // Try to get the variable
         match self.nc_file.variable(var_name_var) {
             Some(var) => {
-                // Read as 2D array of chars and convert to strings
+                // Support both classic NetCDF fixed-length char arrays and
+                // NetCDF-4 NC_STRING variables for name storage.
+                let dims = var.dimensions();
+
+                // If 1D, likely NC_STRING [num_vars]
+                if dims.len() == 1 {
+                    // NC_STRING case: read each entry using get_string
+                    let num_vars = dims[0].len();
+                    let mut names = Vec::with_capacity(num_vars);
+                    for i in 0..num_vars {
+                        let s = var.get_string(i..i + 1)?;
+                        names.push(s.trim_end_matches('\0').trim().to_string());
+                    }
+                    return Ok(names);
+                }
+
+                // Otherwise, expect 2D [num_vars, len_string] of NC_CHAR
                 // CRITICAL: var.len() returns TOTAL elements (num_vars * len_string)
                 // We need the first dimension size (num_vars) instead
-                let num_vars = if let Some(dim) = var.dimensions().first() {
+                let num_vars = if let Some(dim) = dims.first() {
                     dim.len()
                 } else {
                     return Ok(Vec::new());
@@ -61,7 +77,7 @@ impl<M: FileMode> ExodusFile<M> {
                     return Ok(Vec::new());
                 }
 
-                // Get the len_string dimension size to know how many chars per name
+                // Get len_string for fixed-length names
                 let len_string = self
                     .nc_file
                     .dimension("len_string")
@@ -74,12 +90,13 @@ impl<M: FileMode> ExodusFile<M> {
                     .len();
 
                 let mut names = Vec::new();
-
                 for i in 0..num_vars {
-                    // Read one name at a time with explicit dimension bounds
-                    let name_chars: Vec<u8> = var.get_values((i..i + 1, 0..len_string))?;
+                    // Read one name at a time with explicit dimension bounds (NC_CHAR)
+                    let name_chars_i8: Vec<i8> = var.get_values((i..i + 1, 0..len_string))?;
+                    // Convert i8 bytes to u8 slice for UTF-8 decoding
+                    let name_bytes: Vec<u8> = name_chars_i8.iter().map(|&b| b as u8).collect();
                     // Convert to string, trimming null bytes and whitespace
-                    let name = String::from_utf8_lossy(&name_chars)
+                    let name = String::from_utf8_lossy(&name_bytes)
                         .trim_end_matches('\0')
                         .trim()
                         .to_string();
@@ -146,7 +163,20 @@ impl<M: FileMode> ExodusFile<M> {
         // Try to get the variable
         match self.nc_file.variable(var_name_var) {
             Some(var) => {
-                let num_vars = if let Some(dim) = var.dimensions().first() {
+                // Support NC_STRING [num_vars] and NC_CHAR [num_vars, len_string]
+                let dims = var.dimensions();
+
+                if dims.len() == 1 {
+                    let num_vars = dims[0].len();
+                    let mut names = Vec::with_capacity(num_vars);
+                    for i in 0..num_vars {
+                        let s = var.get_string(i..i + 1)?;
+                        names.push(s.trim_end_matches('\0').trim().to_string());
+                    }
+                    return Ok(names);
+                }
+
+                let num_vars = if let Some(dim) = dims.first() {
                     dim.len()
                 } else {
                     return Ok(Vec::new());
@@ -168,10 +198,10 @@ impl<M: FileMode> ExodusFile<M> {
                     .len();
 
                 let mut names = Vec::new();
-
                 for i in 0..num_vars {
-                    let name_chars: Vec<u8> = var.get_values((i..i + 1, 0..len_string))?;
-                    let name = String::from_utf8_lossy(&name_chars)
+                    let name_chars_i8: Vec<i8> = var.get_values((i..i + 1, 0..len_string))?;
+                    let name_bytes: Vec<u8> = name_chars_i8.iter().map(|&b| b as u8).collect();
+                    let name = String::from_utf8_lossy(&name_bytes)
                         .trim_end_matches('\0')
                         .trim()
                         .to_string();
