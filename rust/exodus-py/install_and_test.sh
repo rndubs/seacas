@@ -43,6 +43,8 @@ detect_os() {
             . /etc/os-release
             if [[ "$ID" == "ubuntu" ]] || [[ "$ID_LIKE" == *"ubuntu"* ]] || [[ "$ID_LIKE" == *"debian"* ]]; then
                 echo "ubuntu"
+            elif [[ "$ID" == "rhel" ]] || [[ "$ID" == "centos" ]] || [[ "$ID" == "rocky" ]] || [[ "$ID" == "almalinux" ]] || [[ "$ID_LIKE" == *"rhel"* ]] || [[ "$ID_LIKE" == *"fedora"* ]]; then
+                echo "rhel"
             else
                 echo "unknown"
             fi
@@ -69,6 +71,51 @@ get_library_version() {
     local lib=$1
     if command -v pkg-config &> /dev/null && pkg-config --exists "$lib" 2>/dev/null; then
         pkg-config --modversion "$lib" 2>/dev/null
+    else
+        echo "unknown"
+    fi
+}
+
+# RHEL-specific: Check if HDF5 is installed (doesn't rely on pkg-config)
+check_hdf5_rhel() {
+    # Check for h5cc compiler wrapper
+    if command -v h5cc &> /dev/null; then
+        return 0
+    fi
+    # Check for library files in standard locations
+    if [ -f /usr/lib64/libhdf5.so ] || [ -f /usr/lib/libhdf5.so ]; then
+        return 0
+    fi
+    return 1
+}
+
+# RHEL-specific: Check if NetCDF is installed (doesn't rely on pkg-config)
+check_netcdf_rhel() {
+    # Check for nc-config
+    if command -v nc-config &> /dev/null; then
+        return 0
+    fi
+    # Check for library files in standard locations
+    if [ -f /usr/lib64/libnetcdf.so ] || [ -f /usr/lib/libnetcdf.so ]; then
+        return 0
+    fi
+    return 1
+}
+
+# RHEL-specific: Get HDF5 version
+get_hdf5_version_rhel() {
+    if command -v h5cc &> /dev/null; then
+        # Extract version from h5cc -showconfig
+        h5cc -showconfig 2>/dev/null | grep "HDF5 Version:" | awk '{print $3}' || echo "unknown"
+    else
+        echo "unknown"
+    fi
+}
+
+# RHEL-specific: Get NetCDF version
+get_netcdf_version_rhel() {
+    if command -v nc-config &> /dev/null; then
+        nc-config --version 2>/dev/null | awk '{print $2}' || echo "unknown"
     else
         echo "unknown"
     fi
@@ -193,9 +240,62 @@ install_system_deps() {
             fi
             ;;
 
+        rhel)
+            # RHEL/CentOS/Rocky/AlmaLinux - use system-installed packages only
+            # Note: RHEL typically doesn't ship pkg-config .pc files for HDF5,
+            # so we use alternative detection methods
+            log_info "Using system-installed HDF5 and NetCDF libraries..."
+
+            # Check for HDF5 using RHEL-specific method if pkg-config didn't find it
+            if ! $hdf5_installed; then
+                if check_hdf5_rhel; then
+                    hdf5_installed=true
+                    local hdf5_version=$(get_hdf5_version_rhel)
+                    log_success "HDF5 found via h5cc/library check: version $hdf5_version"
+                else
+                    log_error "HDF5 not found. Please ensure hdf5-devel is installed as a system package."
+                    log_error "  Example: sudo dnf install hdf5-devel"
+                    exit 1
+                fi
+            fi
+
+            # Check for NetCDF using RHEL-specific method if pkg-config didn't find it
+            if ! $netcdf_installed; then
+                if check_netcdf_rhel; then
+                    netcdf_installed=true
+                    local netcdf_version=$(get_netcdf_version_rhel)
+                    log_success "NetCDF found via nc-config/library check: version $netcdf_version"
+                else
+                    log_error "NetCDF not found. Please ensure netcdf-devel is installed as a system package."
+                    log_error "  Example: sudo dnf install netcdf-devel"
+                    exit 1
+                fi
+            fi
+
+            # Set environment variables for RHEL
+            # The hdf5-sys and netcdf-sys crates need these to find the libraries
+            export HDF5_DIR=/usr
+            export NETCDF_DIR=/usr
+
+            # Add library path for linker
+            if [ -d /usr/lib64 ]; then
+                export LIBRARY_PATH="/usr/lib64:${LIBRARY_PATH:-}"
+                export LD_LIBRARY_PATH="/usr/lib64:${LD_LIBRARY_PATH:-}"
+            fi
+
+            # Add include path
+            if [ -d /usr/include ]; then
+                export CPATH="/usr/include:${CPATH:-}"
+            fi
+
+            log_success "HDF5_DIR set to: $HDF5_DIR"
+            log_success "NETCDF_DIR set to: $NETCDF_DIR"
+            log_success "All required system packages are available"
+            ;;
+
         *)
             log_error "Unsupported OS: $os"
-            log_error "This script supports macOS and Ubuntu only"
+            log_error "This script supports macOS, Ubuntu, and RHEL-based distributions"
             exit 1
             ;;
     esac
