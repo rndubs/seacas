@@ -1,12 +1,10 @@
 //! Geometry utilities for Python
 
-use pyo3::prelude::*;
 use exodus_rs::geometry::{
-    element_centroid as rust_element_centroid,
-    element_volume as rust_element_volume,
-    Vec3,
+    element_centroid as rust_element_centroid, element_volume as rust_element_volume, Vec3,
 };
 use exodus_rs::Topology;
+use pyo3::prelude::*;
 
 use crate::error::IntoPyResult;
 
@@ -44,9 +42,10 @@ pub fn element_volume(topology: &str, coords: Vec<Vec<f64>>) -> PyResult<f64> {
         .iter()
         .map(|c| {
             if c.len() != 3 {
-                Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(
-                    format!("Each coordinate must have 3 values (x, y, z), got {}", c.len())
-                ))
+                Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(format!(
+                    "Each coordinate must have 3 values (x, y, z), got {}",
+                    c.len()
+                )))
             } else {
                 Ok([c[0], c[1], c[2]])
             }
@@ -83,9 +82,10 @@ pub fn element_centroid(coords: Vec<Vec<f64>>) -> PyResult<Vec<f64>> {
         .iter()
         .map(|c| {
             if c.len() != 3 {
-                Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(
-                    format!("Each coordinate must have 3 values (x, y, z), got {}", c.len())
-                ))
+                Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(format!(
+                    "Each coordinate must have 3 values (x, y, z), got {}",
+                    c.len()
+                )))
             } else {
                 Ok([c[0], c[1], c[2]])
             }
@@ -134,7 +134,10 @@ impl ExodusReader {
     ///     >>> print(f"First element centroid: {centroids[0]}")
     fn block_element_centroids(&self, block_id: i64) -> PyResult<Vec<Vec<f64>>> {
         let centroids = self.file.block_element_centroids(block_id).into_py()?;
-        Ok(centroids.into_iter().map(|c| vec![c[0], c[1], c[2]]).collect())
+        Ok(centroids
+            .into_iter()
+            .map(|c| vec![c[0], c[1], c[2]])
+            .collect())
     }
 
     /// Compute volumes for all elements in the mesh.
@@ -163,7 +166,10 @@ impl ExodusReader {
     ///     >>> print(f"Mesh has {len(all_centroids)} elements")
     fn all_element_centroids(&self) -> PyResult<Vec<Vec<f64>>> {
         let centroids = self.file.all_element_centroids().into_py()?;
-        Ok(centroids.into_iter().map(|c| vec![c[0], c[1], c[2]]).collect())
+        Ok(centroids
+            .into_iter()
+            .map(|c| vec![c[0], c[1], c[2]])
+            .collect())
     }
 }
 

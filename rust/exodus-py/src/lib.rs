@@ -6,34 +6,37 @@
 use pyo3::prelude::*;
 
 // Module declarations
-mod types;
-mod error;
-mod file;
+mod assembly;
+mod attribute;
+mod block;
 mod builder;
 mod coord;
-mod block;
-mod set;
-mod metadata;
-mod map;
-mod assembly;
-mod variable;
-mod attribute;
-mod performance;
+mod error;
+mod file;
 mod geometry;
+mod map;
+mod metadata;
+mod performance;
 mod search;
+mod set;
 mod transform;
+mod types;
+mod variable;
 
 // Re-exports
-use types::*;
-use file::*;
 use builder::*;
+use file::*;
+use types::*;
 
 /// Python module for exodus-py
 #[pymodule]
 fn exodus(m: &Bound<'_, PyModule>) -> PyResult<()> {
     // Add version info
     m.add("__version__", env!("CARGO_PKG_VERSION"))?;
-    m.add("__doc__", "Python bindings for exodus-rs - Pure Rust Exodus II implementation")?;
+    m.add(
+        "__doc__",
+        "Python bindings for exodus-rs - Pure Rust Exodus II implementation",
+    )?;
 
     // Note: Error handling uses PyRuntimeError - see error.rs
 

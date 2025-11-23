@@ -3,9 +3,9 @@
 //! This module provides Python bindings for spatial transformations of meshes,
 //! including translation, rotation, and scaling operations.
 
-use pyo3::prelude::*;
 use crate::error::IntoPyResult;
 use crate::file::ExodusAppender;
+use pyo3::prelude::*;
 
 #[pymethods]
 impl ExodusAppender {
@@ -18,9 +18,7 @@ impl ExodusAppender {
     ///     >>> appender = ExodusAppender.append("mesh.exo")
     ///     >>> appender.translate([10.0, 5.0, 0.0])  # Move 10 units in X, 5 in Y
     fn translate(&mut self, translation: [f64; 3]) -> PyResult<()> {
-        self.file_mut()?
-            .translate(&translation)
-            .into_py()?;
+        self.file_mut()?.translate(&translation).into_py()?;
         Ok(())
     }
 
@@ -33,9 +31,7 @@ impl ExodusAppender {
     ///     >>> appender = ExodusAppender.append("mesh.exo")
     ///     >>> appender.rotate_x(45.0)  # Rotate 45 degrees around X axis
     fn rotate_x(&mut self, angle_degrees: f64) -> PyResult<()> {
-        self.file_mut()?
-            .rotate_x(angle_degrees)
-            .into_py()?;
+        self.file_mut()?.rotate_x(angle_degrees).into_py()?;
         Ok(())
     }
 
@@ -48,9 +44,7 @@ impl ExodusAppender {
     ///     >>> appender = ExodusAppender.append("mesh.exo")
     ///     >>> appender.rotate_y(90.0)  # Rotate 90 degrees around Y axis
     fn rotate_y(&mut self, angle_degrees: f64) -> PyResult<()> {
-        self.file_mut()?
-            .rotate_y(angle_degrees)
-            .into_py()?;
+        self.file_mut()?.rotate_y(angle_degrees).into_py()?;
         Ok(())
     }
 
@@ -63,9 +57,7 @@ impl ExodusAppender {
     ///     >>> appender = ExodusAppender.append("mesh.exo")
     ///     >>> appender.rotate_z(180.0)  # Rotate 180 degrees around Z axis
     fn rotate_z(&mut self, angle_degrees: f64) -> PyResult<()> {
-        self.file_mut()?
-            .rotate_z(angle_degrees)
-            .into_py()?;
+        self.file_mut()?.rotate_z(angle_degrees).into_py()?;
         Ok(())
     }
 
@@ -122,9 +114,7 @@ impl ExodusAppender {
     ///     >>> appender = ExodusAppender.append("mesh.exo")
     ///     >>> appender.scale_uniform(2.0)  # Double all dimensions
     fn scale_uniform(&mut self, scale_factor: f64) -> PyResult<()> {
-        self.file_mut()?
-            .scale_uniform(scale_factor)
-            .into_py()?;
+        self.file_mut()?.scale_uniform(scale_factor).into_py()?;
         Ok(())
     }
 
@@ -137,9 +127,7 @@ impl ExodusAppender {
     ///     >>> appender = ExodusAppender.append("mesh.exo")
     ///     >>> appender.scale([2.0, 1.0, 0.5])  # Double X, keep Y, halve Z
     fn scale(&mut self, scale_factors: [f64; 3]) -> PyResult<()> {
-        self.file_mut()?
-            .scale(&scale_factors)
-            .into_py()?;
+        self.file_mut()?.scale(&scale_factors).into_py()?;
         Ok(())
     }
 }

@@ -1,9 +1,9 @@
 //! Block operations for Exodus files
 
-use pyo3::prelude::*;
 use crate::error::IntoPyResult;
-use crate::file::{ExodusWriter, ExodusAppender, ExodusReader};
+use crate::file::{ExodusAppender, ExodusReader, ExodusWriter};
 use crate::types::Block;
+use pyo3::prelude::*;
 
 #[cfg(feature = "numpy")]
 use numpy::{PyArray1, PyArray2, PyArrayMethods};
@@ -40,7 +40,12 @@ impl ExodusWriter {
     ///     >>> # One hex element with 8 nodes
     ///     >>> writer.put_connectivity(100, np.array([1, 2, 3, 4, 5, 6, 7, 8]))
     #[cfg(feature = "numpy")]
-    fn put_connectivity(&mut self, _py: Python<'_>, block_id: i64, connectivity: Bound<'_, PyAny>) -> PyResult<()> {
+    fn put_connectivity(
+        &mut self,
+        _py: Python<'_>,
+        block_id: i64,
+        connectivity: Bound<'_, PyAny>,
+    ) -> PyResult<()> {
         // Convert NumPy array or list to Vec
         let conn_vec = if let Ok(arr) = connectivity.clone().cast_into::<PyArray1<i64>>() {
             arr.readonly().as_slice()?.to_vec()
@@ -97,14 +102,14 @@ impl ExodusAppender {
     /// Read a block definition (NOTE: Not fully available in Append mode)
     fn get_block(&self, _block_id: i64) -> PyResult<Block> {
         Err(PyErr::new::<pyo3::exceptions::PyNotImplementedError, _>(
-            "get_block not fully available in Append mode - use ExodusReader instead"
+            "get_block not fully available in Append mode - use ExodusReader instead",
         ))
     }
 
     /// Read element connectivity (NOTE: Not available in Append mode)
     fn get_connectivity(&self, _block_id: i64) -> PyResult<Vec<i64>> {
         Err(PyErr::new::<pyo3::exceptions::PyNotImplementedError, _>(
-            "get_connectivity not available in Append mode - use ExodusReader instead"
+            "get_connectivity not available in Append mode - use ExodusReader instead",
         ))
     }
 
@@ -132,7 +137,11 @@ impl ExodusReader {
     ///     >>> conn = reader.get_connectivity(100)
     ///     >>> print(conn.shape)  # (num_elements, nodes_per_elem)
     #[cfg(feature = "numpy")]
-    fn get_connectivity<'py>(&self, py: Python<'py>, block_id: i64) -> PyResult<Bound<'py, PyArray2<i64>>> {
+    fn get_connectivity<'py>(
+        &self,
+        py: Python<'py>,
+        block_id: i64,
+    ) -> PyResult<Bound<'py, PyArray2<i64>>> {
         // Use optimized connectivity_array() method from Rust
         let arr = self.file_ref().connectivity_array(block_id).into_py()?;
 

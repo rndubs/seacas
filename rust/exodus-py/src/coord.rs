@@ -1,8 +1,8 @@
 //! Coordinate operations for Exodus files
 
-use pyo3::prelude::*;
 use crate::error::IntoPyResult;
-use crate::file::{ExodusWriter, ExodusAppender, ExodusReader};
+use crate::file::{ExodusAppender, ExodusReader, ExodusWriter};
+use pyo3::prelude::*;
 
 #[cfg(feature = "numpy")]
 use numpy::{PyArray1, PyArray2, PyArrayMethods};
@@ -182,8 +182,16 @@ impl ExodusAppender {
         let mut arr = Array2::<f64>::zeros((num_nodes, 3));
         for i in 0..num_nodes {
             arr[[i, 0]] = coords.x[i];
-            arr[[i, 1]] = if !coords.y.is_empty() { coords.y[i] } else { 0.0 };
-            arr[[i, 2]] = if !coords.z.is_empty() { coords.z[i] } else { 0.0 };
+            arr[[i, 1]] = if !coords.y.is_empty() {
+                coords.y[i]
+            } else {
+                0.0
+            };
+            arr[[i, 2]] = if !coords.z.is_empty() {
+                coords.z[i]
+            } else {
+                0.0
+            };
         }
 
         // Convert to NumPy array

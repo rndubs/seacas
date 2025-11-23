@@ -1,8 +1,8 @@
 //! Error handling for Python bindings
 
-use pyo3::prelude::*;
-use pyo3::exceptions::PyRuntimeError;
 use exodus_rs::ExodusError as RustExodusError;
+use pyo3::exceptions::PyRuntimeError;
+use pyo3::prelude::*;
 
 /// Trait for converting Rust results to Python results
 pub trait IntoPyResult<T> {
