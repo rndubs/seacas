@@ -738,17 +738,19 @@ impl ExodusFile<mode::Write> {
             EntityType::Global => {
                 // Global vars: vals_glo_var(time_step, num_glo_var)
                 if self.nc_file.variable("vals_glo_var").is_none() {
+                    // Get dimension length before creating variable to avoid borrow conflict
+                    let num_glo_var = self
+                        .nc_file
+                        .dimension("num_glo_var")
+                        .map(|d| d.len())
+                        .unwrap_or(1);
+
                     let mut var = self
                         .nc_file
                         .add_variable::<f64>("vals_glo_var", &["time_step", "num_glo_var"])?;
 
                     // Apply chunking for global variables
                     if time_chunk > 0 {
-                        let num_glo_var = self
-                            .nc_file
-                            .dimension("num_glo_var")
-                            .map(|d| d.len())
-                            .unwrap_or(1);
                         var.set_chunking(&[time_chunk, num_glo_var])?;
                     }
                 }
