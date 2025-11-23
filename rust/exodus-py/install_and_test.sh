@@ -266,11 +266,13 @@ build_wheel() {
     # Build the wheel
     uv run maturin build --release
 
-    # Find the built wheel
-    WHEEL_FILE=$(find target/wheels -name "exodus_py-*.whl" -type f | sort -r | head -n 1)
+    # Find the built wheel in the workspace target directory
+    # (Cargo workspace puts target/ at the workspace root, not in individual crates)
+    WORKSPACE_TARGET_DIR="$(dirname "$SCRIPT_DIR")/target/wheels"
+    WHEEL_FILE=$(find "$WORKSPACE_TARGET_DIR" -name "exodus_py-*.whl" -type f | sort -r | head -n 1)
 
     if [ -z "$WHEEL_FILE" ]; then
-        log_error "Wheel file not found in target/wheels/"
+        log_error "Wheel file not found in $WORKSPACE_TARGET_DIR"
         exit 1
     fi
 
