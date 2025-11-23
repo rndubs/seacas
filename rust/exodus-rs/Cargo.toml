@@ -33,6 +33,7 @@ approx = "0.5"        # Floating point comparisons
 tempfile = "3.8"      # Temporary test files
 proptest = "1.4"      # Property-based testing
 criterion = "0.5"     # Benchmarking
+clap = { version = "4.5", features = ["derive"] }  # CLI argument parsing for examples
 
 [features]
 default = ["netcdf4"]

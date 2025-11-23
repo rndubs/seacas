@@ -336,41 +336,8 @@ test_wheel() {
         log_warning "Type checking found issues"
     fi
 
-    # Run examples if available
-    if [ -d "$SCRIPT_DIR/examples" ]; then
-        log_info "Running examples..."
-
-        # First run simple_mesh.py if it exists (creates test files for other examples)
-        if [ -f "$SCRIPT_DIR/examples/simple_mesh.py" ]; then
-            log_info "Running example: simple_mesh.py"
-            if python "$SCRIPT_DIR/examples/simple_mesh.py"; then
-                log_success "simple_mesh.py ran successfully"
-            else
-                log_warning "simple_mesh.py failed (exit code: $?)"
-            fi
-        fi
-
-        # Then run read_mesh.py if it exists (depends on simple_mesh.py output)
-        if [ -f "$SCRIPT_DIR/examples/read_mesh.py" ]; then
-            log_info "Running example: read_mesh.py"
-            if python "$SCRIPT_DIR/examples/read_mesh.py"; then
-                log_success "read_mesh.py ran successfully"
-            else
-                log_warning "read_mesh.py failed (exit code: $?)"
-            fi
-        fi
-
-        # Run any other examples (excluding the ones already run)
-        local other_examples=$(find "$SCRIPT_DIR/examples" -name "*.py" -type f ! -name "simple_mesh.py" ! -name "read_mesh.py")
-        for example_file in $other_examples; do
-            log_info "Running example: $(basename $example_file)"
-            if python "$example_file"; then
-                log_success "$(basename $example_file) ran successfully"
-            else
-                log_warning "$(basename $example_file) failed (exit code: $?)"
-            fi
-        done
-    fi
+    # Examples execution intentionally removed to avoid running optional
+    # example scripts during installation/testing.
 
     # Deactivate and keep venv for inspection
     deactivate

@@ -1092,6 +1092,211 @@ reader.close()
 - Search performance is O(n) where n is number of nodes/elements
 - For large meshes with many queries, consider caching coordinate data
 
+## Mesh Transformations
+
+exodus-py provides comprehensive mesh transformation capabilities for spatial manipulation of Exodus meshes. These operations modify mesh coordinates in-place, making them efficient even for large datasets.
+
+### Overview
+
+Transformation operations are available on `ExodusAppender` (read-write mode) since they modify the mesh. Supported transformations include:
+
+- **Translation**: Move mesh by a vector offset
+- **Rotation**: Rotate around X, Y, Z axes or using Euler angles
+- **Scaling**: Uniform or non-uniform scaling
+- **Custom rotation**: Apply arbitrary rotation matrices
+
+### Translation
+
+Translate mesh coordinates by a vector offset:
+
+```python
+from exodus import ExodusAppender
+
+# Open existing file for modification
+with ExodusAppender.append("mesh.exo") as appender:
+    # Translate 10 units in X, 5 in Y, 0 in Z
+    appender.translate([10.0, 5.0, 0.0])
+```
+
+### Axis-Aligned Rotations
+
+Rotate around standard coordinate axes:
+
+```python
+with ExodusAppender.append("mesh.exo") as appender:
+    # Rotate 45 degrees around X axis
+    appender.rotate_x(45.0)
+
+    # Rotate 90 degrees around Y axis
+    appender.rotate_y(90.0)
+
+    # Rotate 180 degrees around Z axis
+    appender.rotate_z(180.0)
+```
+
+**Rotation Convention**: Positive angles represent counterclockwise rotation when looking along the positive axis direction (right-hand rule).
+
+### Euler Angle Rotations
+
+Apply complex rotations using Euler angle sequences, following the scipy.spatial.transform.Rotation.from_euler convention:
+
+```python
+with ExodusAppender.append("mesh.exo") as appender:
+    # Extrinsic XYZ rotation (rotations around fixed axes)
+    # Uppercase = extrinsic (fixed frame)
+    appender.rotate_euler("XYZ", [30.0, 45.0, 60.0], degrees=True)
+
+    # Intrinsic xyz rotation (rotations around body axes)
+    # Lowercase = intrinsic (body frame)
+    appender.rotate_euler("xyz", [30.0, 45.0, 60.0], degrees=True)
+
+    # Single-axis rotation using Euler notation
+    appender.rotate_euler("Z", [90.0], degrees=True)
+
+    # Use radians instead of degrees
+    import math
+    appender.rotate_euler("XYZ", [math.pi/6, math.pi/4, math.pi/3], degrees=False)
+```
+
+**Euler Sequence Types:**
+- **Extrinsic** (uppercase, e.g., "XYZ"): Rotations applied in fixed reference frame
+- **Intrinsic** (lowercase, e.g., "xyz"): Rotations applied in body frame (rotating with the object)
+
+### Custom Rotation Matrix
+
+Apply a custom 3x3 rotation matrix:
+
+```python
+with ExodusAppender.append("mesh.exo") as appender:
+    # Define a rotation matrix (row-major order)
+    # Example: 90-degree rotation around Z axis
+    import math
+    cos_90 = math.cos(math.pi/2)
+    sin_90 = math.sin(math.pi/2)
+
+    matrix = [
+        cos_90, -sin_90, 0.0,   # Row 1
+        sin_90,  cos_90, 0.0,   # Row 2
+        0.0,     0.0,    1.0    # Row 3
+    ]
+
+    appender.apply_rotation(matrix)
+```
+
+### Scaling
+
+Scale mesh coordinates uniformly or non-uniformly:
+
+```python
+with ExodusAppender.append("mesh.exo") as appender:
+    # Uniform scaling - double all dimensions
+    appender.scale_uniform(2.0)
+
+    # Non-uniform scaling - different factor per axis
+    # Scale X by 2, keep Y, halve Z
+    appender.scale([2.0, 1.0, 0.5])
+```
+
+### Combining Transformations
+
+Multiple transformations can be applied sequentially:
+
+```python
+with ExodusAppender.append("mesh.exo") as appender:
+    # 1. First translate to origin
+    appender.translate([-5.0, -5.0, -5.0])
+
+    # 2. Then scale
+    appender.scale_uniform(2.0)
+
+    # 3. Then rotate
+    appender.rotate_z(45.0)
+
+    # 4. Finally translate to final position
+    appender.translate([10.0, 10.0, 0.0])
+```
+
+**Note**: Order matters! Transformations are applied in the sequence you specify.
+
+### Complete Example
+
+```python
+from exodus import ExodusAppender, ExodusReader
+import math
+
+# Before transformation - check original extent
+with ExodusReader.open("mesh.exo") as reader:
+    x, y, z = reader.get_coords()
+    print(f"Original extent: X=[{min(x)}, {max(x)}]")
+
+# Apply transformations
+with ExodusAppender.append("mesh.exo") as appender:
+    # Center the mesh at origin
+    appender.translate([-5.0, -5.0, -5.0])
+
+    # Rotate 45 degrees around Z axis
+    appender.rotate_z(45.0)
+
+    # Scale up by factor of 2
+    appender.scale_uniform(2.0)
+
+    # Move to final position
+    appender.translate([100.0, 100.0, 0.0])
+
+# After transformation - verify new extent
+with ExodusReader.open("mesh.exo") as reader:
+    x, y, z = reader.get_coords()
+    print(f"Transformed extent: X=[{min(x)}, {max(x)}]")
+```
+
+### Use Cases
+
+Mesh transformations are particularly useful for:
+
+- **Assembly positioning**: Place component meshes at correct locations
+- **Coordinate system alignment**: Align meshes with analysis coordinate system
+- **Mesh mirroring**: Create symmetric copies (using negative scale factors)
+- **Model preparation**: Prepare CAD meshes for simulation
+- **Result post-processing**: Transform results to different coordinate systems
+- **Multi-body simulations**: Position and orient multiple bodies
+
+### Performance Notes
+
+All transformation operations:
+- Modify coordinates **in-place** in the file
+- Are **memory-efficient** - don't load entire mesh into memory
+- Support meshes of any size (tested with millions of nodes)
+- Preserve all other mesh data (connectivity, variables, sets, etc.)
+
+### Coordinate System Conventions
+
+exodus-py follows standard engineering conventions:
+- **Right-handed coordinate system**: X × Y = Z
+- **Rotation direction**: Right-hand rule (counterclockwise when looking along positive axis)
+- **Euler angles**: Compatible with scipy.spatial.transform.Rotation
+
+### Error Handling
+
+Transformation functions provide clear error messages for invalid inputs:
+
+```python
+try:
+    with ExodusAppender.append("mesh.exo") as appender:
+        # Invalid Euler sequence (mixed case)
+        appender.rotate_euler("XyZ", [45.0, 45.0, 45.0], degrees=True)
+except RuntimeError as e:
+    print(f"Error: {e}")
+    # "Cannot mix intrinsic (lowercase) and extrinsic (uppercase) rotations"
+
+try:
+    with ExodusAppender.append("mesh.exo") as appender:
+        # Wrong number of angles for sequence
+        appender.rotate_euler("XYZ", [45.0, 45.0], degrees=True)
+except RuntimeError as e:
+    print(f"Error: {e}")
+    # "Expected 3 angles for sequence 'XYZ', got 2"
+```
+
 ## Entity Sets
 
 Entity sets provide a unified interface for working with different set types. In exodus-py, use the specialized `put_node_set` and `put_side_set` methods for working with sets:

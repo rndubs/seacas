@@ -21,6 +21,7 @@ mod attribute;
 mod performance;
 mod geometry;
 mod search;
+mod transform;
 
 // Re-exports
 use types::*;

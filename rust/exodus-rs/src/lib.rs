@@ -56,6 +56,7 @@
 //! - [`topology`] - Element topology and face definitions
 //! - [`sideset_utils`] - Utilities for converting nodesets to sidesets
 //! - [`search`] - Spatial search for nodes and elements by location
+//! - [`transformations`] - Coordinate and field transformations (translate, rotate, scale)
 
 #![deny(missing_docs)]
 #![deny(missing_debug_implementations)]
@@ -79,6 +80,7 @@ mod map;
 mod metadata;
 mod set;
 mod time;
+mod transform_ops;
 mod variable;
 
 // Low-level API
@@ -100,6 +102,9 @@ pub mod search;
 // NumPy integration views
 #[cfg(feature = "ndarray")]
 pub mod views;
+
+// Transformation utilities
+pub mod transformations;
 
 // Re-exports for convenience
 pub use attribute::AttributeData;
