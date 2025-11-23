@@ -900,9 +900,9 @@ class ExodusModel:
         params = self._reader.init_params()
         self.title = params.title
 
-        # Read coordinates as flat arrays (FAST - zero copy)
+        # Read coordinates as flat arrays (using backward-compatible list API)
         if params.num_nodes > 0:
-            x, y, z = self._reader.get_coords()
+            x, y, z = self._reader.get_coords_list()
             self.coords_x = list(x)
             self.coords_y = list(y)
             self.coords_z = list(z)
@@ -922,7 +922,7 @@ class ExodusModel:
                     name = ""
 
                 # Get flat connectivity (FAST - direct from exodus)
-                connectivity_flat = list(self._reader.get_connectivity(block_id))
+                connectivity_flat = list(self._reader.get_connectivity_list(block_id))
 
                 # Store as ElementBlockData
                 self.element_blocks[block_id] = ElementBlockData(

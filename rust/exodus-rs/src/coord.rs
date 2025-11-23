@@ -616,6 +616,73 @@ impl ExodusFile<mode::Read> {
         Ok(Coordinates { x, y, z, num_dim })
     }
 
+    /// Read all coordinates as a 2D ndarray (NumPy-compatible)
+    ///
+    /// Returns coordinates as an (N, 3) ndarray where N is the number of nodes.
+    /// This is more efficient for NumPy integration via PyO3 as it provides
+    /// a contiguous memory layout compatible with NumPy arrays.
+    ///
+    /// # Returns
+    ///
+    /// An `Array2<f64>` with shape (num_nodes, 3) where:
+    /// - Column 0: X coordinates
+    /// - Column 1: Y coordinates (0.0 for 1D meshes)
+    /// - Column 2: Z coordinates (0.0 for 1D/2D meshes)
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - File is not initialized
+    /// - Coordinate variables are not found
+    /// - NetCDF read fails
+    ///
+    /// # Example
+    ///
+    /// ```rust,ignore
+    /// use exodus_rs::ExodusFile;
+    /// use exodus_rs::mode::Read;
+    ///
+    /// let file = ExodusFile::<Read>::open("mesh.exo")?;
+    /// let coords = file.coords_array()?;
+    /// println!("Shape: {:?}", coords.shape());  // (num_nodes, 3)
+    /// println!("First node: {:?}", coords.row(0));
+    /// # Ok::<(), exodus_rs::ExodusError>(())
+    /// ```
+    #[cfg(feature = "ndarray")]
+    pub fn coords_array(&self) -> Result<ndarray::Array2<f64>> {
+        use ndarray::Array2;
+
+        let coords = self.coords::<f64>()?;
+        let num_nodes = coords.x.len();
+
+        // If no nodes, return empty array
+        if num_nodes == 0 {
+            return Ok(Array2::zeros((0, 3)));
+        }
+
+        // Create array with shape (num_nodes, 3)
+        let mut arr = Array2::zeros((num_nodes, 3));
+
+        // Fill columns
+        for (i, &x) in coords.x.iter().enumerate() {
+            arr[[i, 0]] = x;
+        }
+
+        if coords.num_dim >= 2 {
+            for (i, &y) in coords.y.iter().enumerate() {
+                arr[[i, 1]] = y;
+            }
+        }
+
+        if coords.num_dim == 3 {
+            for (i, &z) in coords.z.iter().enumerate() {
+                arr[[i, 2]] = z;
+            }
+        }
+
+        Ok(arr)
+    }
+
     /// Read coordinates into provided buffers
     ///
     /// # Arguments

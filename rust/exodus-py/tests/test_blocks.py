@@ -97,9 +97,9 @@ def test_elem_block_connectivity():
         writer.put_connectivity(1, connectivity)
         writer.close()
 
-        # Read back
+        # Read back (using backward-compatible list API)
         reader = ExodusReader.open(tmp_path)
-        conn_read = reader.get_connectivity(1)
+        conn_read = reader.get_connectivity_list(1)
         assert len(conn_read) == 4
         assert conn_read == connectivity
         reader.close()
@@ -353,6 +353,111 @@ def test_face_blocks():
         block_read = reader.get_block(1)
         assert block_read.topology == "TRI3"
         assert block_read.num_entries == 1
+        reader.close()
+
+    finally:
+        if os.path.exists(tmp_path):
+            os.unlink(tmp_path)
+
+
+def test_get_connectivity_numpy():
+    """Test reading connectivity as NumPy 2D array"""
+    np = pytest.importorskip("numpy")
+
+    with tempfile.NamedTemporaryFile(suffix=".exo", delete=False) as tmp:
+        tmp_path = tmp.name
+
+    os.unlink(tmp_path)
+
+    try:
+        writer = ExodusWriter.create(tmp_path)
+        params = InitParams(
+            title="NumPy Connectivity",
+            num_dim=2,
+            num_nodes=6,
+            num_elems=2,
+            num_elem_blocks=1,
+        )
+        writer.put_init_params(params)
+
+        # Define block with 2 triangles
+        block = Block(
+            id=1,
+            entity_type=EntityType.ElemBlock,
+            topology="TRI3",
+            num_entries=2,
+            num_nodes_per_entry=3,
+            num_attributes=0,
+        )
+        writer.put_block(block)
+
+        # Write connectivity (flat list)
+        connectivity = [1, 2, 3, 4, 5, 6]
+        writer.put_connectivity(1, connectivity)
+        writer.close()
+
+        # Read back as NumPy array
+        reader = ExodusReader.open(tmp_path)
+        conn = reader.get_connectivity(1)
+
+        # Verify it's a 2D NumPy array
+        assert isinstance(conn, np.ndarray)
+        assert conn.shape == (2, 3)  # (num_elements, nodes_per_element)
+        assert conn.dtype == np.int64
+        assert conn.flags['C_CONTIGUOUS']
+
+        # Verify values
+        expected = np.array([[1, 2, 3], [4, 5, 6]])
+        np.testing.assert_array_equal(conn, expected)
+        reader.close()
+
+    finally:
+        if os.path.exists(tmp_path):
+            os.unlink(tmp_path)
+
+
+def test_put_connectivity_numpy():
+    """Test writing connectivity with NumPy arrays"""
+    np = pytest.importorskip("numpy")
+
+    with tempfile.NamedTemporaryFile(suffix=".exo", delete=False) as tmp:
+        tmp_path = tmp.name
+
+    os.unlink(tmp_path)
+
+    try:
+        writer = ExodusWriter.create(tmp_path)
+        params = InitParams(
+            title="NumPy Write Conn",
+            num_dim=2,
+            num_nodes=9,
+            num_elems=3,
+            num_elem_blocks=1,
+        )
+        writer.put_init_params(params)
+
+        # Define block with 3 quads
+        block = Block(
+            id=1,
+            entity_type=EntityType.ElemBlock,
+            topology="QUAD4",
+            num_entries=3,
+            num_nodes_per_entry=4,
+            num_attributes=0,
+        )
+        writer.put_block(block)
+
+        # Write connectivity as NumPy array (1D or 2D both work)
+        connectivity = np.array([1, 2, 5, 4, 2, 3, 6, 5, 4, 5, 8, 7], dtype=np.int64)
+        writer.put_connectivity(1, connectivity)
+        writer.close()
+
+        # Read back and verify
+        reader = ExodusReader.open(tmp_path)
+        conn = reader.get_connectivity(1)
+
+        expected = np.array([[1, 2, 5, 4], [2, 3, 6, 5], [4, 5, 8, 7]])
+        np.testing.assert_array_equal(conn, expected)
         reader.close()
 
     finally:

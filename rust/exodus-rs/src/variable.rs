@@ -1883,6 +1883,97 @@ impl ExodusFile<mode::Read> {
         }
     }
 
+    /// Read variable time series as a 2D ndarray (NumPy-compatible)
+    ///
+    /// Returns variable values across multiple time steps as a 2D ndarray with shape
+    /// (num_steps, num_entities). This is more efficient for NumPy integration via PyO3
+    /// as it provides a contiguous memory layout compatible with NumPy arrays.
+    ///
+    /// # Arguments
+    ///
+    /// * `start_step` - Starting time step index (0-based)
+    /// * `end_step` - Ending time step index (exclusive)
+    /// * `var_type` - Type of entity (Nodal, ElemBlock, Global, etc.)
+    /// * `entity_id` - Entity ID (block/set ID, or 0 for nodal/global)
+    /// * `var_index` - Variable index (0-based)
+    ///
+    /// # Returns
+    ///
+    /// An `Array2<f64>` with shape:
+    /// - For Global variables: (num_steps, 1)
+    /// - For Nodal variables: (num_steps, num_nodes)
+    /// - For Block/Set variables: (num_steps, num_entities_in_block/set)
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - Variable is not defined
+    /// - Entity ID is not found
+    /// - Time step range is invalid
+    /// - NetCDF read fails
+    ///
+    /// # Example
+    ///
+    /// ```rust,ignore
+    /// use exodus_rs::{ExodusFile, EntityType};
+    /// use exodus_rs::mode::Read;
+    ///
+    /// let file = ExodusFile::<Read>::open("mesh.exo")?;
+    /// let temps = file.var_time_series_array(0, 100, EntityType::Nodal, 0, 0)?;
+    /// println!("Shape: {:?}", temps.shape());  // (100, num_nodes)
+    ///
+    /// // Access specific time step
+    /// let step_0 = temps.row(0);
+    ///
+    /// // Access specific node history
+    /// let node_5 = temps.column(5);
+    /// # Ok::<(), exodus_rs::ExodusError>(())
+    /// ```
+    #[cfg(feature = "ndarray")]
+    pub fn var_time_series_array(
+        &self,
+        start_step: usize,
+        end_step: usize,
+        var_type: EntityType,
+        entity_id: EntityId,
+        var_index: usize,
+    ) -> Result<ndarray::Array2<f64>> {
+        use ndarray::Array2;
+
+        // Get the data as a flat vector
+        let data = self.var_time_series(start_step, end_step, var_type, entity_id, var_index)?;
+
+        let num_steps = end_step - start_step;
+
+        // Handle empty case
+        if data.is_empty() || num_steps == 0 {
+            return Ok(Array2::zeros((0, 0)));
+        }
+
+        // For Global variables, reshape to (num_steps, num_vars)
+        // For other types, reshape to (num_steps, num_entities)
+        let num_entities = if var_type == EntityType::Global {
+            // Global variables are stored differently - we collected individual values
+            // The data vector length is num_steps
+            if data.len() != num_steps {
+                return Err(ExodusError::Other(format!(
+                    "Data length mismatch: expected {} steps, got {} values",
+                    num_steps,
+                    data.len()
+                )));
+            }
+            1 // Return shape (num_steps, 1) for global vars
+        } else {
+            // For other types, netcdf returns shape (num_steps * num_entities)
+            data.len() / num_steps
+        };
+
+        // Reshape flat vector into 2D array
+        // Note: Array2::from_shape_vec expects data in row-major (C) order
+        Array2::from_shape_vec((num_steps, num_entities), data)
+            .map_err(|e| ExodusError::Other(format!("Failed to reshape array: {}", e)))
+    }
+
     // Helper function to get variable name for reading
     fn get_var_name_read(
         &self,
