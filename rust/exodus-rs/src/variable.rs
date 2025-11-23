@@ -409,10 +409,16 @@ impl ExodusFile<mode::Write> {
         }
 
         // Get chunking configuration
-        let time_chunk = self.metadata.performance.as_ref()
+        let time_chunk = self
+            .metadata
+            .performance
+            .as_ref()
             .map(|p| p.chunks.time_chunk_size)
             .unwrap_or(0);
-        let node_chunk = self.metadata.performance.as_ref()
+        let node_chunk = self
+            .metadata
+            .performance
+            .as_ref()
             .map(|p| p.chunks.node_chunk_size)
             .unwrap_or(0);
 
@@ -421,7 +427,8 @@ impl ExodusFile<mode::Write> {
             EntityType::Global => {
                 // Global vars: vals_glo_var(time_step, num_glo_var)
                 if self.nc_file.variable("vals_glo_var").is_none() {
-                    let mut var = self.nc_file
+                    let mut var = self
+                        .nc_file
                         .add_variable::<f64>("vals_glo_var", &["time_step", num_var_dim])?;
 
                     // Apply chunking for global variables
@@ -436,7 +443,8 @@ impl ExodusFile<mode::Write> {
                 for i in 0..num_vars {
                     let var_name = format!("vals_nod_var{}", i + 1);
                     if self.nc_file.variable(&var_name).is_none() {
-                        let mut var = self.nc_file
+                        let mut var = self
+                            .nc_file
                             .add_variable::<f64>(&var_name, &["time_step", "num_nodes"])?;
 
                         // Apply chunking for nodal variables
@@ -707,13 +715,22 @@ impl ExodusFile<mode::Write> {
         let var_name = self.get_var_name(var_type, entity_id, var_index)?;
 
         // Get chunking configuration
-        let time_chunk = self.metadata.performance.as_ref()
+        let time_chunk = self
+            .metadata
+            .performance
+            .as_ref()
             .map(|p| p.chunks.time_chunk_size)
             .unwrap_or(0);
-        let node_chunk = self.metadata.performance.as_ref()
+        let node_chunk = self
+            .metadata
+            .performance
+            .as_ref()
             .map(|p| p.chunks.node_chunk_size)
             .unwrap_or(0);
-        let elem_chunk = self.metadata.performance.as_ref()
+        let elem_chunk = self
+            .metadata
+            .performance
+            .as_ref()
             .map(|p| p.chunks.element_chunk_size)
             .unwrap_or(0);
 
@@ -721,12 +738,15 @@ impl ExodusFile<mode::Write> {
             EntityType::Global => {
                 // Global vars: vals_glo_var(time_step, num_glo_var)
                 if self.nc_file.variable("vals_glo_var").is_none() {
-                    let mut var = self.nc_file
+                    let mut var = self
+                        .nc_file
                         .add_variable::<f64>("vals_glo_var", &["time_step", "num_glo_var"])?;
 
                     // Apply chunking for global variables
                     if time_chunk > 0 {
-                        let num_glo_var = self.nc_file.dimension("num_glo_var")
+                        let num_glo_var = self
+                            .nc_file
+                            .dimension("num_glo_var")
                             .map(|d| d.len())
                             .unwrap_or(1);
                         var.set_chunking(&[time_chunk, num_glo_var])?;
@@ -735,7 +755,8 @@ impl ExodusFile<mode::Write> {
             }
             EntityType::Nodal => {
                 // Nodal var{i}: vals_nod_var{i}(time_step, num_nodes)
-                let mut var = self.nc_file
+                let mut var = self
+                    .nc_file
                     .add_variable::<f64>(&var_name, &["time_step", "num_nodes"])?;
 
                 // Apply chunking for nodal variables
@@ -756,7 +777,8 @@ impl ExodusFile<mode::Write> {
                     })?;
 
                 let dim_name = format!("num_el_in_blk{}", block_index + 1);
-                let mut var = self.nc_file
+                let mut var = self
+                    .nc_file
                     .add_variable::<f64>(&var_name, &["time_step", &dim_name])?;
 
                 // Apply chunking for element variables
@@ -776,7 +798,8 @@ impl ExodusFile<mode::Write> {
                     })?;
 
                 let dim_name = format!("num_ed_in_blk{}", block_index + 1);
-                let mut var = self.nc_file
+                let mut var = self
+                    .nc_file
                     .add_variable::<f64>(&var_name, &["time_step", &dim_name])?;
 
                 // Apply chunking for edge variables
@@ -796,7 +819,8 @@ impl ExodusFile<mode::Write> {
                     })?;
 
                 let dim_name = format!("num_fa_in_blk{}", block_index + 1);
-                let mut var = self.nc_file
+                let mut var = self
+                    .nc_file
                     .add_variable::<f64>(&var_name, &["time_step", &dim_name])?;
 
                 // Apply chunking for face variables

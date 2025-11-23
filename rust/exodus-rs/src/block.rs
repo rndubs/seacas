@@ -137,7 +137,10 @@ impl ExodusFile<mode::Write> {
             .add_variable::<i32>(&conn_var_name, &[&dim_name_entries, &dim_name_nodes])?;
 
         // Apply chunking if configured
-        let chunk_size = self.metadata.performance.as_ref()
+        let chunk_size = self
+            .metadata
+            .performance
+            .as_ref()
             .map(|p| p.chunks.element_chunk_size)
             .unwrap_or(0);
         if chunk_size > 0 {
@@ -163,7 +166,8 @@ impl ExodusFile<mode::Write> {
                 .add_dimension(&attr_dim_name, block.num_attributes)?;
 
             let attr_var_name = format!("attrib{}", block_index + 1);
-            let mut attr_var = self.nc_file
+            let mut attr_var = self
+                .nc_file
                 .add_variable::<f64>(&attr_var_name, &[&dim_name_entries, &attr_dim_name])?;
 
             // Apply same chunking to attributes as connectivity

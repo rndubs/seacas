@@ -488,38 +488,47 @@ impl ExodusFile<mode::Write> {
     /// Create coordinate variables
     fn create_coord_variables(&mut self) -> Result<()> {
         // Get chunking configuration from performance config
-        let chunk_size = self.metadata.performance.as_ref()
+        let chunk_size = self
+            .metadata
+            .performance
+            .as_ref()
             .map(|p| p.chunks.node_chunk_size)
             .unwrap_or(0); // 0 means use default/no chunking
 
         // Create coordx variable
-        let mut var_x = self.nc_file
+        let mut var_x = self
+            .nc_file
             .add_variable::<f64>("coordx", &["num_nodes"])
             .map_err(ExodusError::NetCdf)?;
 
         // Apply chunking if specified
         if chunk_size > 0 {
-            var_x.set_chunking(&[chunk_size])
+            var_x
+                .set_chunking(&[chunk_size])
                 .map_err(ExodusError::NetCdf)?;
         }
 
         // Create coordy variable
-        let mut var_y = self.nc_file
+        let mut var_y = self
+            .nc_file
             .add_variable::<f64>("coordy", &["num_nodes"])
             .map_err(ExodusError::NetCdf)?;
 
         if chunk_size > 0 {
-            var_y.set_chunking(&[chunk_size])
+            var_y
+                .set_chunking(&[chunk_size])
                 .map_err(ExodusError::NetCdf)?;
         }
 
         // Create coordz variable
-        let mut var_z = self.nc_file
+        let mut var_z = self
+            .nc_file
             .add_variable::<f64>("coordz", &["num_nodes"])
             .map_err(ExodusError::NetCdf)?;
 
         if chunk_size > 0 {
-            var_z.set_chunking(&[chunk_size])
+            var_z
+                .set_chunking(&[chunk_size])
                 .map_err(ExodusError::NetCdf)?;
         }
 
