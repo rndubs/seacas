@@ -16,12 +16,11 @@ fn benchmark_write_coords(c: &mut Criterion) {
 
                 b.iter(|| {
                     let temp = NamedTempFile::new().unwrap();
-                    let mut file = ExodusFile::create(temp.path(), {
-                        let mut opts = CreateOptions::default();
-                        opts.mode = CreateMode::Clobber;
-                        opts
-                    })
-                    .unwrap();
+                    let opts = CreateOptions {
+                        mode: CreateMode::Clobber,
+                        ..Default::default()
+                    };
+                    let mut file = ExodusFile::create(temp.path(), opts).unwrap();
 
                     let params = InitParams {
                         title: "Benchmark".to_string(),
@@ -31,7 +30,8 @@ fn benchmark_write_coords(c: &mut Criterion) {
                     };
                     file.init(&params).unwrap();
 
-                    black_box(file.put_coords(&x, Some(&y), Some(&z)).unwrap());
+                    let _: () = file.put_coords(&x, Some(&y), Some(&z)).unwrap();
+                    black_box(());
                 })
             },
         );
@@ -47,12 +47,11 @@ fn benchmark_read_coords(c: &mut Criterion) {
         // Setup: create a file with coordinates
         let temp = NamedTempFile::new().unwrap();
         {
-            let mut file = ExodusFile::create(temp.path(), {
-                let mut opts = CreateOptions::default();
-                opts.mode = CreateMode::Clobber;
-                opts
-            })
-            .unwrap();
+            let opts = CreateOptions {
+                mode: CreateMode::Clobber,
+                ..Default::default()
+            };
+            let mut file = ExodusFile::create(temp.path(), opts).unwrap();
             let params = InitParams {
                 title: "Benchmark".to_string(),
                 num_dim: 3,
@@ -92,12 +91,11 @@ fn benchmark_coords_f32_f64_conversion(c: &mut Criterion) {
     group.bench_function("write_f32_read_f64", |b| {
         b.iter(|| {
             let temp = NamedTempFile::new().unwrap();
-            let mut file = ExodusFile::create(temp.path(), {
-                let mut opts = CreateOptions::default();
-                opts.mode = CreateMode::Clobber;
-                opts
-            })
-            .unwrap();
+            let opts = CreateOptions {
+                mode: CreateMode::Clobber,
+                ..Default::default()
+            };
+            let mut file = ExodusFile::create(temp.path(), opts).unwrap();
 
             let params = InitParams {
                 title: "Benchmark".to_string(),

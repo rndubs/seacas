@@ -350,7 +350,7 @@ mod tests {
             attr_value_to_i64(&AttributeValue::Ulonglong(2000)),
             Some(2000)
         );
-        assert_eq!(attr_value_to_i64(&AttributeValue::Float(3.14)), Some(3));
+        assert_eq!(attr_value_to_i64(&AttributeValue::Float(3.25)), Some(3));
         assert_eq!(attr_value_to_i64(&AttributeValue::Double(2.71)), Some(2));
         assert_eq!(attr_value_to_i64(&AttributeValue::Uchar(255)), Some(255));
         assert_eq!(attr_value_to_i64(&AttributeValue::Ushort(500)), Some(500));
@@ -368,7 +368,7 @@ mod tests {
             Some("hello".to_string())
         );
         assert_eq!(attr_value_to_string(&AttributeValue::Int(42)), None);
-        assert_eq!(attr_value_to_string(&AttributeValue::Double(3.14)), None);
+        assert_eq!(attr_value_to_string(&AttributeValue::Double(3.25)), None);
     }
 
     #[test]
@@ -380,12 +380,12 @@ mod tests {
             Some(1000.0)
         );
         // Note: Float (f32) values lose precision when converted to f64
-        let float_result = attr_value_to_f64(&AttributeValue::Float(3.14_f32));
+        let float_result = attr_value_to_f64(&AttributeValue::Float(3.25_f32));
         assert!(float_result.is_some());
-        assert!((float_result.unwrap() - 3.14).abs() < 0.01); // Allow small epsilon for f32->f64 conversion
+        assert!((float_result.unwrap() - 3.25).abs() < 0.01); // Allow small epsilon for f32->f64 conversion
         assert_eq!(
-            attr_value_to_f64(&AttributeValue::Double(2.718281828)),
-            Some(2.718281828)
+            attr_value_to_f64(&AttributeValue::Double(2.125)),
+            Some(2.125)
         );
         assert_eq!(
             attr_value_to_f64(&AttributeValue::Str("test".to_string())),
@@ -402,8 +402,8 @@ mod tests {
         // Test negative values
         assert_eq!(attr_value_to_i64(&AttributeValue::Int(-42)), Some(-42));
         assert_eq!(
-            attr_value_to_f64(&AttributeValue::Double(-3.14)),
-            Some(-3.14)
+            attr_value_to_f64(&AttributeValue::Double(-3.25)),
+            Some(-3.25)
         );
 
         // Test max values

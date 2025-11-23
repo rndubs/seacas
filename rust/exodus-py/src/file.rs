@@ -1,7 +1,7 @@
 //! File operations for Exodus files
 
+use exodus_rs::{mode, ExodusFile as RustExodusFile};
 use pyo3::prelude::*;
-use exodus_rs::{ExodusFile as RustExodusFile, mode};
 
 use crate::error::IntoPyResult;
 use crate::types::{CreateOptions, InitParams};
@@ -131,9 +131,7 @@ impl ExodusWriter {
     #[staticmethod]
     #[pyo3(signature = (path, options=None))]
     fn create(path: &str, options: Option<CreateOptions>) -> PyResult<Self> {
-        let opts = options
-            .map(|o| o.to_rust())
-            .unwrap_or_else(|| exodus_rs::types::CreateOptions::default());
+        let opts = options.map(|o| o.to_rust()).unwrap_or_default();
 
         let file = RustExodusFile::create(path, opts).into_py()?;
         Ok(ExodusWriter { file: Some(file) })
@@ -307,29 +305,29 @@ impl ExodusAppender {
 // Internal helper to get mutable reference to the underlying file
 impl ExodusWriter {
     pub(crate) fn file_mut(&mut self) -> PyResult<&mut RustExodusFile<mode::Write>> {
-        self.file.as_mut().ok_or_else(|| {
-            PyErr::new::<pyo3::exceptions::PyRuntimeError, _>("File already closed")
-        })
+        self.file
+            .as_mut()
+            .ok_or_else(|| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>("File already closed"))
     }
 
     pub(crate) fn file_ref(&self) -> PyResult<&RustExodusFile<mode::Write>> {
-        self.file.as_ref().ok_or_else(|| {
-            PyErr::new::<pyo3::exceptions::PyRuntimeError, _>("File already closed")
-        })
+        self.file
+            .as_ref()
+            .ok_or_else(|| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>("File already closed"))
     }
 }
 
 impl ExodusAppender {
     pub(crate) fn file_mut(&mut self) -> PyResult<&mut RustExodusFile<mode::Append>> {
-        self.file.as_mut().ok_or_else(|| {
-            PyErr::new::<pyo3::exceptions::PyRuntimeError, _>("File already closed")
-        })
+        self.file
+            .as_mut()
+            .ok_or_else(|| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>("File already closed"))
     }
 
     pub(crate) fn file_ref(&self) -> PyResult<&RustExodusFile<mode::Append>> {
-        self.file.as_ref().ok_or_else(|| {
-            PyErr::new::<pyo3::exceptions::PyRuntimeError, _>("File already closed")
-        })
+        self.file
+            .as_ref()
+            .ok_or_else(|| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>("File already closed"))
     }
 }
 

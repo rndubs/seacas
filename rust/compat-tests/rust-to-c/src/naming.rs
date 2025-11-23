@@ -4,7 +4,9 @@
 //! are correctly written and can be read by the C Exodus library.
 
 use anyhow::Result;
-use exodus_rs::{Block, CreateMode, CreateOptions, EntityType, ExodusFile, InitParams, Set, Topology};
+use exodus_rs::{
+    Block, CreateMode, CreateOptions, EntityType, ExodusFile, InitParams, Set, Topology,
+};
 use std::path::Path;
 
 /// Generate a file with named element blocks
@@ -287,9 +289,9 @@ pub fn generate_variable_names(path: &Path) -> Result<()> {
     file.put_time(0, 0.0)?;
 
     // Global variables
-    file.put_var(0, EntityType::Global, 0, 0, &[100.0])?;  // Total_Energy
-    file.put_var(0, EntityType::Global, 0, 1, &[60.0])?;   // Kinetic_Energy
-    file.put_var(0, EntityType::Global, 0, 2, &[40.0])?;   // Potential_Energy
+    file.put_var(0, EntityType::Global, 0, 0, &[100.0])?; // Total_Energy
+    file.put_var(0, EntityType::Global, 0, 1, &[60.0])?; // Kinetic_Energy
+    file.put_var(0, EntityType::Global, 0, 2, &[40.0])?; // Potential_Energy
 
     // Nodal variables
     let temp_vals = vec![300.0, 310.0, 320.0, 330.0];
@@ -400,7 +402,13 @@ pub fn generate_all_names(path: &Path) -> Result<()> {
     // Write one time step
     file.put_time(0, 1.0)?;
     file.put_var(0, EntityType::Global, 0, 0, &[1000.0])?;
-    file.put_var(0, EntityType::Nodal, 1, 0, &[0.0, 0.1, 0.2, 0.0, 0.05, 0.15])?;
+    file.put_var(
+        0,
+        EntityType::Nodal,
+        1,
+        0,
+        &[0.0, 0.1, 0.2, 0.0, 0.05, 0.15],
+    )?;
 
     Ok(())
 }

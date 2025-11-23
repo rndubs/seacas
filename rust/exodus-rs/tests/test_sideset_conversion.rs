@@ -326,7 +326,7 @@ mod tests {
 
         // Check the name
         let names = file.names(EntityType::SideSet).unwrap();
-        assert!(names.len() >= 1);
+        assert!(!names.is_empty());
         assert_eq!(names[0], "top_face");
     }
 
@@ -357,7 +357,7 @@ mod tests {
             assert_eq!(sideset.elements.len(), 1);
 
             let ss_names = file.names(EntityType::SideSet).unwrap();
-            assert!(ss_names.len() >= 1);
+            assert!(!ss_names.is_empty());
             assert_eq!(ss_names[0], "inlet");
         }
     }

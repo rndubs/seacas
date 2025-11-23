@@ -1,7 +1,7 @@
 //! Spatial search utilities for Python
 
-use pyo3::prelude::*;
 use exodus_rs::search::SpatialSearchResult as RustSpatialSearchResult;
+use pyo3::prelude::*;
 
 use crate::error::IntoPyResult;
 use crate::file::ExodusReader;
@@ -56,7 +56,8 @@ impl SpatialSearchResult {
     ///     >>> sliced = result.slice(0, None, 2)
     fn slice(&self, start: usize, end: Option<usize>, step: usize) -> Self {
         let end_idx = end.unwrap_or(self.time_history.len());
-        let sliced: Vec<f64> = self.time_history
+        let sliced: Vec<f64> = self
+            .time_history
             .iter()
             .skip(start)
             .take(end_idx.saturating_sub(start))
@@ -157,13 +158,7 @@ impl ExodusReader {
     ///     >>> reader = ExodusReader.open("mesh.exo")
     ///     >>> node_id, distance = reader.find_nearest_node(1.0, 2.0, 3.0, -1.0)
     ///     >>> print(f"Nearest node: {node_id} at distance {distance}")
-    fn find_nearest_node(
-        &self,
-        x: f64,
-        y: f64,
-        z: f64,
-        max_distance: f64,
-    ) -> PyResult<(i64, f64)> {
+    fn find_nearest_node(&self, x: f64, y: f64, z: f64, max_distance: f64) -> PyResult<(i64, f64)> {
         self.file.find_nearest_node(x, y, z, max_distance).into_py()
     }
 
@@ -192,7 +187,9 @@ impl ExodusReader {
         z: f64,
         max_distance: f64,
     ) -> PyResult<(i64, f64)> {
-        self.file.find_nearest_element(x, y, z, max_distance).into_py()
+        self.file
+            .find_nearest_element(x, y, z, max_distance)
+            .into_py()
     }
 
     /// Search for a nodal variable by spatial location and return its time history.
@@ -232,7 +229,10 @@ impl ExodusReader {
         var_name: &str,
         max_distance: Option<f64>,
     ) -> PyResult<SpatialSearchResult> {
-        let result = self.file.search_nodal_variable(x, y, z, var_name, max_distance).into_py()?;
+        let result = self
+            .file
+            .search_nodal_variable(x, y, z, var_name, max_distance)
+            .into_py()?;
         Ok(result.into())
     }
 
@@ -271,7 +271,10 @@ impl ExodusReader {
         var_name: &str,
         max_distance: Option<f64>,
     ) -> PyResult<SpatialSearchResult> {
-        let result = self.file.search_element_variable(x, y, z, var_name, max_distance).into_py()?;
+        let result = self
+            .file
+            .search_element_variable(x, y, z, var_name, max_distance)
+            .into_py()?;
         Ok(result.into())
     }
 }

@@ -48,10 +48,26 @@ impl<M: FileMode> ExodusFile<M> {
         // Try to get the variable
         match self.nc_file.variable(var_name_var) {
             Some(var) => {
-                // Read as 2D array of chars and convert to strings
+                // Support both classic NetCDF fixed-length char arrays and
+                // NetCDF-4 NC_STRING variables for name storage.
+                let dims = var.dimensions();
+
+                // If 1D, likely NC_STRING [num_vars]
+                if dims.len() == 1 {
+                    // NC_STRING case: read each entry using get_string
+                    let num_vars = dims[0].len();
+                    let mut names = Vec::with_capacity(num_vars);
+                    for i in 0..num_vars {
+                        let s = var.get_string(i..i + 1)?;
+                        names.push(s.trim_end_matches('\0').trim().to_string());
+                    }
+                    return Ok(names);
+                }
+
+                // Otherwise, expect 2D [num_vars, len_string] of NC_CHAR
                 // CRITICAL: var.len() returns TOTAL elements (num_vars * len_string)
                 // We need the first dimension size (num_vars) instead
-                let num_vars = if let Some(dim) = var.dimensions().first() {
+                let num_vars = if let Some(dim) = dims.first() {
                     dim.len()
                 } else {
                     return Ok(Vec::new());
@@ -61,7 +77,7 @@ impl<M: FileMode> ExodusFile<M> {
                     return Ok(Vec::new());
                 }
 
-                // Get the len_string dimension size to know how many chars per name
+                // Get len_string for fixed-length names
                 let len_string = self
                     .nc_file
                     .dimension("len_string")
@@ -74,12 +90,13 @@ impl<M: FileMode> ExodusFile<M> {
                     .len();
 
                 let mut names = Vec::new();
-
                 for i in 0..num_vars {
-                    // Read one name at a time with explicit dimension bounds
-                    let name_chars: Vec<u8> = var.get_values((i..i + 1, 0..len_string))?;
+                    // Read one name at a time with explicit dimension bounds (NC_CHAR)
+                    let name_chars_i8: Vec<i8> = var.get_values((i..i + 1, 0..len_string))?;
+                    // Convert i8 bytes to u8 slice for UTF-8 decoding
+                    let name_bytes: Vec<u8> = name_chars_i8.iter().map(|&b| b as u8).collect();
                     // Convert to string, trimming null bytes and whitespace
-                    let name = String::from_utf8_lossy(&name_chars)
+                    let name = String::from_utf8_lossy(&name_bytes)
                         .trim_end_matches('\0')
                         .trim()
                         .to_string();
@@ -146,7 +163,20 @@ impl<M: FileMode> ExodusFile<M> {
         // Try to get the variable
         match self.nc_file.variable(var_name_var) {
             Some(var) => {
-                let num_vars = if let Some(dim) = var.dimensions().first() {
+                // Support NC_STRING [num_vars] and NC_CHAR [num_vars, len_string]
+                let dims = var.dimensions();
+
+                if dims.len() == 1 {
+                    let num_vars = dims[0].len();
+                    let mut names = Vec::with_capacity(num_vars);
+                    for i in 0..num_vars {
+                        let s = var.get_string(i..i + 1)?;
+                        names.push(s.trim_end_matches('\0').trim().to_string());
+                    }
+                    return Ok(names);
+                }
+
+                let num_vars = if let Some(dim) = dims.first() {
                     dim.len()
                 } else {
                     return Ok(Vec::new());
@@ -168,10 +198,10 @@ impl<M: FileMode> ExodusFile<M> {
                     .len();
 
                 let mut names = Vec::new();
-
                 for i in 0..num_vars {
-                    let name_chars: Vec<u8> = var.get_values((i..i + 1, 0..len_string))?;
-                    let name = String::from_utf8_lossy(&name_chars)
+                    let name_chars_i8: Vec<i8> = var.get_values((i..i + 1, 0..len_string))?;
+                    let name_bytes: Vec<u8> = name_chars_i8.iter().map(|&b| b as u8).collect();
+                    let name = String::from_utf8_lossy(&name_bytes)
                         .trim_end_matches('\0')
                         .trim()
                         .to_string();
@@ -2019,6 +2049,97 @@ impl ExodusFile<mode::Read> {
                 var_type
             ))),
         }
+    }
+
+    /// Read variable time series as a 2D ndarray (NumPy-compatible)
+    ///
+    /// Returns variable values across multiple time steps as a 2D ndarray with shape
+    /// (num_steps, num_entities). This is more efficient for NumPy integration via PyO3
+    /// as it provides a contiguous memory layout compatible with NumPy arrays.
+    ///
+    /// # Arguments
+    ///
+    /// * `start_step` - Starting time step index (0-based)
+    /// * `end_step` - Ending time step index (exclusive)
+    /// * `var_type` - Type of entity (Nodal, ElemBlock, Global, etc.)
+    /// * `entity_id` - Entity ID (block/set ID, or 0 for nodal/global)
+    /// * `var_index` - Variable index (0-based)
+    ///
+    /// # Returns
+    ///
+    /// An `Array2<f64>` with shape:
+    /// - For Global variables: (num_steps, 1)
+    /// - For Nodal variables: (num_steps, num_nodes)
+    /// - For Block/Set variables: (num_steps, num_entities_in_block/set)
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - Variable is not defined
+    /// - Entity ID is not found
+    /// - Time step range is invalid
+    /// - NetCDF read fails
+    ///
+    /// # Example
+    ///
+    /// ```rust,ignore
+    /// use exodus_rs::{ExodusFile, EntityType};
+    /// use exodus_rs::mode::Read;
+    ///
+    /// let file = ExodusFile::<Read>::open("mesh.exo")?;
+    /// let temps = file.var_time_series_array(0, 100, EntityType::Nodal, 0, 0)?;
+    /// println!("Shape: {:?}", temps.shape());  // (100, num_nodes)
+    ///
+    /// // Access specific time step
+    /// let step_0 = temps.row(0);
+    ///
+    /// // Access specific node history
+    /// let node_5 = temps.column(5);
+    /// # Ok::<(), exodus_rs::ExodusError>(())
+    /// ```
+    #[cfg(feature = "ndarray")]
+    pub fn var_time_series_array(
+        &self,
+        start_step: usize,
+        end_step: usize,
+        var_type: EntityType,
+        entity_id: EntityId,
+        var_index: usize,
+    ) -> Result<ndarray::Array2<f64>> {
+        use ndarray::Array2;
+
+        // Get the data as a flat vector
+        let data = self.var_time_series(start_step, end_step, var_type, entity_id, var_index)?;
+
+        let num_steps = end_step - start_step;
+
+        // Handle empty case
+        if data.is_empty() || num_steps == 0 {
+            return Ok(Array2::zeros((0, 0)));
+        }
+
+        // For Global variables, reshape to (num_steps, num_vars)
+        // For other types, reshape to (num_steps, num_entities)
+        let num_entities = if var_type == EntityType::Global {
+            // Global variables are stored differently - we collected individual values
+            // The data vector length is num_steps
+            if data.len() != num_steps {
+                return Err(ExodusError::Other(format!(
+                    "Data length mismatch: expected {} steps, got {} values",
+                    num_steps,
+                    data.len()
+                )));
+            }
+            1 // Return shape (num_steps, 1) for global vars
+        } else {
+            // For other types, netcdf returns shape (num_steps * num_entities)
+            data.len() / num_steps
+        };
+
+        // Reshape flat vector into 2D array
+        // Note: Array2::from_shape_vec expects data in row-major (C) order
+        Array2::from_shape_vec((num_steps, num_entities), data)
+            .map_err(|e| ExodusError::Other(format!("Failed to reshape array: {}", e)))
     }
 
     // Helper function to get variable name for reading

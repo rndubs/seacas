@@ -21,8 +21,10 @@ use std::path::Path;
 /// ```
 pub fn generate_2d(path: &Path) -> Result<()> {
     // Create file with clobber mode
-    let mut opts = CreateOptions::default();
-    opts.mode = CreateMode::Clobber;
+    let opts = CreateOptions {
+        mode: CreateMode::Clobber,
+        ..Default::default()
+    };
 
     let mut file = ExodusFile::create(path, opts)?;
 
@@ -76,8 +78,10 @@ pub fn generate_2d(path: &Path) -> Result<()> {
 /// ```
 pub fn generate_3d(path: &Path) -> Result<()> {
     // Create file with clobber mode
-    let mut opts = CreateOptions::default();
-    opts.mode = CreateMode::Clobber;
+    let opts = CreateOptions {
+        mode: CreateMode::Clobber,
+        ..Default::default()
+    };
 
     let mut file = ExodusFile::create(path, opts)?;
 

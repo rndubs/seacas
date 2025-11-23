@@ -795,10 +795,9 @@ mod block_tests {
                 num_attributes: 3,
             };
             file.put_block(&block1).unwrap();
-            file.put_block_attribute_names(100, &vec!["a1", "a2", "a3"])
+            file.put_block_attribute_names(100, &["a1", "a2", "a3"])
                 .unwrap();
-            file.put_block_attributes(100, &vec![1.0, 2.0, 3.0])
-                .unwrap();
+            file.put_block_attributes(100, &[1.0, 2.0, 3.0]).unwrap();
 
             // Block 2: 2 tet elements, 2 attributes
             let block2 = Block {
@@ -812,9 +811,8 @@ mod block_tests {
                 num_attributes: 2,
             };
             file.put_block(&block2).unwrap();
-            file.put_block_attribute_names(200, &vec!["b1", "b2"])
-                .unwrap();
-            file.put_block_attributes(200, &vec![10.0, 20.0, 30.0, 40.0])
+            file.put_block_attribute_names(200, &["b1", "b2"]).unwrap();
+            file.put_block_attributes(200, &[10.0, 20.0, 30.0, 40.0])
                 .unwrap();
         }
 

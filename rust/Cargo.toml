@@ -1,0 +1,30 @@
+[workspace]
+members = ["exodus-rs", "exodus-py", "compat-tests/rust-to-c", "compat-tests/c-to-rust"]
+resolver = "2"
+
+# Centralized dependency versions to ensure compatibility across crates.
+# IMPORTANT: numpy 0.27.x requires ndarray 0.15.x - do not upgrade ndarray
+# without verifying numpy compatibility first.
+[workspace.dependencies]
+# Core dependencies
+thiserror = "1.0"
+netcdf = "0.11"
+
+# Array support - pinned to 0.16 for numpy compatibility
+# numpy 0.27.x uses ndarray 0.16.x internally
+ndarray = "0.16"
+
+# Python bindings
+pyo3 = { version = "0.27", features = ["extension-module", "multiple-pymethods"] }
+numpy = "0.27"
+
+# Optional features
+rayon = "1.8"
+serde = { version = "1.0", features = ["derive"] }
+
+# Testing (shared dev-dependencies)
+approx = "0.5"
+tempfile = "3.8"
+proptest = "1.4"
+criterion = "0.5"
+clap = { version = "4.5", features = ["derive"] }

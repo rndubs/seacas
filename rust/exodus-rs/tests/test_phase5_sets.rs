@@ -371,7 +371,7 @@ mod set_tests {
                 num_dist_factors: 0,
             };
             file.put_set(&set).unwrap();
-            file.put_entity_set(EntityType::ElemSet, 1, &vec![1, 3])
+            file.put_entity_set(EntityType::ElemSet, 1, &[1, 3])
                 .unwrap();
         }
 
@@ -422,7 +422,7 @@ mod set_tests {
                 num_dist_factors: 3,
             };
             file.put_set(&set).unwrap();
-            file.put_entity_set(EntityType::ElemSet, 50, &vec![1, 2, 3])
+            file.put_entity_set(EntityType::ElemSet, 50, &[1, 2, 3])
                 .unwrap();
             // Note: distribution factors not supported for entity sets in current API
         }
@@ -476,7 +476,7 @@ mod set_tests {
                 num_dist_factors: 0,
             };
             file.put_set(&set).unwrap();
-            file.put_entity_set(EntityType::EdgeSet, 1, &vec![1, 3, 5])
+            file.put_entity_set(EntityType::EdgeSet, 1, &[1, 3, 5])
                 .unwrap();
         }
 
@@ -524,7 +524,7 @@ mod set_tests {
                 num_dist_factors: 0,
             };
             file.put_set(&set).unwrap();
-            file.put_entity_set(EntityType::EdgeSet, 10, &vec![2, 4])
+            file.put_entity_set(EntityType::EdgeSet, 10, &[2, 4])
                 .unwrap();
             // Note: distribution factors not supported for entity sets in current API
         }
@@ -577,7 +577,7 @@ mod set_tests {
                 num_dist_factors: 0,
             };
             file.put_set(&set).unwrap();
-            file.put_entity_set(EntityType::FaceSet, 1, &vec![1, 2])
+            file.put_entity_set(EntityType::FaceSet, 1, &[1, 2])
                 .unwrap();
         }
 
@@ -624,7 +624,7 @@ mod set_tests {
                 num_dist_factors: 0,
             };
             file.put_set(&set).unwrap();
-            file.put_entity_set(EntityType::FaceSet, 20, &vec![1, 2, 3])
+            file.put_entity_set(EntityType::FaceSet, 20, &[1, 2, 3])
                 .unwrap();
             // Note: distribution factors not supported for entity sets in current API
         }
@@ -754,8 +754,7 @@ mod set_tests {
                 num_dist_factors: 0,
             };
             file.put_set(&set).unwrap();
-            file.put_entity_set(EntityType::ElemSet, 1, &vec![])
-                .unwrap();
+            file.put_entity_set(EntityType::ElemSet, 1, &[]).unwrap();
         }
 
         let file = ExodusFile::<mode::Read>::open(path).unwrap();
@@ -905,8 +904,7 @@ mod set_tests {
                     num_dist_factors: 0,
                 };
                 file.put_set(&set).unwrap();
-                file.put_entity_set(EntityType::ElemSet, i, &vec![i])
-                    .unwrap();
+                file.put_entity_set(EntityType::ElemSet, i, &[i]).unwrap();
             }
         }
 

@@ -64,7 +64,7 @@ fn create_node_sets() -> Result<(), Box<dyn std::error::Error>> {
         num_dist_factors: 0,
     };
     file.put_set(&set1)?;
-    file.put_node_set(10, &vec![1, 4, 7], None)?;
+    file.put_node_set(10, &[1, 4, 7], None)?;
 
     // Node set 2: Bottom edge nodes (1, 2, 3)
     let set2 = Set {
@@ -74,7 +74,7 @@ fn create_node_sets() -> Result<(), Box<dyn std::error::Error>> {
         num_dist_factors: 0,
     };
     file.put_set(&set2)?;
-    file.put_node_set(20, &vec![1, 2, 3], None)?;
+    file.put_node_set(20, &[1, 2, 3], None)?;
 
     // Node set 3: Corner nodes (1, 3, 7, 9)
     let set3 = Set {
@@ -84,7 +84,7 @@ fn create_node_sets() -> Result<(), Box<dyn std::error::Error>> {
         num_dist_factors: 0,
     };
     file.put_set(&set3)?;
-    file.put_node_set(30, &vec![1, 3, 7, 9], None)?;
+    file.put_node_set(30, &[1, 3, 7, 9], None)?;
 
     println!("  ✓ Created 3 node sets:");
     println!("    - Set 10: Left edge (3 nodes)");
@@ -127,7 +127,7 @@ fn create_side_sets() -> Result<(), Box<dyn std::error::Error>> {
         num_attributes: 0,
     };
     file.put_block(&block)?;
-    file.put_connectivity(1, &vec![1, 2, 5, 4, 2, 3, 6, 5])?;
+    file.put_connectivity(1, &[1, 2, 5, 4, 2, 3, 6, 5])?;
 
     // Side set 1: Left boundary (element 1, side 4)
     let ss1 = Set {
@@ -137,7 +137,7 @@ fn create_side_sets() -> Result<(), Box<dyn std::error::Error>> {
         num_dist_factors: 0,
     };
     file.put_set(&ss1)?;
-    file.put_side_set(100, &vec![1], &vec![4], None)?;
+    file.put_side_set(100, &[1], &[4], None)?;
 
     // Side set 2: Bottom boundary (both elements, side 1)
     let ss2 = Set {
@@ -147,7 +147,7 @@ fn create_side_sets() -> Result<(), Box<dyn std::error::Error>> {
         num_dist_factors: 0,
     };
     file.put_set(&ss2)?;
-    file.put_side_set(200, &vec![1, 2], &vec![1, 1], None)?;
+    file.put_side_set(200, &[1, 2], &[1, 1], None)?;
 
     println!("  ✓ Created 2 side sets:");
     println!("    - Set 100: Left boundary (1 side)");
@@ -183,7 +183,7 @@ fn create_element_sets() -> Result<(), Box<dyn std::error::Error>> {
         num_dist_factors: 0,
     };
     file.put_set(&es1)?;
-    file.put_entity_set(EntityType::ElemSet, 1000, &vec![1, 2, 3])?;
+    file.put_entity_set(EntityType::ElemSet, 1000, &[1, 2, 3])?;
 
     // Element set 2: Second group of elements (4, 5, 6)
     let es2 = Set {
@@ -193,7 +193,7 @@ fn create_element_sets() -> Result<(), Box<dyn std::error::Error>> {
         num_dist_factors: 0,
     };
     file.put_set(&es2)?;
-    file.put_entity_set(EntityType::ElemSet, 2000, &vec![4, 5, 6])?;
+    file.put_entity_set(EntityType::ElemSet, 2000, &[4, 5, 6])?;
 
     println!("  ✓ Created 2 element sets:");
     println!("    - Set 1000: Elements 1-3");
@@ -291,12 +291,7 @@ fn distribution_factors_example() -> Result<(), Box<dyn std::error::Error>> {
     let total_force = 100.0;
     let sum_factors: f64 = node_set.dist_factors.iter().sum();
 
-    for (_i, (&node, &factor)) in node_set
-        .nodes
-        .iter()
-        .zip(&node_set.dist_factors)
-        .enumerate()
-    {
+    for (&node, &factor) in node_set.nodes.iter().zip(&node_set.dist_factors) {
         let node_force = total_force * factor / sum_factors;
         println!("    Node {}: Force = {:.2}", node, node_force);
     }

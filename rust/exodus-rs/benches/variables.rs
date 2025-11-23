@@ -14,12 +14,11 @@ fn benchmark_write_nodal_vars(c: &mut Criterion) {
 
                 b.iter(|| {
                     let temp = NamedTempFile::new().unwrap();
-                    let mut file = ExodusFile::create(temp.path(), {
-                        let mut opts = CreateOptions::default();
-                        opts.mode = CreateMode::Clobber;
-                        opts
-                    })
-                    .unwrap();
+                    let opts = CreateOptions {
+                        mode: CreateMode::Clobber,
+                        ..Default::default()
+                    };
+                    let mut file = ExodusFile::create(temp.path(), opts).unwrap();
 
                     let params = InitParams {
                         title: "Benchmark".to_string(),
@@ -33,7 +32,8 @@ fn benchmark_write_nodal_vars(c: &mut Criterion) {
                         .unwrap();
                     file.put_time(1, 0.0).unwrap();
 
-                    black_box(file.put_var(1, EntityType::Nodal, 0, 0, &values).unwrap());
+                    let _: () = file.put_var(1, EntityType::Nodal, 0, 0, &values).unwrap();
+                    black_box(());
                 })
             },
         );
@@ -51,12 +51,11 @@ fn benchmark_read_nodal_vars(c: &mut Criterion) {
         // Setup: create a file with variables
         let temp = NamedTempFile::new().unwrap();
         {
-            let mut file = ExodusFile::create(temp.path(), {
-                let mut opts = CreateOptions::default();
-                opts.mode = CreateMode::Clobber;
-                opts
-            })
-            .unwrap();
+            let opts = CreateOptions {
+                mode: CreateMode::Clobber,
+                ..Default::default()
+            };
+            let mut file = ExodusFile::create(temp.path(), opts).unwrap();
             let params = InitParams {
                 title: "Benchmark".to_string(),
                 num_dim: 3,
@@ -101,12 +100,11 @@ fn benchmark_write_global_vars(c: &mut Criterion) {
 
                 b.iter(|| {
                     let temp = NamedTempFile::new().unwrap();
-                    let mut file = ExodusFile::create(temp.path(), {
-                        let mut opts = CreateOptions::default();
-                        opts.mode = CreateMode::Clobber;
-                        opts
-                    })
-                    .unwrap();
+                    let opts = CreateOptions {
+                        mode: CreateMode::Clobber,
+                        ..Default::default()
+                    };
+                    let mut file = ExodusFile::create(temp.path(), opts).unwrap();
 
                     let params = InitParams {
                         title: "Benchmark".to_string(),
@@ -147,12 +145,11 @@ fn benchmark_multiple_time_steps(c: &mut Criterion) {
 
                 b.iter(|| {
                     let temp = NamedTempFile::new().unwrap();
-                    let mut file = ExodusFile::create(temp.path(), {
-                        let mut opts = CreateOptions::default();
-                        opts.mode = CreateMode::Clobber;
-                        opts
-                    })
-                    .unwrap();
+                    let opts = CreateOptions {
+                        mode: CreateMode::Clobber,
+                        ..Default::default()
+                    };
+                    let mut file = ExodusFile::create(temp.path(), opts).unwrap();
 
                     let params = InitParams {
                         title: "Benchmark".to_string(),

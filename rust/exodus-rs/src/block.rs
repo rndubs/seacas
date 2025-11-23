@@ -438,6 +438,66 @@ impl ExodusFile<mode::Read> {
         })
     }
 
+    /// Get connectivity as a 2D ndarray (NumPy-compatible)
+    ///
+    /// Returns connectivity as a 2D ndarray with shape (num_elements, nodes_per_element).
+    /// This is more efficient for NumPy integration via PyO3 as it provides a contiguous
+    /// memory layout compatible with NumPy arrays.
+    ///
+    /// # Arguments
+    ///
+    /// * `block_id` - ID of the block
+    ///
+    /// # Returns
+    ///
+    /// An `Array2<i64>` with shape (num_elements, nodes_per_element) where each row
+    /// contains the node IDs for one element.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - Block is not found
+    /// - Connectivity variable is not defined
+    /// - NetCDF read fails
+    /// - Data cannot be reshaped (inconsistent dimensions)
+    ///
+    /// # Example
+    ///
+    /// ```rust,ignore
+    /// use exodus_rs::ExodusFile;
+    /// use exodus_rs::mode::Read;
+    ///
+    /// let file = ExodusFile::<Read>::open("mesh.exo")?;
+    /// let conn = file.connectivity_array(1)?;
+    /// println!("Shape: {:?}", conn.shape());  // (num_elements, nodes_per_element)
+    /// println!("Element 0 nodes: {:?}", conn.row(0));
+    /// # Ok::<(), exodus_rs::ExodusError>(())
+    /// ```
+    #[cfg(feature = "ndarray")]
+    pub fn connectivity_array(&self, block_id: EntityId) -> Result<ndarray::Array2<i64>> {
+        use ndarray::Array2;
+
+        let conn_data = self.connectivity_structured(block_id)?;
+
+        // Handle empty case
+        if conn_data.num_entries == 0 || conn_data.nodes_per_entry == 0 {
+            return Ok(Array2::zeros((0, 0)));
+        }
+
+        // Reshape flat vector into 2D array (num_elements, nodes_per_element)
+        // Note: Array2::from_shape_vec expects data in row-major (C) order
+        Array2::from_shape_vec(
+            (conn_data.num_entries, conn_data.nodes_per_entry),
+            conn_data.data,
+        )
+        .map_err(|e| {
+            ExodusError::Other(format!(
+                "Failed to reshape connectivity array for block {}: {}",
+                block_id, e
+            ))
+        })
+    }
+
     /// Get block attributes
     ///
     /// # Arguments
