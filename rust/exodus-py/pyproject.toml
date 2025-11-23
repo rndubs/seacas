@@ -41,6 +41,11 @@ dev = [
     "tqdm>=4.67.1",
     "scipy",
 ]
+test = [
+    "pytest>=7.0",
+    "numpy>=1.20",
+    "netCDF4>=1.6.0",  # For verifying chunking in tests
+]
 
 [project.urls]
 Homepage = "https://github.com/rndubs/seacas"

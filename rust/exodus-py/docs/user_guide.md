@@ -1951,6 +1951,41 @@ For optimal performance with exodus-py:
 - **Avoid over-allocation**: Don't set cache larger than available RAM
 - **Test your settings**: Run benchmarks to find optimal values for your data
 
+#### Implementation Status and Limitations
+
+**Chunking** ✅ **FULLY IMPLEMENTED**
+
+Chunking is fully implemented and working:
+- Coordinate variables (`coordx`, `coordy`, `coordz`) use `node_chunk_size`
+- Connectivity variables (`connect{N}`) use `element_chunk_size`
+- Element/block attributes use `element_chunk_size`
+- Result variables (nodal, element, global) use appropriate chunk sizes
+- Time-dependent variables can use `time_chunk_size`
+
+**Cache Configuration** ⚠️ **PARTIALLY WORKING**
+
+Cache settings are applied via HDF5 environment variables:
+- **Limitation**: Environment variables must be set **before** the HDF5 library is initialized
+- **Implication**: If HDF5 is already loaded (e.g., by another library), cache settings may not apply
+- **Workaround**: Set environment variables before importing exodus:
+
+```python
+import os
+# Set before importing exodus
+os.environ['HDF5_CHUNK_CACHE_NBYTES'] = str(256 * 1024 * 1024)  # 256 MB
+os.environ['HDF5_CHUNK_CACHE_W0'] = '0.75'
+
+# Now import
+from exodus import ExodusWriter, PerformanceConfig
+```
+
+**Recommended Approach**:
+- Use `PerformanceConfig` for chunking (works reliably)
+- For cache, either:
+  - Set environment variables before importing exodus (most reliable)
+  - Use `PerformanceConfig` and accept that cache may not apply if HDF5 already initialized
+  - Focus on chunking optimization, which often has bigger performance impact
+
 #### Additional Resources
 
 For detailed performance tuning guidance, benchmark results, and troubleshooting:
