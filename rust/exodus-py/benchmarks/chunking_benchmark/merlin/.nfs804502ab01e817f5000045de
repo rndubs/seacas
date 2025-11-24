@@ -1,0 +1,96 @@
+/usr/WS1/whitmore/pydev/seacas/rust/exodus-py/.venv/lib64/python3.12/site-packages/merlin/utils.py:25: UserWarning: pkg_resources is deprecated as an API. See https://setuptools.pypa.io/en/latest/pkg_resources.html. The pkg_resources package is slated for removal as early as 2025-11-30. Refrain from using this package or pin to Setuptools<81.
+  import pkg_resources
+/usr/WS1/whitmore/pydev/seacas/rust/exodus-py/.venv/lib64/python3.12/site-packages/merlin/utils.py:25: UserWarning: pkg_resources is deprecated as an API. See https://setuptools.pypa.io/en/latest/pkg_resources.html. The pkg_resources package is slated for removal as early as 2025-11-30. Refrain from using this package or pin to Setuptools<81.
+  import pkg_resources
+/usr/WS1/whitmore/pydev/seacas/rust/exodus-py/.venv/lib64/python3.12/site-packages/merlin/utils.py:25: UserWarning: pkg_resources is deprecated as an API. See https://setuptools.pypa.io/en/latest/pkg_resources.html. The pkg_resources package is slated for removal as early as 2025-11-30. Refrain from using this package or pin to Setuptools<81.
+  import pkg_resources
+/usr/WS1/whitmore/pydev/seacas/rust/exodus-py/.venv/lib64/python3.12/site-packages/merlin/utils.py:25: UserWarning: pkg_resources is deprecated as an API. See https://setuptools.pypa.io/en/latest/pkg_resources.html. The pkg_resources package is slated for removal as early as 2025-11-30. Refrain from using this package or pin to Setuptools<81.
+  import pkg_resources
+/usr/WS1/whitmore/pydev/seacas/rust/exodus-py/.venv/lib64/python3.12/site-packages/merlin/utils.py:25: UserWarning: pkg_resources is deprecated as an API. See https://setuptools.pypa.io/en/latest/pkg_resources.html. The pkg_resources package is slated for removal as early as 2025-11-30. Refrain from using this package or pin to Setuptools<81.
+  import pkg_resources
+/usr/WS1/whitmore/pydev/seacas/rust/exodus-py/.venv/lib64/python3.12/site-packages/merlin/utils.py:25: UserWarning: pkg_resources is deprecated as an API. See https://setuptools.pypa.io/en/latest/pkg_resources.html. The pkg_resources package is slated for removal as early as 2025-11-30. Refrain from using this package or pin to Setuptools<81.
+  import pkg_resources
+/usr/WS1/whitmore/pydev/seacas/rust/exodus-py/.venv/lib64/python3.12/site-packages/merlin/utils.py:25: UserWarning: pkg_resources is deprecated as an API. See https://setuptools.pypa.io/en/latest/pkg_resources.html. The pkg_resources package is slated for removal as early as 2025-11-30. Refrain from using this package or pin to Setuptools<81.
+  import pkg_resources
+/usr/WS1/whitmore/pydev/seacas/rust/exodus-py/.venv/lib64/python3.12/site-packages/merlin/utils.py:25: UserWarning: pkg_resources is deprecated as an API. See https://setuptools.pypa.io/en/latest/pkg_resources.html. The pkg_resources package is slated for removal as early as 2025-11-30. Refrain from using this package or pin to Setuptools<81.
+  import pkg_resources
+[2025-11-23 17:17:15: INFO] Running Merlin in local mode (no configuration file required)
+[2025-11-23 17:17:15: INFO] Using default configuration (local mode)
+[2025-11-23 17:17:15: INFO] Loading specification from path: /usr/WS1/whitmore/pydev/seacas/rust/exodus-py/benchmarks/chunking_benchmark/merlin/chunking_benchmark.yaml
+[2025-11-23 17:17:15: INFO] Running Merlin in local mode (no configuration file required)
+[2025-11-23 17:17:15: INFO] Using default configuration (local mode)
+[2025-11-23 17:17:15: INFO] Loading specification from path: /usr/WS1/whitmore/pydev/seacas/rust/exodus-py/benchmarks/chunking_benchmark/merlin/chunking_benchmark.yaml
+[2025-11-23 17:17:15: INFO] Running Merlin in local mode (no configuration file required)
+[2025-11-23 17:17:15: INFO] Using default configuration (local mode)
+[2025-11-23 17:17:15: INFO] Loading specification from path: /usr/WS1/whitmore/pydev/seacas/rust/exodus-py/benchmarks/chunking_benchmark/merlin/chunking_benchmark.yaml
+[2025-11-23 17:17:15: INFO] Running Merlin in local mode (no configuration file required)
+[2025-11-23 17:17:15: INFO] Using default configuration (local mode)
+[2025-11-23 17:17:15: INFO] Loading specification from path: /usr/WS1/whitmore/pydev/seacas/rust/exodus-py/benchmarks/chunking_benchmark/merlin/chunking_benchmark.yaml
+[2025-11-23 17:17:15: INFO] Running Merlin in local mode (no configuration file required)
+[2025-11-23 17:17:15: INFO] Using default configuration (local mode)
+[2025-11-23 17:17:15: INFO] Loading specification from path: /usr/WS1/whitmore/pydev/seacas/rust/exodus-py/benchmarks/chunking_benchmark/merlin/chunking_benchmark.yaml
+[2025-11-23 17:17:15: INFO] Running Merlin in local mode (no configuration file required)
+[2025-11-23 17:17:15: INFO] Using default configuration (local mode)
+[2025-11-23 17:17:15: INFO] Loading specification from path: /usr/WS1/whitmore/pydev/seacas/rust/exodus-py/benchmarks/chunking_benchmark/merlin/chunking_benchmark.yaml
+[2025-11-23 17:17:15: INFO] Running Merlin in local mode (no configuration file required)
+[2025-11-23 17:17:15: INFO] Using default configuration (local mode)
+[2025-11-23 17:17:15: INFO] Loading specification from path: /usr/WS1/whitmore/pydev/seacas/rust/exodus-py/benchmarks/chunking_benchmark/merlin/chunking_benchmark.yaml
+[2025-11-23 17:17:15: INFO] Running Merlin in local mode (no configuration file required)
+[2025-11-23 17:17:15: INFO] Using default configuration (local mode)
+[2025-11-23 17:17:15: INFO] Loading specification from path: /usr/WS1/whitmore/pydev/seacas/rust/exodus-py/benchmarks/chunking_benchmark/merlin/chunking_benchmark.yaml
+[2025-11-23 17:17:15: WARNING] The worker arg --prefetch-multiplier 1 is recommended when running parallel tasks
+[2025-11-23 17:17:15: WARNING] The worker arg -O fair is recommended when running parallel tasks
+[2025-11-23 17:17:15: WARNING] The worker arg --prefetch-multiplier 1 is recommended when running parallel tasks
+[2025-11-23 17:17:15: WARNING] The worker arg -O fair is recommended when running parallel tasks
+[2025-11-23 17:17:15: WARNING] The worker arg --prefetch-multiplier 1 is recommended when running parallel tasks
+[2025-11-23 17:17:15: WARNING] The worker arg -O fair is recommended when running parallel tasks
+[2025-11-23 17:17:15: WARNING] The worker arg --prefetch-multiplier 1 is recommended when running parallel tasks
+[2025-11-23 17:17:15: WARNING] The worker arg -O fair is recommended when running parallel tasks
+[2025-11-23 17:17:15: WARNING] The worker arg --prefetch-multiplier 1 is recommended when running parallel tasks
+[2025-11-23 17:17:15: WARNING] The worker arg -O fair is recommended when running parallel tasks
+[2025-11-23 17:17:16: WARNING] The worker arg --prefetch-multiplier 1 is recommended when running parallel tasks
+[2025-11-23 17:17:16: WARNING] The worker arg -O fair is recommended when running parallel tasks
+[2025-11-23 17:17:16: WARNING] The worker arg --prefetch-multiplier 1 is recommended when running parallel tasks
+[2025-11-23 17:17:16: WARNING] The worker arg -O fair is recommended when running parallel tasks
+[2025-11-23 17:17:16: WARNING] The worker arg --prefetch-multiplier 1 is recommended when running parallel tasks
+[2025-11-23 17:17:16: WARNING] The worker arg -O fair is recommended when running parallel tasks
+[2025-11-23 17:17:17: WARNING] The worker arg --prefetch-multiplier 1 is recommended when running parallel tasks
+[2025-11-23 17:17:17: WARNING] The worker arg -O fair is recommended when running parallel tasks
+[2025-11-23 17:17:17: WARNING] The worker arg --prefetch-multiplier 1 is recommended when running parallel tasks
+[2025-11-23 17:17:17: WARNING] The worker arg -O fair is recommended when running parallel tasks
+[2025-11-23 17:17:17: WARNING] The worker arg --prefetch-multiplier 1 is recommended when running parallel tasks
+[2025-11-23 17:17:17: WARNING] The worker arg -O fair is recommended when running parallel tasks
+[2025-11-23 17:17:17: WARNING] The worker arg --prefetch-multiplier 1 is recommended when running parallel tasks
+[2025-11-23 17:17:17: WARNING] The worker arg -O fair is recommended when running parallel tasks
+[2025-11-23 17:17:17: WARNING] The worker arg --prefetch-multiplier 1 is recommended when running parallel tasks
+[2025-11-23 17:17:17: WARNING] The worker arg -O fair is recommended when running parallel tasks
+[2025-11-23 17:17:17: WARNING] The worker arg --prefetch-multiplier 1 is recommended when running parallel tasks
+[2025-11-23 17:17:17: WARNING] The worker arg -O fair is recommended when running parallel tasks
+[2025-11-23 17:17:17: WARNING] The worker arg --prefetch-multiplier 1 is recommended when running parallel tasks
+[2025-11-23 17:17:17: WARNING] The worker arg -O fair is recommended when running parallel tasks
+[2025-11-23 17:17:17: WARNING] The worker arg --prefetch-multiplier 1 is recommended when running parallel tasks
+[2025-11-23 17:17:17: WARNING] The worker arg -O fair is recommended when running parallel tasks
+srun -N 1 -n 1 -A pbatch -p pbatch celery -A merlin worker -l INFO --concurrency 1 -n benchmark_workers.%%h -Q '[merlin]_merlin'
+srun -N 1 -n 1 -A pbatch -p pbatch celery -A merlin worker -l INFO --concurrency 1 -n serial_workers.%%h -Q '[merlin]_merlin'
+
+srun -N 1 -n 1 -A pbatch -p pbatch celery -A merlin worker -l INFO --concurrency 1 -n benchmark_workers.%%h -Q '[merlin]_merlin'
+srun -N 1 -n 1 -A pbatch -p pbatch celery -A merlin worker -l INFO --concurrency 1 -n serial_workers.%%h -Q '[merlin]_merlin'
+
+srun -N 1 -n 1 -A pbatch -p pbatch celery -A merlin worker -l INFO --concurrency 1 -n benchmark_workers.%%h -Q '[merlin]_merlin'
+srun -N 1 -n 1 -A pbatch -p pbatch celery -A merlin worker -l INFO --concurrency 1 -n serial_workers.%%h -Q '[merlin]_merlin'
+
+srun -N 1 -n 1 -A pbatch -p pbatch celery -A merlin worker -l INFO --concurrency 1 -n benchmark_workers.%%h -Q '[merlin]_merlin'
+srun -N 1 -n 1 -A pbatch -p pbatch celery -A merlin worker -l INFO --concurrency 1 -n serial_workers.%%h -Q '[merlin]_merlin'
+
+srun -N 1 -n 1 -A pbatch -p pbatch celery -A merlin worker -l INFO --concurrency 1 -n benchmark_workers.%%h -Q '[merlin]_merlin'
+srun -N 1 -n 1 -A pbatch -p pbatch celery -A merlin worker -l INFO --concurrency 1 -n serial_workers.%%h -Q '[merlin]_merlin'
+
+srun -N 1 -n 1 -A pbatch -p pbatch celery -A merlin worker -l INFO --concurrency 1 -n benchmark_workers.%%h -Q '[merlin]_merlin'
+srun -N 1 -n 1 -A pbatch -p pbatch celery -A merlin worker -l INFO --concurrency 1 -n serial_workers.%%h -Q '[merlin]_merlin'
+
+srun -N 1 -n 1 -A pbatch -p pbatch celery -A merlin worker -l INFO --concurrency 1 -n benchmark_workers.%%h -Q '[merlin]_merlin'
+srun -N 1 -n 1 -A pbatch -p pbatch celery -A merlin worker -l INFO --concurrency 1 -n serial_workers.%%h -Q '[merlin]_merlin'
+
+srun -N 1 -n 1 -A pbatch -p pbatch celery -A merlin worker -l INFO --concurrency 1 -n benchmark_workers.%%h -Q '[merlin]_merlin'
+srun -N 1 -n 1 -A pbatch -p pbatch celery -A merlin worker -l INFO --concurrency 1 -n serial_workers.%%h -Q '[merlin]_merlin'
+

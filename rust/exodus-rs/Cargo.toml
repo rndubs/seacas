@@ -27,6 +27,12 @@ rayon = { workspace = true, optional = true }
 # Optional: serde support for types
 serde = { workspace = true, optional = true }
 
+# CLI argument parsing (for binaries)
+clap = { workspace = true, optional = true }
+
+# JSON serialization (for benchmark output)
+serde_json = { version = "1.0", optional = true }
+
 [dev-dependencies]
 # Testing
 approx = { workspace = true }
@@ -43,6 +49,8 @@ ndarray = ["dep:ndarray"]
 numpy-compat = ["ndarray"]  # NumPy-compatible layout for zero-copy transfer
 parallel = ["dep:rayon"]
 serde = ["dep:serde"]
+# CLI binary support
+cli = ["dep:clap", "dep:serde_json", "serde"]
 
 [package.metadata.docs.rs]
 all-features = true
@@ -63,3 +71,8 @@ harness = false
 [[bench]]
 name = "variables"
 harness = false
+
+[[bin]]
+name = "transform_mesh"
+path = "src/bin/transform_mesh.rs"
+required-features = ["netcdf4", "cli"]

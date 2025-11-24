@@ -1,0 +1,15 @@
+[project]
+name = "exoperform"
+version = "0.1.0"
+requires-python = ">=3.12"
+dependencies = [
+    "merlin>=1.13.0",
+    "exodus-py",  # Installed from find-links
+    "scipy",
+    "matplotlib",
+    "tqdm",
+    "numpy",
+]
+
+[tool.uv]
+find-links = ["../../../../target/wheels"]  # Relative path to wheel directory
