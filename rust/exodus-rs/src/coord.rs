@@ -930,10 +930,25 @@ impl ExodusFile<mode::Read> {
             Some(var) => {
                 let num_dim = self.metadata.num_dim.unwrap_or(3);
 
+                // Support both NC_STRING [num_dim] and NC_CHAR [num_dim, len_name] formats
+                let dims = var.dimensions();
+
+                // If 1D, likely NC_STRING
+                if dims.len() == 1 {
+                    let mut names = Vec::with_capacity(num_dim);
+                    for i in 0..num_dim {
+                        let s = var.get_string(i..i + 1)?;
+                        names.push(s.trim_end_matches('\0').trim().to_string());
+                    }
+                    return Ok(names);
+                }
+
+                // Otherwise, 2D NC_CHAR format
                 let mut names = Vec::with_capacity(num_dim);
 
                 // Read each coordinate name
                 for i in 0..num_dim {
+                    // Use u8 for compatibility with older HDF5/NetCDF files
                     let name_chars: Vec<u8> = var.get_values((i..i + 1, ..))?;
                     let name = String::from_utf8_lossy(&name_chars)
                         .trim_end_matches('\0')

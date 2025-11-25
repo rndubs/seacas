@@ -537,12 +537,13 @@ impl ExodusFile<mode::Read> {
             let mut names = Vec::with_capacity(block.num_attributes);
 
             for i in 0..block.num_attributes {
-                let bytes: Vec<i8> = var.get_values((i..i + 1, 0..33))?;
+                // Use u8 instead of i8 for compatibility with older HDF5/NetCDF files
+                let bytes: Vec<u8> = var.get_values((i..i + 1, 0..33))?;
                 let name = String::from_utf8_lossy(
                     &bytes
                         .iter()
                         .take_while(|&&b| b != 0)
-                        .map(|&b| b as u8)
+                        .copied()
                         .collect::<Vec<u8>>(),
                 )
                 .trim()

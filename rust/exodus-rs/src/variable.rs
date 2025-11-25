@@ -92,9 +92,8 @@ impl<M: FileMode> ExodusFile<M> {
                 let mut names = Vec::new();
                 for i in 0..num_vars {
                     // Read one name at a time with explicit dimension bounds (NC_CHAR)
-                    let name_chars_i8: Vec<i8> = var.get_values((i..i + 1, 0..len_string))?;
-                    // Convert i8 bytes to u8 slice for UTF-8 decoding
-                    let name_bytes: Vec<u8> = name_chars_i8.iter().map(|&b| b as u8).collect();
+                    // Use u8 instead of i8 for compatibility with older HDF5/NetCDF files
+                    let name_bytes: Vec<u8> = var.get_values((i..i + 1, 0..len_string))?;
                     // Convert to string, trimming null bytes and whitespace
                     let name = String::from_utf8_lossy(&name_bytes)
                         .trim_end_matches('\0')
@@ -199,8 +198,8 @@ impl<M: FileMode> ExodusFile<M> {
 
                 let mut names = Vec::new();
                 for i in 0..num_vars {
-                    let name_chars_i8: Vec<i8> = var.get_values((i..i + 1, 0..len_string))?;
-                    let name_bytes: Vec<u8> = name_chars_i8.iter().map(|&b| b as u8).collect();
+                    // Use u8 instead of i8 for compatibility with older HDF5/NetCDF files
+                    let name_bytes: Vec<u8> = var.get_values((i..i + 1, 0..len_string))?;
                     let name = String::from_utf8_lossy(&name_bytes)
                         .trim_end_matches('\0')
                         .trim()
