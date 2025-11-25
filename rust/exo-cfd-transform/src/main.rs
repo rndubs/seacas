@@ -381,10 +381,26 @@ fn parse_rotate(s: &str) -> Result<(String, Vec<f64>)> {
     Ok((sequence, angles?))
 }
 
-/// Extract operations from command-line args in the order they appear
-fn extract_ordered_operations(cli: &Cli) -> Result<Vec<Operation>> {
-    let args: Vec<String> = std::env::args().collect();
+/// Check if an argument matches a flag (handles both "--flag" and "--flag=value" forms)
+fn arg_matches_flag(arg: &str, flag: &str) -> bool {
+    arg == flag || arg.starts_with(&format!("{}=", flag))
+}
+
+/// Extract operations from args in the order they appear (testable version)
+fn extract_ordered_operations_from_args(
+    args: &[String],
+    cli: &Cli,
+    verbose: bool,
+) -> Result<Vec<Operation>> {
     let mut operations: Vec<(usize, Operation)> = Vec::new();
+
+    if verbose {
+        println!("DEBUG: Raw args: {:?}", args);
+        println!(
+            "DEBUG: Clap parsed - translate: {:?}, rotate: {:?}, scale_len: {:?}, mirror: {:?}",
+            cli.translate, cli.rotate, cli.scale_len, cli.mirror
+        );
+    }
 
     // Track indices for each operation type
     let mut scale_idx = 0;
@@ -393,42 +409,65 @@ fn extract_ordered_operations(cli: &Cli) -> Result<Vec<Operation>> {
     let mut rotate_idx = 0;
 
     for (pos, arg) in args.iter().enumerate() {
-        match arg.as_str() {
-            "--scale-len" => {
-                if scale_idx < cli.scale_len.len() {
-                    operations.push((pos, Operation::ScaleLen(cli.scale_len[scale_idx])));
-                    scale_idx += 1;
-                }
+        if arg_matches_flag(arg, "--scale-len") && scale_idx < cli.scale_len.len() {
+            if verbose {
+                println!(
+                    "DEBUG: Found --scale-len at pos {}, value: {}",
+                    pos, cli.scale_len[scale_idx]
+                );
             }
-            "--mirror" => {
-                if mirror_idx < cli.mirror.len() {
-                    let axis: Axis = cli.mirror[mirror_idx].parse()?;
-                    operations.push((pos, Operation::Mirror(axis)));
-                    mirror_idx += 1;
-                }
+            operations.push((pos, Operation::ScaleLen(cli.scale_len[scale_idx])));
+            scale_idx += 1;
+        } else if arg_matches_flag(arg, "--mirror") && mirror_idx < cli.mirror.len() {
+            if verbose {
+                println!(
+                    "DEBUG: Found --mirror at pos {}, value: {}",
+                    pos, cli.mirror[mirror_idx]
+                );
             }
-            "--translate" => {
-                if translate_idx < cli.translate.len() {
-                    let offset = parse_translate(&cli.translate[translate_idx])?;
-                    operations.push((pos, Operation::Translate(offset)));
-                    translate_idx += 1;
-                }
+            let axis: Axis = cli.mirror[mirror_idx].parse()?;
+            operations.push((pos, Operation::Mirror(axis)));
+            mirror_idx += 1;
+        } else if arg_matches_flag(arg, "--translate") && translate_idx < cli.translate.len() {
+            if verbose {
+                println!(
+                    "DEBUG: Found --translate at pos {}, value: {}",
+                    pos, cli.translate[translate_idx]
+                );
             }
-            "--rotate" => {
-                if rotate_idx < cli.rotate.len() {
-                    let (seq, angles) = parse_rotate(&cli.rotate[rotate_idx])?;
-                    operations.push((pos, Operation::Rotate(seq, angles)));
-                    rotate_idx += 1;
-                }
+            let offset = parse_translate(&cli.translate[translate_idx])?;
+            operations.push((pos, Operation::Translate(offset)));
+            translate_idx += 1;
+        } else if arg_matches_flag(arg, "--rotate") && rotate_idx < cli.rotate.len() {
+            if verbose {
+                println!(
+                    "DEBUG: Found --rotate at pos {}, value: {}",
+                    pos, cli.rotate[rotate_idx]
+                );
             }
-            _ => {}
+            let (seq, angles) = parse_rotate(&cli.rotate[rotate_idx])?;
+            operations.push((pos, Operation::Rotate(seq, angles)));
+            rotate_idx += 1;
         }
     }
 
     // Sort by position to preserve command-line order
     operations.sort_by_key(|(pos, _)| *pos);
 
+    if verbose {
+        println!("DEBUG: Final operation order:");
+        for (i, op) in operations.iter().enumerate() {
+            println!("  {}: pos={}, {:?}", i, op.0, op.1);
+        }
+    }
+
     Ok(operations.into_iter().map(|(_, op)| op).collect())
+}
+
+/// Extract operations from command-line args in the order they appear
+fn extract_ordered_operations(cli: &Cli, verbose: bool) -> Result<Vec<Operation>> {
+    let args: Vec<String> = std::env::args().collect();
+    extract_ordered_operations_from_args(&args, cli, verbose)
 }
 
 /// Apply a single transformation operation to the mesh
@@ -573,7 +612,7 @@ fn main() -> Result<()> {
     let output = cli.output.as_ref().unwrap();
 
     // Extract operations in command-line order
-    let operations = extract_ordered_operations(&cli)?;
+    let operations = extract_ordered_operations(&cli, cli.verbose)?;
 
     if cli.verbose {
         println!("Input:  {}", input.display());
@@ -794,5 +833,237 @@ mod tests {
         cli.preemption = Some(-0.5); // Out of range (should clamp to 0.0)
         let perf = PerformanceOptions::from_cli(&cli);
         assert!(perf.preemption.abs() < 0.001);
+    }
+
+    #[test]
+    fn test_arg_matches_flag() {
+        // Exact match (space-separated form: --flag value)
+        assert!(arg_matches_flag("--translate", "--translate"));
+        assert!(arg_matches_flag("--scale-len", "--scale-len"));
+        assert!(arg_matches_flag("--mirror", "--mirror"));
+        assert!(arg_matches_flag("--rotate", "--rotate"));
+
+        // Equals form (--flag=value)
+        assert!(arg_matches_flag("--translate=1,0,0", "--translate"));
+        assert!(arg_matches_flag("--scale-len=2.0", "--scale-len"));
+        assert!(arg_matches_flag("--mirror=x", "--mirror"));
+        assert!(arg_matches_flag("--rotate=Z,90", "--rotate"));
+
+        // Non-matches
+        assert!(!arg_matches_flag("--translatex", "--translate")); // No equals sign
+        assert!(!arg_matches_flag("--trans", "--translate")); // Partial match
+        assert!(!arg_matches_flag("-t", "--translate")); // Short form (not supported)
+        assert!(!arg_matches_flag("translate", "--translate")); // Missing dashes
+    }
+
+    /// Helper to create a test CLI with specific operations
+    fn make_test_cli(
+        translate: Vec<String>,
+        rotate: Vec<String>,
+        scale_len: Vec<f64>,
+        mirror: Vec<String>,
+    ) -> Cli {
+        Cli {
+            input: Some(PathBuf::from("input.exo")),
+            output: Some(PathBuf::from("output.exo")),
+            scale_len,
+            mirror,
+            translate,
+            rotate,
+            zero_time: false,
+            verbose: false,
+            cache_size: None,
+            preemption: None,
+            node_chunk: None,
+            element_chunk: None,
+            time_chunk: None,
+            show_perf_config: false,
+            man: false,
+        }
+    }
+
+    #[test]
+    fn test_operation_order_translate_then_rotate() {
+        // Simulate: exo-cfd-transform in.exo out.exo --translate 1,0,0 --rotate Z,90
+        let args: Vec<String> = vec![
+            "exo-cfd-transform",
+            "in.exo",
+            "out.exo",
+            "--translate",
+            "1,0,0",
+            "--rotate",
+            "Z,90",
+        ]
+        .into_iter()
+        .map(String::from)
+        .collect();
+
+        let cli = make_test_cli(
+            vec!["1,0,0".to_string()],
+            vec!["Z,90".to_string()],
+            vec![],
+            vec![],
+        );
+
+        let ops = extract_ordered_operations_from_args(&args, &cli, false).unwrap();
+
+        assert_eq!(ops.len(), 2);
+        assert!(matches!(ops[0], Operation::Translate(_)));
+        assert!(matches!(ops[1], Operation::Rotate(_, _)));
+    }
+
+    #[test]
+    fn test_operation_order_rotate_then_translate() {
+        // Simulate: exo-cfd-transform in.exo out.exo --rotate Z,90 --translate 1,0,0
+        let args: Vec<String> = vec![
+            "exo-cfd-transform",
+            "in.exo",
+            "out.exo",
+            "--rotate",
+            "Z,90",
+            "--translate",
+            "1,0,0",
+        ]
+        .into_iter()
+        .map(String::from)
+        .collect();
+
+        let cli = make_test_cli(
+            vec!["1,0,0".to_string()],
+            vec!["Z,90".to_string()],
+            vec![],
+            vec![],
+        );
+
+        let ops = extract_ordered_operations_from_args(&args, &cli, false).unwrap();
+
+        assert_eq!(ops.len(), 2);
+        assert!(matches!(ops[0], Operation::Rotate(_, _)));
+        assert!(matches!(ops[1], Operation::Translate(_)));
+    }
+
+    #[test]
+    fn test_operation_order_interleaved() {
+        // Simulate: exo-cfd-transform in.exo out.exo --translate 1,0,0 --rotate Z,90 --translate 2,0,0
+        let args: Vec<String> = vec![
+            "exo-cfd-transform",
+            "in.exo",
+            "out.exo",
+            "--translate",
+            "1,0,0",
+            "--rotate",
+            "Z,90",
+            "--translate",
+            "2,0,0",
+        ]
+        .into_iter()
+        .map(String::from)
+        .collect();
+
+        let cli = make_test_cli(
+            vec!["1,0,0".to_string(), "2,0,0".to_string()],
+            vec!["Z,90".to_string()],
+            vec![],
+            vec![],
+        );
+
+        let ops = extract_ordered_operations_from_args(&args, &cli, false).unwrap();
+
+        assert_eq!(ops.len(), 3);
+        assert!(matches!(ops[0], Operation::Translate([1.0, 0.0, 0.0])));
+        assert!(matches!(ops[1], Operation::Rotate(_, _)));
+        assert!(matches!(ops[2], Operation::Translate([2.0, 0.0, 0.0])));
+    }
+
+    #[test]
+    fn test_operation_order_all_types() {
+        // Simulate: exo-cfd-transform in.exo out.exo --mirror x --translate 1,0,0 --scale-len 2 --rotate Z,90
+        let args: Vec<String> = vec![
+            "exo-cfd-transform",
+            "in.exo",
+            "out.exo",
+            "--mirror",
+            "x",
+            "--translate",
+            "1,0,0",
+            "--scale-len",
+            "2",
+            "--rotate",
+            "Z,90",
+        ]
+        .into_iter()
+        .map(String::from)
+        .collect();
+
+        let cli = make_test_cli(
+            vec!["1,0,0".to_string()],
+            vec!["Z,90".to_string()],
+            vec![2.0],
+            vec!["x".to_string()],
+        );
+
+        let ops = extract_ordered_operations_from_args(&args, &cli, false).unwrap();
+
+        assert_eq!(ops.len(), 4);
+        assert!(matches!(ops[0], Operation::Mirror(Axis::X)));
+        assert!(matches!(ops[1], Operation::Translate(_)));
+        assert!(matches!(ops[2], Operation::ScaleLen(2.0)));
+        assert!(matches!(ops[3], Operation::Rotate(_, _)));
+    }
+
+    #[test]
+    fn test_operation_order_equals_syntax() {
+        // Simulate: exo-cfd-transform in.exo out.exo --translate=1,0,0 --rotate=Z,90
+        let args: Vec<String> = vec![
+            "exo-cfd-transform",
+            "in.exo",
+            "out.exo",
+            "--translate=1,0,0",
+            "--rotate=Z,90",
+        ]
+        .into_iter()
+        .map(String::from)
+        .collect();
+
+        let cli = make_test_cli(
+            vec!["1,0,0".to_string()],
+            vec!["Z,90".to_string()],
+            vec![],
+            vec![],
+        );
+
+        let ops = extract_ordered_operations_from_args(&args, &cli, false).unwrap();
+
+        assert_eq!(ops.len(), 2);
+        assert!(matches!(ops[0], Operation::Translate(_)));
+        assert!(matches!(ops[1], Operation::Rotate(_, _)));
+    }
+
+    #[test]
+    fn test_operation_order_equals_syntax_reversed() {
+        // Simulate: exo-cfd-transform in.exo out.exo --rotate=Z,90 --translate=1,0,0
+        let args: Vec<String> = vec![
+            "exo-cfd-transform",
+            "in.exo",
+            "out.exo",
+            "--rotate=Z,90",
+            "--translate=1,0,0",
+        ]
+        .into_iter()
+        .map(String::from)
+        .collect();
+
+        let cli = make_test_cli(
+            vec!["1,0,0".to_string()],
+            vec!["Z,90".to_string()],
+            vec![],
+            vec![],
+        );
+
+        let ops = extract_ordered_operations_from_args(&args, &cli, false).unwrap();
+
+        assert_eq!(ops.len(), 2);
+        assert!(matches!(ops[0], Operation::Rotate(_, _)));
+        assert!(matches!(ops[1], Operation::Translate(_)));
     }
 }
