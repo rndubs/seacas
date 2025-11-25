@@ -2254,3 +2254,75 @@ impl ExodusFile<mode::Read> {
         })
     }
 }
+
+// ====================
+// Append Operations (Read + Write for time values)
+// ====================
+
+impl ExodusFile<mode::Append> {
+    /// Get all time values
+    ///
+    /// # Returns
+    ///
+    /// Vector of time values
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if NetCDF read fails
+    pub fn times(&self) -> Result<Vec<f64>> {
+        match self.nc_file.variable("time_whole") {
+            Some(var) => Ok(var.get_values(..)?),
+            None => Ok(Vec::new()),
+        }
+    }
+
+    /// Get time value for a step
+    ///
+    /// # Arguments
+    ///
+    /// * `step` - Time step index (0-based)
+    ///
+    /// # Returns
+    ///
+    /// Time value
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - Time step is out of range
+    /// - NetCDF read fails
+    pub fn time(&self, step: usize) -> Result<f64> {
+        let times = self.times()?;
+        times
+            .get(step)
+            .copied()
+            .ok_or(ExodusError::InvalidTimeStep(step))
+    }
+
+    /// Write time value for a time step
+    ///
+    /// # Arguments
+    ///
+    /// * `step` - Time step index (0-based)
+    /// * `time` - Time value
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - NetCDF write fails
+    /// - time_whole variable doesn't exist in the file
+    pub fn put_time(&mut self, step: usize, time: f64) -> Result<()> {
+        // Ensure we're in data mode for writing time values
+        self.ensure_data_mode()?;
+
+        // Write the time value - the variable should already exist for append mode
+        if let Some(mut var) = self.nc_file.variable_mut("time_whole") {
+            var.put_value(time, step..step + 1)?;
+            Ok(())
+        } else {
+            Err(ExodusError::Other(
+                "time_whole variable not found in file".to_string(),
+            ))
+        }
+    }
+}
