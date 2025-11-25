@@ -37,12 +37,12 @@ type Result<T> = std::result::Result<T, TransformError>;
 #[command(author, version, about, long_about = None)]
 struct Cli {
     /// Input Exodus file
-    #[arg(value_name = "INPUT")]
-    input: PathBuf,
+    #[arg(value_name = "INPUT", required_unless_present = "man")]
+    input: Option<PathBuf>,
 
     /// Output Exodus file
-    #[arg(value_name = "OUTPUT")]
-    output: PathBuf,
+    #[arg(value_name = "OUTPUT", required_unless_present = "man")]
+    output: Option<PathBuf>,
 
     /// Scale mesh coordinates uniformly by a factor
     #[arg(long = "scale-len", value_name = "FACTOR")]
@@ -70,6 +70,10 @@ struct Cli {
     /// Print verbose output
     #[arg(short, long)]
     verbose: bool,
+
+    /// Display the man page
+    #[arg(long)]
+    man: bool,
 }
 
 /// Represents a transformation operation
@@ -280,6 +284,42 @@ fn apply_operation(
     Ok(())
 }
 
+/// Display the man page by looking for it relative to the executable
+fn show_man_page() -> Result<()> {
+    use std::process::Command;
+
+    // Get the executable path
+    let exe_path = std::env::current_exe()?;
+    let exe_dir = exe_path.parent().ok_or_else(|| {
+        TransformError::Io(std::io::Error::new(
+            std::io::ErrorKind::NotFound,
+            "Could not determine executable directory",
+        ))
+    })?;
+
+    // Look for the man page in the same directory as the executable
+    let man_page = exe_dir.join("exo-cfd-transform.1");
+
+    if !man_page.exists() {
+        eprintln!("Man page not found at: {}", man_page.display());
+        eprintln!("Please ensure exo-cfd-transform.1 is in the same directory as the executable.");
+        eprintln!("\nYou can view it with: man {}", man_page.display());
+        std::process::exit(1);
+    }
+
+    // Use the man command to display it
+    let status = Command::new("man")
+        .arg(man_page.as_os_str())
+        .status()?;
+
+    if !status.success() {
+        eprintln!("Failed to display man page");
+        std::process::exit(1);
+    }
+
+    Ok(())
+}
+
 /// Normalize time values so the first time step is zero
 fn normalize_time(file: &mut ExodusFile<exodus_rs::mode::Append>, verbose: bool) -> Result<()> {
     let times = file.times()?;
@@ -311,12 +351,22 @@ fn normalize_time(file: &mut ExodusFile<exodus_rs::mode::Append>, verbose: bool)
 fn main() -> Result<()> {
     let cli = Cli::parse();
 
+    // Handle --man flag
+    if cli.man {
+        show_man_page()?;
+        return Ok(());
+    }
+
+    // Unwrap input and output (guaranteed to be present due to required_unless_present)
+    let input = cli.input.as_ref().unwrap();
+    let output = cli.output.as_ref().unwrap();
+
     // Extract operations in command-line order
     let operations = extract_ordered_operations(&cli)?;
 
     if cli.verbose {
-        println!("Input:  {}", cli.input.display());
-        println!("Output: {}", cli.output.display());
+        println!("Input:  {}", input.display());
+        println!("Output: {}", output.display());
         println!("Operations to apply: {}", operations.len());
     }
 
@@ -324,10 +374,10 @@ fn main() -> Result<()> {
     if cli.verbose {
         println!("Copying input file to output location...");
     }
-    std::fs::copy(&cli.input, &cli.output)?;
+    std::fs::copy(input, output)?;
 
     // Open the output file in append mode for modifications
-    let mut file = ExodusFile::append(&cli.output)?;
+    let mut file = ExodusFile::append(output)?;
 
     if cli.verbose {
         let params = file.init_params()?;
