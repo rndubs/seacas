@@ -84,6 +84,11 @@ def collect_results(results_dir: str) -> Dict:
     Collect all result JSON files from the results directory.
 
     Returns a combined results dictionary compatible with plot_results.py.
+
+    Handles three types of results:
+    - Successful: Contains full timing_results with time_total
+    - Timeout: Contains status="timeout", elapsed_seconds, timeout_seconds
+    - Error: Contains status="error", exit_code, elapsed_seconds
     """
     # Find all result JSON files
     pattern = os.path.join(results_dir, "result_*.json")
@@ -98,6 +103,8 @@ def collect_results(results_dir: str) -> Dict:
     runs = []
     successful = 0
     failed = 0
+    timed_out = 0
+    errored = 0
 
     for idx, filepath in enumerate(sorted(result_files)):
         # Parse config from filename
@@ -110,7 +117,7 @@ def collect_results(results_dir: str) -> Dict:
         # Load the result JSON
         try:
             with open(filepath, 'r') as f:
-                timing_results = json.load(f)
+                result_data = json.load(f)
         except Exception as e:
             print(f"  WARNING: Failed to load {filepath}: {e}")
             runs.append({
@@ -118,6 +125,7 @@ def collect_results(results_dir: str) -> Dict:
                 "param_varied": determine_varied_param(config, BASELINE_CONFIG),
                 "config": config,
                 "success": False,
+                "status": "load_error",
                 "backend": "python",
                 "error": str(e),
             })
@@ -127,19 +135,60 @@ def collect_results(results_dir: str) -> Dict:
         # Determine which parameter was varied
         param_varied = determine_varied_param(config, BASELINE_CONFIG)
 
-        # Build run data
-        run_data = {
-            "run_id": idx,
-            "param_varied": param_varied,
-            "config": config,
-            "success": True,
-            "backend": "python",
-            "timing_results": timing_results,
-        }
+        # Check if this is a timeout or error result
+        status = result_data.get("status")
 
-        runs.append(run_data)
-        successful += 1
-        print(f"  Loaded: {os.path.basename(filepath)} ({param_varied})")
+        if status == "timeout":
+            # Timeout case - benchmark exceeded time limit
+            run_data = {
+                "run_id": idx,
+                "param_varied": param_varied,
+                "config": config,
+                "success": False,
+                "status": "timeout",
+                "backend": "python",
+                "timeout_seconds": result_data.get("timeout_seconds"),
+                "elapsed_seconds": result_data.get("elapsed_seconds"),
+                "error": result_data.get("error", "Benchmark timed out"),
+            }
+            runs.append(run_data)
+            timed_out += 1
+            print(f"  TIMEOUT: {os.path.basename(filepath)} ({param_varied}) - "
+                  f"exceeded {result_data.get('timeout_seconds')}s limit")
+
+        elif status == "error":
+            # Error case - benchmark failed with non-zero exit code
+            run_data = {
+                "run_id": idx,
+                "param_varied": param_varied,
+                "config": config,
+                "success": False,
+                "status": "error",
+                "backend": "python",
+                "exit_code": result_data.get("exit_code"),
+                "elapsed_seconds": result_data.get("elapsed_seconds"),
+                "error": result_data.get("error", "Benchmark failed"),
+            }
+            runs.append(run_data)
+            errored += 1
+            print(f"  ERROR: {os.path.basename(filepath)} ({param_varied}) - "
+                  f"exit code {result_data.get('exit_code')}")
+
+        else:
+            # Success case - full timing results available
+            run_data = {
+                "run_id": idx,
+                "param_varied": param_varied,
+                "config": config,
+                "success": True,
+                "status": "completed",
+                "backend": "python",
+                "timing_results": result_data,
+            }
+            runs.append(run_data)
+            successful += 1
+            total_time = result_data.get("time_total", 0)
+            print(f"  Loaded: {os.path.basename(filepath)} ({param_varied}) - {total_time:.1f}s")
 
     # Build the combined results structure
     results = {
@@ -147,7 +196,9 @@ def collect_results(results_dir: str) -> Dict:
             "timestamp": datetime.datetime.now().isoformat(),
             "total_runs": len(runs),
             "successful_runs": successful,
-            "failed_runs": failed,
+            "timed_out_runs": timed_out,
+            "errored_runs": errored,
+            "failed_runs": failed,  # Load errors
             "backends": ["python"],
             "source": "merlin_workflow",
         },
@@ -165,17 +216,49 @@ def analyze_results(results: Dict) -> Dict:
     """
     Analyze results to find optimal configurations.
     This mirrors the analysis from run_benchmark_suite.py.
+
+    Handles timeout/error cases by:
+    - Only analyzing successful (completed) runs for timing statistics
+    - Tracking which configurations timed out (these are very slow)
+    - Including timeout info in recommendations
     """
     analysis = {
         "by_backend": {},
         "comparison": {},
         "recommendations": [],
+        "timeout_configurations": [],
+        "error_configurations": [],
     }
 
     backend = "python"
     backend_runs = [r for r in results["runs"] if r["success"]]
+    timeout_runs = [r for r in results["runs"] if r.get("status") == "timeout"]
+    error_runs = [r for r in results["runs"] if r.get("status") == "error"]
+
+    # Track timeout configurations
+    for run in timeout_runs:
+        analysis["timeout_configurations"].append({
+            "config": run["config"],
+            "param_varied": run["param_varied"],
+            "timeout_seconds": run.get("timeout_seconds"),
+            "elapsed_seconds": run.get("elapsed_seconds"),
+        })
+
+    # Track error configurations
+    for run in error_runs:
+        analysis["error_configurations"].append({
+            "config": run["config"],
+            "param_varied": run["param_varied"],
+            "exit_code": run.get("exit_code"),
+            "error": run.get("error"),
+        })
 
     if not backend_runs:
+        if timeout_runs:
+            analysis["recommendations"].append(
+                f"WARNING: All {len(timeout_runs)} benchmark runs timed out. "
+                "Consider increasing the timeout limit or using faster configurations."
+            )
         return analysis
 
     backend_analysis = {
@@ -200,34 +283,44 @@ def analyze_results(results: Dict) -> Dict:
 
     for param_name in PARAM_RANGES.keys():
         param_runs = [r for r in backend_runs if r["param_varied"] == param_name]
-
-        if not param_runs or baseline_time is None:
-            continue
+        param_timeouts = [r for r in timeout_runs if r["param_varied"] == param_name]
 
         param_analysis = {
             "values": [],
+            "timed_out_values": [],
             "best_value": None,
             "best_time": None,
             "improvement_vs_baseline": None,
         }
 
+        # Track successful runs
         for run in param_runs:
             value = run["config"][param_name]
             total_time = run["timing_results"]["time_total"]
             param_analysis["values"].append({
                 "value": value,
                 "total_time": total_time,
-                "speedup_vs_baseline": baseline_time / total_time if total_time > 0 else 0,
+                "speedup_vs_baseline": baseline_time / total_time if baseline_time and total_time > 0 else 0,
             })
 
-        # Find best value for this parameter
+        # Track timed out values (these are very slow configurations)
+        for run in param_timeouts:
+            value = run["config"][param_name]
+            param_analysis["timed_out_values"].append({
+                "value": value,
+                "timeout_seconds": run.get("timeout_seconds"),
+                "status": "did_not_finish",
+            })
+
+        # Find best value for this parameter (only from successful runs)
         if param_analysis["values"]:
             best = min(param_analysis["values"], key=lambda x: x["total_time"])
             param_analysis["best_value"] = best["value"]
             param_analysis["best_time"] = best["total_time"]
-            param_analysis["improvement_vs_baseline"] = (
-                (baseline_time - best["total_time"]) / baseline_time * 100
-            )
+            if baseline_time:
+                param_analysis["improvement_vs_baseline"] = (
+                    (baseline_time - best["total_time"]) / baseline_time * 100
+                )
 
         backend_analysis["by_parameter"][param_name] = param_analysis
 
@@ -235,6 +328,8 @@ def analyze_results(results: Dict) -> Dict:
 
     # Generate recommendations
     recommendations = []
+
+    # Recommendations based on best parameters
     for param_name, param_data in backend_analysis.get("by_parameter", {}).items():
         improvement = param_data.get("improvement_vs_baseline")
         if improvement and improvement > 5:
@@ -242,6 +337,25 @@ def analyze_results(results: Dict) -> Dict:
                 f"Consider {param_name}={param_data['best_value']} "
                 f"({improvement:.1f}% improvement)"
             )
+
+        # Warn about timed out configurations
+        timed_out = param_data.get("timed_out_values", [])
+        if timed_out:
+            timeout_values = [str(v["value"]) for v in timed_out]
+            recommendations.append(
+                f"AVOID {param_name} values [{', '.join(timeout_values)}] - "
+                f"these configurations exceeded the time limit"
+            )
+
+    # Summary of timeout/error runs
+    if timeout_runs:
+        recommendations.append(
+            f"Note: {len(timeout_runs)} configuration(s) timed out and were excluded from analysis"
+        )
+    if error_runs:
+        recommendations.append(
+            f"Note: {len(error_runs)} configuration(s) failed with errors"
+        )
 
     analysis["recommendations"] = recommendations
 
@@ -287,7 +401,27 @@ def main():
     print(f"\nCombined results written to: {args.output}")
     print(f"  Total runs: {results['metadata']['total_runs']}")
     print(f"  Successful: {results['metadata']['successful_runs']}")
-    print(f"  Failed: {results['metadata']['failed_runs']}")
+    print(f"  Timed out: {results['metadata']['timed_out_runs']}")
+    print(f"  Errored: {results['metadata']['errored_runs']}")
+    print(f"  Load errors: {results['metadata']['failed_runs']}")
+
+    # Print timeout details if any
+    timeout_configs = results.get("analysis", {}).get("timeout_configurations", [])
+    if timeout_configs:
+        print(f"\nTimed out configurations (exceeded time limit, marked as DNF):")
+        for tc in timeout_configs:
+            config = tc["config"]
+            print(f"  - {tc['param_varied']}: cache={config['cache_mb']}MB, "
+                  f"node={config['node_chunk_size']}, elem={config['element_chunk_size']}, "
+                  f"time={config['time_chunk_size']}, preempt={config['preemption']}")
+
+    # Print error details if any
+    error_configs = results.get("analysis", {}).get("error_configurations", [])
+    if error_configs:
+        print(f"\nErrored configurations:")
+        for ec in error_configs:
+            config = ec["config"]
+            print(f"  - {ec['param_varied']}: exit_code={ec.get('exit_code')} - {ec.get('error', 'Unknown error')}")
 
     # Print summary
     best = results.get("analysis", {}).get("by_backend", {}).get("python", {}).get("best_overall")

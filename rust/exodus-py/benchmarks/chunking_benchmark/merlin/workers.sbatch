@@ -1,7 +1,7 @@
 #!/bin/bash
-#SBATCH -N 1
+#SBATCH -N 16
 #SBATCH -p pbatch
-#SBATCH -t 04:00:00
+#SBATCH -t 12:00:00
 #SBATCH -J merlin_workers
 #SBATCH -o merlin_workers_%j.out
 

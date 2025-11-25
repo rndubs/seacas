@@ -51,7 +51,7 @@ def load_results(results_file: str) -> dict:
         return json.load(f)
 
 
-def get_param_data(results: dict, param_name: str, backend: Optional[str] = None) -> tuple:
+def get_param_data(results: dict, param_name: str, backend: Optional[str] = None, include_timeouts: bool = False) -> tuple:
     """
     Extract data for a specific parameter.
 
@@ -59,8 +59,9 @@ def get_param_data(results: dict, param_name: str, backend: Optional[str] = None
         results: Benchmark results dict
         param_name: Parameter name to extract
         backend: Filter by backend ("python", "rust", or None for all)
+        include_timeouts: If True, include timed-out runs
 
-    Returns (values, total_times, read_times, transform_times, write_times, memory)
+    Returns (values, total_times, read_times, transform_times, write_times, memory, timed_out)
     """
     baseline = results.get("baseline", {})
     runs = results.get("runs", [])
@@ -69,38 +70,81 @@ def get_param_data(results: dict, param_name: str, backend: Optional[str] = None
     if backend:
         runs = [r for r in runs if r.get("backend", "python") == backend]
 
+    # Get successful runs
+    successful_runs = [r for r in runs if r.get("success") and "timing_results" in r]
+
+    # Get timed-out runs if requested
+    timed_out_runs = []
+    if include_timeouts:
+        timed_out_runs = [r for r in runs if r.get("status") == "timeout"]
+
+    all_runs = successful_runs + timed_out_runs
+
+    if not all_runs:
+        return [], [], [], [], [], [], []
+
+    # Filter to runs where all OTHER parameters are at baseline values
+    # This handles factorial design data where all parameters vary
+    filtered_runs = []
+    for run in all_runs:
+        config = run["config"]
+        # Check if all parameters except param_name match baseline
+        matches_baseline = True
+        for key, baseline_value in baseline.items():
+            if key != param_name and config.get(key) != baseline_value:
+                matches_baseline = False
+                break
+        if matches_baseline:
+            filtered_runs.append(run)
+
+    # If filtering by baseline yields no data, use all runs
+    # (useful for factorial designs where we still want to see trends)
+    runs_to_use = filtered_runs if filtered_runs else all_runs
+
+    # Group runs by parameter value
+    param_groups = {}
+    for run in runs_to_use:
+        param_value = run["config"].get(param_name)
+        if param_value is not None:
+            if param_value not in param_groups:
+                param_groups[param_value] = []
+            param_groups[param_value].append(run)
+
+    if not param_groups:
+        return [], [], [], [], [], [], []
+
+    # For each parameter value, get the best run (minimum total time)
     values = []
     total_times = []
     read_times = []
     transform_times = []
     write_times = []
     memory = []
+    timed_out = []
 
-    # Get baseline data
-    baseline_runs = [r for r in runs if r.get("param_varied") == "baseline" and r.get("success")]
-    if baseline_runs:
-        br = baseline_runs[0]
-        baseline_value = baseline.get(param_name)
-        if baseline_value is not None and "timing_results" in br:
-            values.append(baseline_value)
-            total_times.append(br["timing_results"]["time_total"])
-            read_times.append(br["timing_results"]["time_total_read"])
-            transform_times.append(br["timing_results"]["time_total_transform"])
-            write_times.append(br["timing_results"]["time_total_write"])
-            memory.append(br["timing_results"]["peak_memory_mb"])
+    for param_value in sorted(param_groups.keys()):
+        group_runs = param_groups[param_value]
+        # Find run with minimum total time (or elapsed time for timeouts)
+        best_run = min(group_runs, key=lambda x: x.get("timing_results", {}).get("time_total", x.get("elapsed_seconds", float('inf'))))
 
-    # Get varied parameter data
-    param_runs = [r for r in runs if r.get("param_varied") == param_name and r.get("success")]
-    for run in sorted(param_runs, key=lambda x: x["config"].get(param_name, 0)):
-        if "timing_results" in run:
-            values.append(run["config"][param_name])
-            total_times.append(run["timing_results"]["time_total"])
-            read_times.append(run["timing_results"]["time_total_read"])
-            transform_times.append(run["timing_results"]["time_total_transform"])
-            write_times.append(run["timing_results"]["time_total_write"])
-            memory.append(run["timing_results"]["peak_memory_mb"])
+        values.append(param_value)
+        is_timeout = best_run.get("status") == "timeout"
+        timed_out.append(is_timeout)
 
-    return values, total_times, read_times, transform_times, write_times, memory
+        if is_timeout:
+            total_times.append(best_run.get("elapsed_seconds", best_run.get("timeout_seconds", 600)))
+            read_times.append(0)
+            transform_times.append(0)
+            write_times.append(0)
+            memory.append(0)
+        else:
+            total_times.append(best_run["timing_results"]["time_total"])
+            read_times.append(best_run["timing_results"]["time_total_read"])
+            transform_times.append(best_run["timing_results"]["time_total_transform"])
+            write_times.append(best_run["timing_results"]["time_total_write"])
+            memory.append(best_run["timing_results"]["peak_memory_mb"])
+
+    return values, total_times, read_times, transform_times, write_times, memory, timed_out
 
 
 def get_backends(results: dict) -> List[str]:
@@ -112,9 +156,18 @@ def get_backends(results: dict) -> List[str]:
     return backends if backends else ["python"]
 
 
+def get_timeout_threshold(results: dict) -> float:
+    """Get the timeout threshold used in the benchmark."""
+    runs = results.get("runs", [])
+    for run in runs:
+        if run.get("timeout_seconds"):
+            return run["timeout_seconds"]
+    return 600  # Default timeout
+
+
 def plot_total_runtime_by_param(results: dict, param_name: str, output_dir: str):
     """Create a line plot of total runtime vs parameter value."""
-    values, total_times, _, _, _, _ = get_param_data(results, param_name)
+    values, total_times, _, _, _, _, _ = get_param_data(results, param_name)
 
     if not values:
         print(f"  No data for {param_name}, skipping...")
@@ -155,7 +208,7 @@ def plot_total_runtime_by_param(results: dict, param_name: str, output_dir: str)
 
 def plot_time_breakdown_by_param(results: dict, param_name: str, output_dir: str):
     """Create a stacked bar chart showing read/transform/write breakdown."""
-    values, _, read_times, transform_times, write_times, _ = get_param_data(results, param_name)
+    values, _, read_times, transform_times, write_times, _, _ = get_param_data(results, param_name)
 
     if not values:
         print(f"  No data for {param_name}, skipping...")
@@ -191,7 +244,7 @@ def plot_time_breakdown_by_param(results: dict, param_name: str, output_dir: str
 
 def plot_memory_by_param(results: dict, param_name: str, output_dir: str):
     """Create a bar chart of peak memory usage vs parameter value."""
-    values, _, _, _, _, memory = get_param_data(results, param_name)
+    values, _, _, _, _, memory, _ = get_param_data(results, param_name)
 
     if not values:
         print(f"  No data for {param_name}, skipping...")
@@ -229,26 +282,42 @@ def plot_all_params_comparison(results: dict, output_dir: str):
     axes = axes.flatten()
 
     param_names = list(PARAM_LABELS.keys())
+    timeout_threshold = get_timeout_threshold(results)
 
     for idx, param_name in enumerate(param_names):
         ax = axes[idx]
-        values, total_times, _, _, _, _ = get_param_data(results, param_name)
+        values, total_times, _, _, _, _, timed_out = get_param_data(results, param_name, include_timeouts=True)
 
         if not values:
             ax.text(0.5, 0.5, 'No data', ha='center', va='center')
             ax.set_title(PARAM_LABELS.get(param_name, param_name))
             continue
 
-        ax.plot(values, total_times, 'o-', color=COLORS['total'], linewidth=2, markersize=6)
+        # Separate successful and timed-out points
+        success_vals = [v for v, to in zip(values, timed_out) if not to]
+        success_times = [t for t, to in zip(total_times, timed_out) if not to]
+        timeout_vals = [v for v, to in zip(values, timed_out) if to]
+        timeout_times = [t for t, to in zip(total_times, timed_out) if to]
 
-        # Highlight min
-        min_idx = np.argmin(total_times)
-        ax.scatter([values[min_idx]], [total_times[min_idx]], color='green', s=100, zorder=5)
+        # Plot successful runs
+        if success_vals:
+            ax.plot(success_vals, success_times, 'o-', color=COLORS['total'], linewidth=2, markersize=6, label='Completed')
+            # Highlight min among successful runs
+            min_idx = np.argmin(success_times)
+            ax.scatter([success_vals[min_idx]], [success_times[min_idx]], color='green', s=100, zorder=5)
+
+        # Plot timed-out runs
+        if timeout_vals:
+            ax.scatter(timeout_vals, timeout_times, marker='x', color='red', s=100, linewidth=2, zorder=5, label='Timeout')
+
+        # Add timeout threshold line
+        ax.axhline(y=timeout_threshold, color='red', linestyle='--', alpha=0.5, linewidth=1, label=f'Timeout ({timeout_threshold}s)')
 
         ax.set_xlabel(PARAM_LABELS.get(param_name, param_name), fontsize=10)
         ax.set_ylabel('Runtime (s)', fontsize=10)
         ax.set_title(PARAM_LABELS.get(param_name, param_name), fontsize=11)
         ax.grid(True, alpha=0.3)
+        ax.legend(fontsize=8, loc='best')
 
     # Hide unused subplot
     if len(param_names) < len(axes):
@@ -521,7 +590,7 @@ def plot_backend_comparison_by_param(results: dict, param_name: str, output_dir:
     fig, ax = plt.subplots(figsize=(10, 6))
 
     for backend in backends:
-        values, total_times, _, _, _, _ = get_param_data(results, param_name, backend=backend)
+        values, total_times, _, _, _, _, _ = get_param_data(results, param_name, backend=backend)
         if values:
             color = COLORS.get(backend, COLORS['total'])
             ax.plot(values, total_times, 'o-', color=color, linewidth=2,
@@ -662,6 +731,243 @@ def generate_summary_report(results: dict, output_dir: str):
     print("\n" + report_text)
 
 
+def plot_interactive_all_params(results: dict, output_dir: str):
+    """
+    Create an interactive HTML plot with all parameters showing all runs (including timeouts).
+    Hover over points to see full configuration details.
+    """
+    try:
+        import plotly.graph_objects as go
+        from plotly.subplots import make_subplots
+    except ImportError:
+        print("  Warning: plotly not installed. Install with: pip install plotly")
+        print("  Falling back to static matplotlib plot...")
+        plot_interactive_all_params_matplotlib(results, output_dir)
+        return
+
+    param_names = list(PARAM_LABELS.keys())
+    timeout_threshold = get_timeout_threshold(results)
+
+    # Store all run data
+    runs = results.get("runs", [])
+    all_runs = [r for r in runs if r.get("success") or r.get("status") == "timeout"]
+
+    # Create subplots (2 rows, 3 columns)
+    fig = make_subplots(
+        rows=2, cols=3,
+        subplot_titles=[PARAM_LABELS.get(p, p) for p in param_names],
+        vertical_spacing=0.12,
+        horizontal_spacing=0.08
+    )
+
+    # Add traces for each parameter
+    for idx, param_name in enumerate(param_names):
+        row = idx // 3 + 1
+        col = idx % 3 + 1
+
+        # Get all runs and separate by status
+        success_runs = []
+        timeout_runs = []
+
+        for run in all_runs:
+            param_val = run["config"].get(param_name)
+            if param_val is not None:
+                is_timeout = run.get("status") == "timeout"
+                time_val = run.get("elapsed_seconds", 0) if is_timeout else run.get("timing_results", {}).get("time_total", 0)
+
+                # Build hover text
+                config = run["config"]
+                hover_text = f"<b>Runtime: {time_val:.1f}s</b>"
+                if is_timeout:
+                    hover_text += " (TIMEOUT)"
+                hover_text += "<br><br><b>Configuration:</b><br>"
+                for key, value in config.items():
+                    label = PARAM_LABELS.get(key, key)
+                    hover_text += f"  {label}: {value}<br>"
+
+                # Add timing breakdown if available
+                if not is_timeout and 'timing_results' in run:
+                    tr = run['timing_results']
+                    hover_text += f"<br><b>Breakdown:</b><br>"
+                    hover_text += f"  Read: {tr.get('time_total_read', 0):.1f}s<br>"
+                    hover_text += f"  Transform: {tr.get('time_total_transform', 0):.1f}s<br>"
+                    hover_text += f"  Write: {tr.get('time_total_write', 0):.1f}s<br>"
+                    hover_text += f"  Memory: {tr.get('peak_memory_mb', 0):.0f} MB"
+
+                run_data = {
+                    'param_value': param_val,
+                    'time': time_val,
+                    'hover_text': hover_text
+                }
+
+                if is_timeout:
+                    timeout_runs.append(run_data)
+                else:
+                    success_runs.append(run_data)
+
+        # Add successful runs scatter
+        if success_runs:
+            x_vals = [r['param_value'] for r in success_runs]
+            y_vals = [r['time'] for r in success_runs]
+            hover_texts = [r['hover_text'] for r in success_runs]
+
+            fig.add_trace(
+                go.Scatter(
+                    x=x_vals,
+                    y=y_vals,
+                    mode='markers',
+                    name='Completed',
+                    marker=dict(size=8, color='#9b59b6', opacity=0.7),
+                    hovertext=hover_texts,
+                    hoverinfo='text',
+                    showlegend=(idx == 0)  # Only show legend for first subplot
+                ),
+                row=row, col=col
+            )
+
+        # Add timed-out runs scatter
+        if timeout_runs:
+            x_vals = [r['param_value'] for r in timeout_runs]
+            y_vals = [r['time'] for r in timeout_runs]
+            hover_texts = [r['hover_text'] for r in timeout_runs]
+
+            fig.add_trace(
+                go.Scatter(
+                    x=x_vals,
+                    y=y_vals,
+                    mode='markers',
+                    name='Timeout',
+                    marker=dict(size=12, color='red', symbol='x', line=dict(width=2)),
+                    hovertext=hover_texts,
+                    hoverinfo='text',
+                    showlegend=(idx == 0)
+                ),
+                row=row, col=col
+            )
+
+        # Add timeout threshold line
+        if success_runs or timeout_runs:
+            all_x = [r['param_value'] for r in success_runs + timeout_runs]
+            x_range = [min(all_x), max(all_x)]
+
+            fig.add_trace(
+                go.Scatter(
+                    x=x_range,
+                    y=[timeout_threshold, timeout_threshold],
+                    mode='lines',
+                    name=f'Timeout ({timeout_threshold}s)',
+                    line=dict(color='red', dash='dash', width=2),
+                    hoverinfo='skip',
+                    showlegend=(idx == 0)
+                ),
+                row=row, col=col
+            )
+
+        # Update axes labels
+        fig.update_xaxes(title_text=PARAM_LABELS.get(param_name, param_name), row=row, col=col)
+        fig.update_yaxes(title_text='Runtime (s)', row=row, col=col)
+
+    # Update layout
+    fig.update_layout(
+        title_text='<b>Interactive Parameter Explorer</b><br><sub>Hover over points for configuration details</sub>',
+        title_x=0.5,
+        height=900,
+        width=1600,
+        showlegend=True,
+        legend=dict(
+            orientation="h",
+            yanchor="bottom",
+            y=1.02,
+            xanchor="right",
+            x=1
+        ),
+        hovermode='closest'
+    )
+
+    # Save as HTML
+    output_file = os.path.join(output_dir, 'interactive_all_params.html')
+    fig.write_html(output_file)
+    print(f"  Saved: {output_file}")
+    print(f"  Open in browser to interact: file://{os.path.abspath(output_file)}")
+
+
+def plot_interactive_all_params_matplotlib(results: dict, output_dir: str):
+    """
+    Fallback: Create a static matplotlib plot when plotly is not available.
+    """
+    param_names = list(PARAM_LABELS.keys())
+    timeout_threshold = get_timeout_threshold(results)
+
+    fig, axes = plt.subplots(2, 3, figsize=(18, 12))
+    axes = axes.flatten()
+
+    # Store all run data
+    runs = results.get("runs", [])
+    all_runs = [r for r in runs if r.get("success") or r.get("status") == "timeout"]
+
+    for idx, param_name in enumerate(param_names):
+        ax = axes[idx]
+
+        # Get all runs and separate by status
+        param_runs = []
+        for run in all_runs:
+            param_val = run["config"].get(param_name)
+            if param_val is not None:
+                is_timeout = run.get("status") == "timeout"
+                time_val = run.get("elapsed_seconds", 0) if is_timeout else run.get("timing_results", {}).get("time_total", 0)
+                param_runs.append({
+                    'param_value': param_val,
+                    'time': time_val,
+                    'is_timeout': is_timeout
+                })
+
+        if not param_runs:
+            ax.text(0.5, 0.5, 'No data', ha='center', va='center')
+            ax.set_title(PARAM_LABELS.get(param_name, param_name))
+            continue
+
+        # Separate successful and timed-out
+        success_runs = [r for r in param_runs if not r['is_timeout']]
+        timeout_runs = [r for r in param_runs if r['is_timeout']]
+
+        # Plot successful runs
+        if success_runs:
+            x_vals = [r['param_value'] for r in success_runs]
+            y_vals = [r['time'] for r in success_runs]
+            ax.scatter(x_vals, y_vals, c=COLORS['total'], s=50, alpha=0.7,
+                      marker='o', label='Completed')
+
+        # Plot timed-out runs
+        if timeout_runs:
+            x_vals = [r['param_value'] for r in timeout_runs]
+            y_vals = [r['time'] for r in timeout_runs]
+            ax.scatter(x_vals, y_vals, c='red', s=100, alpha=0.7,
+                      marker='x', linewidth=2, label='Timeout')
+
+        # Add timeout threshold line
+        ax.axhline(y=timeout_threshold, color='red', linestyle='--', alpha=0.5,
+                  linewidth=1.5, label=f'Timeout ({timeout_threshold}s)')
+
+        ax.set_xlabel(PARAM_LABELS.get(param_name, param_name), fontsize=11)
+        ax.set_ylabel('Runtime (s)', fontsize=11)
+        ax.set_title(PARAM_LABELS.get(param_name, param_name), fontsize=12, fontweight='bold')
+        ax.grid(True, alpha=0.3)
+        ax.legend(fontsize=9, loc='best')
+
+    # Hide unused subplot
+    if len(param_names) < len(axes):
+        axes[-1].axis('off')
+
+    fig.suptitle('All Parameters (Static - install plotly for interactivity)',
+                fontsize=15, fontweight='bold', y=0.995)
+    plt.tight_layout()
+
+    output_file = os.path.join(output_dir, 'interactive_all_params.png')
+    plt.savefig(output_file, dpi=150, bbox_inches='tight')
+    print(f"  Saved: {output_file}")
+    plt.close()
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Generate plots from HDF5 chunking benchmark results"
@@ -717,6 +1023,10 @@ def main():
     plot_speedup_comparison(results, args.output_dir)
     plot_time_breakdown_summary(results, args.output_dir)
     plot_runtime_vs_memory(results, args.output_dir)
+
+    # Generate interactive plot with all runs
+    print("\nInteractive plot:")
+    plot_interactive_all_params(results, args.output_dir)
 
     # Generate Python vs Rust comparison plots (if both backends present)
     if len(backends) > 1:

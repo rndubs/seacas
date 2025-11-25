@@ -30,20 +30,23 @@ from typing import List, Dict, Tuple
 
 # Default baseline configuration (tuned for RZHound with 256GB RAM)
 BASELINE_CONFIG = {
-    "CACHE_MB": 256,
-    "NODE_CHUNK_SIZE": 25000,
-    "ELEMENT_CHUNK_SIZE": 25000,
-    "TIME_CHUNK_SIZE": 100,
-    "PREEMPTION": 0.75,
+    "CACHE_MB": 64,
+    "NODE_CHUNK_SIZE": 100_000,
+    "ELEMENT_CHUNK_SIZE": 50_000,
+    "TIME_CHUNK_SIZE": 10,
+    "PREEMPTION": 1.0,
 }
 
 # Full parameter sweep ranges for RZHound (256GB RAM per node)
+# Cache-aware ranges targeting L2 cache (2 MiB) and L3 cache (105 MiB)
+# At 10 timesteps: 50k elements = ~2 MiB (L2-sized chunk)
+# Trimmed to focus on cache-friendly sizes: 432 configs (full factorial)
 PARAM_RANGES = {
-    "CACHE_MB": [64, 128, 256, 512, 1024, 2048],
-    "NODE_CHUNK_SIZE": [10000, 25000, 50000, 75000, 100000],
-    "ELEMENT_CHUNK_SIZE": [10000, 25000, 50000, 75000],
-    "TIME_CHUNK_SIZE": [10, 50, 100, 250, 500],
-    "PREEMPTION": [0.0, 0.25, 0.5, 0.75, 1.0],
+    "CACHE_MB": [32, 64, 96, 128],                           # Stay under L3 (105 MiB)
+    "NODE_CHUNK_SIZE": [50_000, 75_000, 100_000],           # 2-4 MiB at 10 timesteps
+    "ELEMENT_CHUNK_SIZE": [25_000, 37_500, 50_000, 75_000], # 1-3 MiB at 10 timesteps
+    "TIME_CHUNK_SIZE": [5, 10, 20],                        # Avoid extremes
+    "PREEMPTION": [0.0, 0.5, 1.0],                          # Test extremes + middle
 }
 
 # Quick test ranges (reduced for faster testing)
@@ -83,18 +86,36 @@ def generate_one_at_a_time(param_ranges: Dict, baseline: Dict) -> List[Dict]:
     return configs
 
 
-def generate_full_factorial(param_ranges: Dict) -> List[Dict]:
+def generate_full_factorial(param_ranges: Dict, baseline: Dict = None) -> List[Dict]:
     """
     Generate all combinations of parameters (full factorial design).
+
+    If baseline is provided, ensures all one-at-a-time variations are included
+    by augmenting the parameter ranges with baseline values before generating
+    the factorial design.
 
     WARNING: This can generate many configurations!
     For the full parameter ranges: 6 * 5 * 4 * 5 * 5 = 3000 configurations
     """
     import itertools
 
+    # Augment parameter ranges to include baseline values
+    # This ensures one-at-a-time slices will be in the factorial design
+    augmented_ranges = {}
+    if baseline:
+        for param_name, values in param_ranges.items():
+            baseline_val = baseline.get(param_name)
+            # Add baseline value to range if not already present
+            if baseline_val is not None and baseline_val not in values:
+                augmented_ranges[param_name] = sorted(values + [baseline_val])
+            else:
+                augmented_ranges[param_name] = values
+    else:
+        augmented_ranges = param_ranges
+
     # Get all parameter names and their values
-    param_names = list(param_ranges.keys())
-    param_values = [param_ranges[name] for name in param_names]
+    param_names = list(augmented_ranges.keys())
+    param_values = [augmented_ranges[name] for name in param_names]
 
     configs = []
     for combo in itertools.product(*param_values):
@@ -138,7 +159,8 @@ def get_custom_generator(env, **kwargs):
     # Generate configurations
     if full:
         print("pgen: Generating FULL FACTORIAL design (all combinations)")
-        configs = generate_full_factorial(param_ranges)
+        print("pgen: Including baseline values to ensure one-at-a-time slices are present")
+        configs = generate_full_factorial(param_ranges, BASELINE_CONFIG)
     else:
         print("pgen: Generating ONE-AT-A-TIME design (vary one parameter at a time)")
         configs = generate_one_at_a_time(param_ranges, BASELINE_CONFIG)
@@ -191,6 +213,8 @@ def write_csv(configs: List[Dict], outfile: str):
 
 
 def main():
+    import os
+
     parser = argparse.ArgumentParser(
         description="Generate parameter configurations for HDF5 chunking benchmark"
     )
@@ -218,8 +242,12 @@ def main():
 
     args = parser.parse_args()
 
+    # Check environment variables (set by run.sh) if CLI flags not provided
+    quick = args.quick or os.environ.get('PGEN_QUICK', '').lower() == 'true'
+    full = args.full or os.environ.get('PGEN_FULL', '').lower() == 'true'
+
     # Select parameter ranges
-    if args.quick:
+    if quick:
         param_ranges = QUICK_PARAM_RANGES
         print("Using QUICK parameter ranges (reduced set)")
     else:
@@ -227,9 +255,10 @@ def main():
         print("Using FULL parameter ranges")
 
     # Generate configurations
-    if args.full:
+    if full:
         print("Generating FULL FACTORIAL design (all combinations)")
-        configs = generate_full_factorial(param_ranges)
+        print("Including baseline values to ensure one-at-a-time slices are present")
+        configs = generate_full_factorial(param_ranges, BASELINE_CONFIG)
     else:
         print("Generating ONE-AT-A-TIME design (vary one parameter at a time)")
         configs = generate_one_at_a_time(param_ranges, BASELINE_CONFIG)
