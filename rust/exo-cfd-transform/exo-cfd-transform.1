@@ -1,0 +1,260 @@
+.TH EXO-CFD-TRANSFORM 1 "November 2025" "exo-cfd-transform 0.1.0" "User Commands"
+.SH NAME
+exo-cfd-transform \- transform Exodus II mesh files with geometric operations
+.SH SYNOPSIS
+.B exo-cfd-transform
+[\fIOPTIONS\fR] \fIINPUT\fR \fIOUTPUT\fR
+.SH DESCRIPTION
+.B exo-cfd-transform
+applies geometric transformations to Exodus II finite element mesh files.
+It reads an input mesh, applies a sequence of transformations, and writes
+the result to a new output file. The original input file is never modified.
+.PP
+Transformations include translation, rotation (using Euler angles), uniform
+scaling, and mirroring about coordinate axes. Multiple transformations can
+be chained together and are applied in the exact order they appear on the
+command line.
+.SH ARGUMENTS
+.TP
+.I INPUT
+Path to the input Exodus II file (.exo). This file must exist and be a valid
+Exodus II format file.
+.TP
+.I OUTPUT
+Path for the output Exodus II file. If this file exists, it will be overwritten.
+The output file is created by copying the input file and then applying
+transformations in-place.
+.SH OPTIONS
+.SS Transformation Options
+.TP
+.BI \-\-translate " X,Y,Z"
+Translate (move) all mesh coordinates by the specified offset vector.
+The offset is specified as three comma-separated floating-point values
+representing the displacement in the X, Y, and Z directions respectively.
+.IP
+Example: \fB\-\-translate "10.0,5.0,0.0"\fR moves the mesh 10 units in X
+and 5 units in Y.
+.TP
+.BI \-\-rotate " SEQUENCE,ANGLE1[,ANGLE2[,ANGLE3]]"
+Rotate the mesh using Euler angles. The rotation is specified as a sequence
+string followed by 1-3 angles in degrees, all comma-separated.
+.IP
+The sequence string determines both the axes of rotation and whether the
+rotation is \fBextrinsic\fR (fixed frame) or \fBintrinsic\fR (body frame):
+.RS
+.IP \(bu 2
+\fBUppercase\fR letters (X, Y, Z) specify \fBextrinsic\fR rotations,
+where each rotation is performed about the original fixed coordinate axes.
+.IP \(bu 2
+\fBlowercase\fR letters (x, y, z) specify \fBintrinsic\fR rotations,
+where each rotation is performed about the current (rotated) body axes.
+.RE
+.IP
+The sequence can be 1-3 characters, and the number of angles must match
+the sequence length.
+.IP
+Examples:
+.RS
+.IP \(bu 2
+\fB\-\-rotate "Z,90"\fR \- Rotate 90 degrees about the Z axis
+.IP \(bu 2
+\fB\-\-rotate "XYZ,30,45,60"\fR \- Extrinsic XYZ Euler rotation
+(rotate 30° about fixed X, then 45° about fixed Y, then 60° about fixed Z)
+.IP \(bu 2
+\fB\-\-rotate "zyx,60,45,30"\fR \- Intrinsic zyx Euler rotation
+(rotate 60° about body z, then 45° about new body y, then 30° about new body x)
+.RE
+.TP
+.BI \-\-scale\-len " FACTOR"
+Scale all mesh coordinates uniformly by the specified factor. A factor
+greater than 1.0 enlarges the mesh, while a factor less than 1.0 shrinks it.
+.IP
+Example: \fB\-\-scale\-len 0.001\fR converts mesh units from millimeters
+to meters.
+.TP
+.BI \-\-mirror " AXIS"
+Mirror (reflect) the mesh about the specified coordinate plane. The axis
+specifies which coordinate is negated:
+.RS
+.IP \(bu 2
+\fBx\fR \- Mirror about the YZ plane (negate X coordinates)
+.IP \(bu 2
+\fBy\fR \- Mirror about the XZ plane (negate Y coordinates)
+.IP \(bu 2
+\fBz\fR \- Mirror about the XY plane (negate Z coordinates)
+.RE
+.IP
+The axis can be specified in upper or lower case.
+.SS Time Options
+.TP
+.BR \-z ", " \-\-zero\-time
+Normalize time values so that the first time step has a value of zero.
+This subtracts the first time step value from all time steps in the file.
+.IP
+This is useful when combining meshes from simulations that started at
+different times, or when the absolute time values are not meaningful.
+.SS General Options
+.TP
+.BR \-v ", " \-\-verbose
+Enable verbose output. When enabled, the program prints:
+.RS
+.IP \(bu 2
+Input and output file paths
+.IP \(bu 2
+Number of operations to apply
+.IP \(bu 2
+Mesh statistics (nodes, elements, dimensions)
+.IP \(bu 2
+Details of each transformation as it is applied
+.RE
+.TP
+.BR \-h ", " \-\-help
+Print a help message and exit.
+.TP
+.BR \-V ", " \-\-version
+Print version information and exit.
+.SH OPERATION ORDER
+.PP
+\fBIMPORTANT:\fR Transformations are applied in the exact order they appear
+on the command line. This order matters because geometric transformations
+are not commutative \- applying them in different orders produces different
+results.
+.PP
+For example, the following two commands produce different results:
+.IP
+.nf
+# Translate first, then rotate
+exo-cfd-transform mesh.exo out1.exo \-\-translate "10,0,0" \-\-rotate "Z,90"
+
+# Rotate first, then translate
+exo-cfd-transform mesh.exo out2.exo \-\-rotate "Z,90" \-\-translate "10,0,0"
+.fi
+.PP
+In the first case, the mesh is moved 10 units in X, then rotated 90 degrees.
+In the second case, the mesh is rotated first, so the subsequent translation
+of 10 units in X moves the (now rotated) mesh in a different direction
+relative to its original orientation.
+.PP
+Multiple instances of the same transformation type can be specified:
+.IP
+.nf
+exo-cfd-transform mesh.exo out.exo \-\-rotate "X,45" \-\-rotate "Y,30" \-\-rotate "Z,15"
+.fi
+.PP
+This applies three separate rotations in sequence.
+.SH EULER ANGLE CONVENTIONS
+.PP
+This tool follows the scipy/mathematics convention for Euler angles:
+.SS Extrinsic Rotations (Uppercase: X, Y, Z)
+Rotations are performed about the fixed, original coordinate axes. Each
+rotation is applied with respect to the global frame, regardless of
+previous rotations.
+.PP
+For an extrinsic XYZ sequence with angles (\fIα\fR, \fIβ\fR, \fIγ\fR):
+.IP 1. 3
+Rotate by \fIα\fR about the global X axis
+.IP 2. 3
+Rotate by \fIβ\fR about the global Y axis
+.IP 3. 3
+Rotate by \fIγ\fR about the global Z axis
+.SS Intrinsic Rotations (Lowercase: x, y, z)
+Rotations are performed about the body-fixed axes, which move with the
+object. Each rotation is applied with respect to the current orientation
+of the body.
+.PP
+For an intrinsic xyz sequence with angles (\fIα\fR, \fIβ\fR, \fIγ\fR):
+.IP 1. 3
+Rotate by \fIα\fR about the body x axis
+.IP 2. 3
+Rotate by \fIβ\fR about the (now rotated) body y axis
+.IP 3. 3
+Rotate by \fIγ\fR about the (now rotated) body z axis
+.SS Common Euler Sequences
+.TP
+.B XYZ / xyz
+Often used in aerospace (roll-pitch-yaw)
+.TP
+.B ZYX / zyx
+Common in robotics and some CAD systems
+.TP
+.B ZXZ / zxz
+Classical Euler angles, used in physics
+.SH EXAMPLES
+.TP
+\fBBasic translation:\fR
+.nf
+exo-cfd-transform input.exo output.exo \-\-translate "100,50,0"
+.fi
+.TP
+\fBScale from inches to meters:\fR
+.nf
+exo-cfd-transform input.exo output.exo \-\-scale\-len 0.0254
+.fi
+.TP
+\fBRotate 90 degrees about Z axis:\fR
+.nf
+exo-cfd-transform input.exo output.exo \-\-rotate "Z,90"
+.fi
+.TP
+\fBComplex transformation chain:\fR
+.nf
+exo-cfd-transform input.exo output.exo \\
+    \-\-translate "0,0,\-5" \\
+    \-\-rotate "XYZ,0,0,45" \\
+    \-\-scale\-len 1000 \\
+    \-\-translate "100,100,0" \\
+    \-v
+.fi
+.IP
+This centers the mesh at Z=0, rotates 45° about Z, scales up by 1000x,
+then moves to position (100, 100, 0), with verbose output.
+.TP
+\fBMirror and normalize time:\fR
+.nf
+exo-cfd-transform simulation.exo mirrored.exo \-\-mirror x \-\-zero\-time
+.fi
+.TP
+\fBIntrinsic vs extrinsic rotation comparison:\fR
+.nf
+# Extrinsic: rotations about fixed global axes
+exo-cfd-transform mesh.exo ext.exo \-\-rotate "XYZ,30,45,60"
+
+# Intrinsic: rotations about moving body axes
+exo-cfd-transform mesh.exo int.exo \-\-rotate "xyz,30,45,60"
+.fi
+.SH EXIT STATUS
+.TP
+.B 0
+Success
+.TP
+.B 1
+Error (invalid arguments, file not found, transformation failed, etc.)
+.SH FILES
+.TP
+.I INPUT
+Must be a valid Exodus II format file (NetCDF-based).
+.TP
+.I OUTPUT
+Will be created as a copy of INPUT with transformations applied.
+.SH SEE ALSO
+.BR exodus (7),
+.BR ncdump (1),
+.BR ncview (1)
+.PP
+Exodus II documentation: https://sandialabs.github.io/seacas-docs/
+.SH NOTES
+.PP
+The input file is copied to the output location before any transformations
+are applied. This ensures the original file is never modified and preserves
+all mesh data (connectivity, variables, sets, etc.) that is not affected
+by coordinate transformations.
+.PP
+Time normalization (\fB\-\-zero\-time\fR) only works on files that already
+contain time step data. It will report "No time steps to normalize" for
+mesh-only files without time history.
+.SH BUGS
+Report bugs at: https://github.com/sandialabs/seacas/issues
+.SH AUTHORS
+Generated using exodus-rs, a Rust implementation of the Exodus II library.
+.SH COPYRIGHT
+BSD-3-Clause License. See the LICENSE file for details.
