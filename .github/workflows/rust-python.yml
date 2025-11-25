@@ -53,9 +53,9 @@ jobs:
           ${{ runner.os }}-cargo-git-
 
     - name: Install uv
-      run: |
-        curl -LsSf https://astral.sh/uv/install.sh | sh
-        echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+      uses: astral-sh/setup-uv@v5
+      with:
+        github-token: ${{ github.token }}
 
     - name: Install Python dependencies and build package
       run: |
