@@ -479,23 +479,41 @@ impl ExodusFile<mode::Write> {
             .variable(&var_name)
             .ok_or_else(|| ExodusError::VariableNotDefined(var_name.clone()))?;
 
-        // Read the raw bytes
-        let name_bytes: Vec<u8> = var.get_values(..).map_err(ExodusError::NetCdf)?;
+        // Support both classic NetCDF fixed-length char arrays (NC_CHAR) and
+        // NetCDF-4 NC_STRING variables for name storage.
+        let dims = var.dimensions();
 
+        // If 1D, likely NC_STRING [num_names]
+        if dims.len() == 1 {
+            let num_names = dims[0].len();
+            let mut names = Vec::with_capacity(num_names);
+            for i in 0..num_names {
+                let s = var.get_string(i..i + 1).map_err(ExodusError::NetCdf)?;
+                names.push(s.trim_end_matches('\0').trim().to_string());
+            }
+            return Ok(names);
+        }
+
+        // Otherwise, expect 2D [num_names, len_name] of NC_CHAR
         const MAX_NAME_LENGTH: usize = 32;
-        let num_names = name_bytes.len() / (MAX_NAME_LENGTH + 1);
+        let num_names = dims.first().map(|d| d.len()).unwrap_or(0);
+        let len_name = dims.get(1).map(|d| d.len()).unwrap_or(MAX_NAME_LENGTH + 1);
+
         let mut names = Vec::with_capacity(num_names);
 
+        // Read each name (NC_CHAR stored as i8 in older files)
         for i in 0..num_names {
-            let offset = i * (MAX_NAME_LENGTH + 1);
-            let name_slice = &name_bytes[offset..offset + (MAX_NAME_LENGTH + 1)];
+            let name_chars_i8: Vec<i8> =
+                var.get_values((i..i + 1, 0..len_name)).map_err(ExodusError::NetCdf)?;
+            // Convert i8 bytes to u8 slice for UTF-8 decoding
+            let name_bytes: Vec<u8> = name_chars_i8.iter().map(|&b| b as u8).collect();
 
             // Find the null terminator or end of string
-            let end = name_slice
+            let end = name_bytes
                 .iter()
                 .position(|&b| b == 0)
-                .unwrap_or(name_slice.len());
-            let name = String::from_utf8_lossy(&name_slice[..end]).to_string();
+                .unwrap_or(name_bytes.len());
+            let name = String::from_utf8_lossy(&name_bytes[..end]).to_string();
             names.push(name);
         }
 
@@ -563,23 +581,41 @@ impl ExodusFile<mode::Read> {
             .variable(&var_name)
             .ok_or_else(|| ExodusError::VariableNotDefined(var_name.clone()))?;
 
-        // Read the raw bytes
-        let name_bytes: Vec<u8> = var.get_values(..).map_err(ExodusError::NetCdf)?;
+        // Support both classic NetCDF fixed-length char arrays (NC_CHAR) and
+        // NetCDF-4 NC_STRING variables for name storage.
+        let dims = var.dimensions();
 
+        // If 1D, likely NC_STRING [num_names]
+        if dims.len() == 1 {
+            let num_names = dims[0].len();
+            let mut names = Vec::with_capacity(num_names);
+            for i in 0..num_names {
+                let s = var.get_string(i..i + 1).map_err(ExodusError::NetCdf)?;
+                names.push(s.trim_end_matches('\0').trim().to_string());
+            }
+            return Ok(names);
+        }
+
+        // Otherwise, expect 2D [num_names, len_name] of NC_CHAR
         const MAX_NAME_LENGTH: usize = 32;
-        let num_names = name_bytes.len() / (MAX_NAME_LENGTH + 1);
+        let num_names = dims.first().map(|d| d.len()).unwrap_or(0);
+        let len_name = dims.get(1).map(|d| d.len()).unwrap_or(MAX_NAME_LENGTH + 1);
+
         let mut names = Vec::with_capacity(num_names);
 
+        // Read each name (NC_CHAR stored as i8 in older files)
         for i in 0..num_names {
-            let offset = i * (MAX_NAME_LENGTH + 1);
-            let name_slice = &name_bytes[offset..offset + (MAX_NAME_LENGTH + 1)];
+            let name_chars_i8: Vec<i8> =
+                var.get_values((i..i + 1, 0..len_name)).map_err(ExodusError::NetCdf)?;
+            // Convert i8 bytes to u8 slice for UTF-8 decoding
+            let name_bytes: Vec<u8> = name_chars_i8.iter().map(|&b| b as u8).collect();
 
             // Find the null terminator or end of string
-            let end = name_slice
+            let end = name_bytes
                 .iter()
                 .position(|&b| b == 0)
-                .unwrap_or(name_slice.len());
-            let name = String::from_utf8_lossy(&name_slice[..end]).to_string();
+                .unwrap_or(name_bytes.len());
+            let name = String::from_utf8_lossy(&name_bytes[..end]).to_string();
             names.push(name);
         }
 
