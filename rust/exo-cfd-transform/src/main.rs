@@ -38,12 +38,12 @@ type Result<T> = std::result::Result<T, TransformError>;
 #[command(author, version, about, long_about = None)]
 struct Cli {
     /// Input Exodus file
-    #[arg(value_name = "INPUT")]
-    input: PathBuf,
+    #[arg(value_name = "INPUT", required_unless_present_any = ["man", "show_perf_config"])]
+    input: Option<PathBuf>,
 
     /// Output Exodus file
-    #[arg(value_name = "OUTPUT")]
-    output: PathBuf,
+    #[arg(value_name = "OUTPUT", required_unless_present_any = ["man", "show_perf_config"])]
+    output: Option<PathBuf>,
 
     /// Scale mesh coordinates uniformly by a factor
     #[arg(long = "scale-len", value_name = "FACTOR")]
@@ -106,6 +106,10 @@ struct Cli {
     /// Print performance configuration and exit
     #[arg(long)]
     show_perf_config: bool,
+
+    /// Display the man page
+    #[arg(long)]
+    man: bool,
 }
 
 /// Represents a transformation operation
@@ -480,6 +484,40 @@ fn apply_operation(
     Ok(())
 }
 
+/// Display the man page by looking for it relative to the executable
+fn show_man_page() -> Result<()> {
+    use std::process::Command;
+
+    // Get the executable path
+    let exe_path = std::env::current_exe()?;
+    let exe_dir = exe_path.parent().ok_or_else(|| {
+        TransformError::Io(std::io::Error::new(
+            std::io::ErrorKind::NotFound,
+            "Could not determine executable directory",
+        ))
+    })?;
+
+    // Look for the man page in the same directory as the executable
+    let man_page = exe_dir.join("exo-cfd-transform.1");
+
+    if !man_page.exists() {
+        eprintln!("Man page not found at: {}", man_page.display());
+        eprintln!("Please ensure exo-cfd-transform.1 is in the same directory as the executable.");
+        eprintln!("\nYou can view it with: man {}", man_page.display());
+        std::process::exit(1);
+    }
+
+    // Use the man command to display it
+    let status = Command::new("man").arg(man_page.as_os_str()).status()?;
+
+    if !status.success() {
+        eprintln!("Failed to display man page");
+        std::process::exit(1);
+    }
+
+    Ok(())
+}
+
 /// Normalize time values so the first time step is zero
 fn normalize_time(file: &mut ExodusFile<exodus_rs::mode::Append>, verbose: bool) -> Result<()> {
     let times = file.times()?;
@@ -514,6 +552,12 @@ fn main() -> Result<()> {
     // Build performance configuration from CLI options
     let perf_config = PerformanceOptions::from_cli(&cli);
 
+    // Handle --man flag
+    if cli.man {
+        show_man_page()?;
+        return Ok(());
+    }
+
     // Handle --show-perf-config
     if cli.show_perf_config {
         println!("{}", perf_config);
@@ -524,12 +568,16 @@ fn main() -> Result<()> {
     // These must be set before the HDF5 library is initialized
     perf_config.apply_env_vars();
 
+    // Unwrap input and output (guaranteed to be present due to required_unless_present_any)
+    let input = cli.input.as_ref().unwrap();
+    let output = cli.output.as_ref().unwrap();
+
     // Extract operations in command-line order
     let operations = extract_ordered_operations(&cli)?;
 
     if cli.verbose {
-        println!("Input:  {}", cli.input.display());
-        println!("Output: {}", cli.output.display());
+        println!("Input:  {}", input.display());
+        println!("Output: {}", output.display());
         println!("Operations to apply: {}", operations.len());
         println!();
         println!("{}", perf_config);
@@ -540,10 +588,10 @@ fn main() -> Result<()> {
     if cli.verbose {
         println!("Copying input file to output location...");
     }
-    std::fs::copy(&cli.input, &cli.output)?;
+    std::fs::copy(input, output)?;
 
     // Open the output file in append mode for modifications
-    let mut file = ExodusFile::append(&cli.output)?;
+    let mut file = ExodusFile::append(output)?;
 
     if cli.verbose {
         let params = file.init_params()?;
@@ -658,8 +706,8 @@ mod tests {
     fn test_performance_options_defaults() {
         // Create a mock CLI with no performance options set
         let cli = Cli {
-            input: PathBuf::from("input.exo"),
-            output: PathBuf::from("output.exo"),
+            input: Some(PathBuf::from("input.exo")),
+            output: Some(PathBuf::from("output.exo")),
             scale_len: vec![],
             mirror: vec![],
             translate: vec![],
@@ -672,6 +720,7 @@ mod tests {
             element_chunk: None,
             time_chunk: None,
             show_perf_config: false,
+            man: false,
         };
 
         let perf = PerformanceOptions::from_cli(&cli);
@@ -693,8 +742,8 @@ mod tests {
     #[test]
     fn test_performance_options_custom() {
         let cli = Cli {
-            input: PathBuf::from("input.exo"),
-            output: PathBuf::from("output.exo"),
+            input: Some(PathBuf::from("input.exo")),
+            output: Some(PathBuf::from("output.exo")),
             scale_len: vec![],
             mirror: vec![],
             translate: vec![],
@@ -707,6 +756,7 @@ mod tests {
             element_chunk: Some(15000), // 15k elements
             time_chunk: Some(10),       // 10 time steps
             show_perf_config: false,
+            man: false,
         };
 
         let perf = PerformanceOptions::from_cli(&cli);
@@ -721,8 +771,8 @@ mod tests {
     #[test]
     fn test_preemption_clamping() {
         let mut cli = Cli {
-            input: PathBuf::from("input.exo"),
-            output: PathBuf::from("output.exo"),
+            input: Some(PathBuf::from("input.exo")),
+            output: Some(PathBuf::from("output.exo")),
             scale_len: vec![],
             mirror: vec![],
             translate: vec![],
@@ -735,6 +785,7 @@ mod tests {
             element_chunk: None,
             time_chunk: None,
             show_perf_config: false,
+            man: false,
         };
 
         let perf = PerformanceOptions::from_cli(&cli);
