@@ -246,6 +246,12 @@ install_system_deps() {
             # so we use alternative detection methods
             log_info "Using system-installed HDF5 and NetCDF libraries..."
 
+            # Load Python 3.12 module if available (required for wheel compatibility)
+            if command -v module &> /dev/null; then
+                log_info "Loading Python 3.12 module..."
+                module load python/3.12 2>/dev/null || log_warning "Could not load python/3.12 module"
+            fi
+
             # Check for HDF5 using RHEL-specific method if pkg-config didn't find it
             if ! $hdf5_installed; then
                 if check_hdf5_rhel; then
@@ -399,7 +405,17 @@ build_wheel() {
     # Find the built wheel in the workspace target directory
     # (Cargo workspace puts target/ at the workspace root, not in individual crates)
     WORKSPACE_TARGET_DIR="$(dirname "$SCRIPT_DIR")/target/wheels"
-    WHEEL_FILE=$(find "$WORKSPACE_TARGET_DIR" -name "exodus_py-*.whl" -type f | sort -r | head -n 1)
+
+    # Get Python version tag (e.g., cp312 for Python 3.12)
+    PY_VERSION_TAG=$(python3 -c "import sys; print(f'cp{sys.version_info.major}{sys.version_info.minor}')")
+    log_info "Looking for wheel matching Python version: $PY_VERSION_TAG"
+
+    # Find wheel matching current Python version, preferring manylinux
+    WHEEL_FILE=$(find "$WORKSPACE_TARGET_DIR" -name "exodus_py-*-${PY_VERSION_TAG}-*-manylinux*.whl" -type f | sort -r | head -n 1)
+    if [ -z "$WHEEL_FILE" ]; then
+        # Fall back to any wheel for this Python version
+        WHEEL_FILE=$(find "$WORKSPACE_TARGET_DIR" -name "exodus_py-*-${PY_VERSION_TAG}-*.whl" -type f | sort -r | head -n 1)
+    fi
 
     if [ -z "$WHEEL_FILE" ]; then
         log_error "Wheel file not found in $WORKSPACE_TARGET_DIR"

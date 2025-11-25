@@ -1,0 +1,469 @@
+###############################################################################
+# HDF5 Chunking Benchmark Suite - Merlin Specification
+###############################################################################
+#
+# This Merlin workflow runs the HDF5 chunking benchmark suite on RZHound,
+# distributing each configuration to a separate node for parallel execution.
+#
+# Usage:
+#   # Generate parameter samples
+#   merlin run chunking_benchmark.yaml --pgen pgen_configs.py
+#
+#   # Or run directly after samples are generated
+#   merlin run chunking_benchmark.yaml
+#
+#   # Monitor status
+#   merlin status chunking_benchmark.yaml
+#
+###############################################################################
+
+description:
+    name: hdf5_chunking_benchmark
+    description: |
+        HDF5 chunking strategy benchmark for exodus-py.
+        Evaluates different HDF5 chunking configurations for large mesh transformations.
+        Each configuration runs on a separate node for parallel execution.
+
+batch:
+    type: slurm
+    bank: pbatch
+    queue: pbatch
+
+env:
+    variables:
+        # Output paths (on Lustre for performance)
+        # Shared resources (mesh, venv) use fixed path
+        OUTPUT_PATH: /p/lustre1/whitmore/chunking_benchmark_merlin
+        # Per-run results and plots use workflow workspace
+        RESULTS_DIR: $(MERLIN_WORKSPACE)/results
+        PLOTS_DIR: $(MERLIN_WORKSPACE)/plots
+
+        # Input mesh (generated in setup step)
+        INPUT_MESH: $(OUTPUT_PATH)/input_mesh.exo
+
+        # Mesh generation parameters
+        NUM_NODES: 75000
+        NUM_TIMESTEPS: 18500
+
+        # Path to source scripts (in the spec directory)
+        SCRIPT_DIR: $(SPECROOT)/..
+        EXODUS_PY_DIR: $(SPECROOT)/../../..
+        RUST_DIR: $(SPECROOT)/../../../..
+
+        # Virtual environment path (per-run, inside workspace)
+        VENV_PATH: $(MERLIN_WORKSPACE)/benchmark-venv
+
+    labels:
+        CACHE_MB: $(CACHE_MB)
+        NODE_CHUNK: $(NODE_CHUNK_SIZE)
+        ELEM_CHUNK: $(ELEMENT_CHUNK_SIZE)
+        TIME_CHUNK: $(TIME_CHUNK_SIZE)
+        PREEMPTION: $(PREEMPTION)
+
+study:
+    ###########################################################################
+    # Step 1: Setup environment and install exodus-py from pre-built wheel
+    ###########################################################################
+    - name: setup
+      description: Create venv, install pre-built exodus-py wheel, and setup directories
+      run:
+          cmd: |
+              set -euo pipefail
+
+              echo "Setting up benchmark environment..."
+              echo "Working directory: $(pwd)"
+              echo "Output path: $(OUTPUT_PATH)"
+
+              # Create output directories
+              mkdir -p $(OUTPUT_PATH)
+              mkdir -p $(RESULTS_DIR)
+              mkdir -p $(PLOTS_DIR)
+
+              # Check for pre-built wheel
+              WHEEL_DIR="$(RUST_DIR)/target/wheels"
+              if [ ! -d "$WHEEL_DIR" ] || [ -z "$(ls -A $WHEEL_DIR/*.whl 2>/dev/null)" ]; then
+                  echo "ERROR: No pre-built wheel found at $WHEEL_DIR"
+                  echo "Please build exodus-py first:"
+                  echo "  cd rust/exodus-py && ./install_and_test.sh"
+                  exit 1
+              fi
+
+              module load python/3.12
+
+              # Create virtual environment (recreate if corrupted)
+              if [ ! -f "$(VENV_PATH)/bin/activate" ]; then
+                  echo "Creating virtual environment at $(VENV_PATH)..."
+                  rm -rf $(VENV_PATH)  # Clean up any partial venv
+                  python3 -m venv $(VENV_PATH)
+              else
+                  echo "Using existing virtual environment at $(VENV_PATH)"
+              fi
+
+              # Activate venv
+              source $(VENV_PATH)/bin/activate
+
+              # Verify activation
+              echo "Activated venv. Python: $(which python3)"
+
+              # Upgrade pip first (use python3 -m pip to ensure we use the venv's pip)
+              python3 -m pip install --upgrade pip
+
+              # Get Python version for wheel selection (e.g., cp312)
+              PY_VERSION=$(python3 -c "import sys; print(f'cp{sys.version_info.major}{sys.version_info.minor}')")
+              echo "Python wheel tag: $PY_VERSION"
+
+              # Find the manylinux wheel for this Python version (prefer manylinux for portability)
+              WHEEL_FILE=$(ls $WHEEL_DIR/exodus_py-*-${PY_VERSION}-*-manylinux*.whl 2>/dev/null | head -1)
+              if [ -z "$WHEEL_FILE" ]; then
+                  # Fall back to any wheel for this Python version
+                  WHEEL_FILE=$(ls $WHEEL_DIR/exodus_py-*-${PY_VERSION}-*.whl 2>/dev/null | head -1)
+              fi
+
+              if [ -z "$WHEEL_FILE" ]; then
+                  echo "ERROR: No wheel found for Python $PY_VERSION in $WHEEL_DIR"
+                  echo "Available wheels:"
+                  ls -la $WHEEL_DIR/*.whl
+                  exit 1
+              fi
+
+              echo "Selected wheel: $WHEEL_FILE"
+
+              # Install exodus-py from wheel (force reinstall to ensure consistency)
+              echo "Installing exodus-py from wheel..."
+              python3 -m pip install --force-reinstall "$WHEEL_FILE"
+
+              # Install benchmark dependencies
+              echo "Installing benchmark dependencies..."
+              python3 -m pip install --upgrade scipy matplotlib tqdm numpy
+
+              # Verify all critical imports
+              echo "Verifying installations..."
+              python3 -c "import exodus; print(f'exodus-py version: {exodus.__version__}')"
+              python3 -c "import numpy; print(f'numpy version: {numpy.__version__}')"
+              python3 -c "import scipy; print(f'scipy version: {scipy.__version__}')"
+              python3 -c "import tqdm; print(f'tqdm version: {tqdm.__version__}')"
+
+              # List all installed packages for debugging
+              echo "Installed packages:"
+              python3 -m pip list
+
+              echo "Setup complete"
+          nodes: 1
+          procs: 1
+          walltime: "00:15:00"
+
+    ###########################################################################
+    # Step 2: Generate the benchmark mesh
+    ###########################################################################
+    - name: generate_mesh
+      description: Generate the ~100GB benchmark mesh on Lustre
+      run:
+          cmd: |
+              set -euo pipefail
+
+              echo "Generating benchmark mesh..."
+              echo "Working directory: $(pwd)"
+
+              # Activate venv
+              source $(VENV_PATH)/bin/activate
+
+              # Check if mesh already exists
+              if [ -f "$(INPUT_MESH)" ]; then
+                  echo "Mesh already exists: $(INPUT_MESH)"
+                  ls -lh $(INPUT_MESH)
+                  exit 0
+              fi
+
+              # Copy generate_mesh.py to working directory
+              cp $(SCRIPT_DIR)/generate_mesh.py ./generate_mesh.py
+
+              # Generate mesh
+              python3 ./generate_mesh.py \
+                  --output $(INPUT_MESH) \
+                  --num-nodes $(NUM_NODES) \
+                  --num-timesteps $(NUM_TIMESTEPS) \
+                  --cache-mb 512 \
+                  --node-chunk-size 25000 \
+                  --element-chunk-size 25000 \
+                  --time-chunk-size 100
+
+              # Report file size
+              echo "Mesh generated:"
+              ls -lh $(INPUT_MESH)
+          nodes: 1
+          procs: 1
+          walltime: "00:10:00"
+          depends: [setup]
+
+    ###########################################################################
+    # Step 3: Run benchmark for each configuration (parameterized)
+    ###########################################################################
+    - name: run_benchmark
+      description: Run mesh transformation benchmark with specific HDF5 config
+      run:
+          cmd: |
+              set -euo pipefail
+
+              # Timeout limit in seconds (600s = 10 minutes)
+              TIMEOUT_SECONDS=600
+
+              echo "========================================================================"
+              echo "Running benchmark configuration:"
+              echo "  Cache MB:          $(CACHE_MB)"
+              echo "  Node Chunk:        $(NODE_CHUNK_SIZE)"
+              echo "  Element Chunk:     $(ELEMENT_CHUNK_SIZE)"
+              echo "  Time Chunk:        $(TIME_CHUNK_SIZE)"
+              echo "  Preemption:        $(PREEMPTION)"
+              echo "  Timeout:           ${TIMEOUT_SECONDS}s"
+              echo "  Working directory: $(pwd)"
+              echo "  VENV_PATH:         $(VENV_PATH)"
+              echo "========================================================================"
+
+              # Debug: Check venv exists
+              if [ ! -d "$(VENV_PATH)" ]; then
+                  echo "ERROR: Venv directory does not exist: $(VENV_PATH)"
+                  ls -la $(OUTPUT_PATH)/
+                  exit 1
+              fi
+
+              if [ ! -f "$(VENV_PATH)/bin/activate" ]; then
+                  echo "ERROR: Venv activate script does not exist"
+                  ls -la $(VENV_PATH)/
+                  exit 1
+              fi
+
+              # Activate venv
+              source $(VENV_PATH)/bin/activate
+
+              # Debug: Verify activation worked
+              echo "Python path: $(which python3)"
+              echo "Pip path: $(which pip)"
+              echo "VIRTUAL_ENV: $VIRTUAL_ENV"
+
+              # Debug: Check if numpy is installed
+              if ! python3 -c "import numpy; print(f'numpy version: {numpy.__version__}')" 2>&1; then
+                  echo "ERROR: numpy not found in venv"
+                  echo "Installed packages:"
+                  python3 -m pip list
+                  exit 1
+              fi
+
+              # Disable HDF5 file locking to allow concurrent reads on Lustre
+              export HDF5_USE_FILE_LOCKING=FALSE
+
+              # Copy input mesh to task working directory to avoid Lustre I/O contention
+              # Each task gets its own copy, eliminating concurrent read issues
+              LOCAL_MESH="./input_mesh.exo"
+              echo "Copying input mesh to task directory..."
+              cp $(INPUT_MESH) "$LOCAL_MESH"
+              echo "Mesh copy complete: $(ls -lh $LOCAL_MESH)"
+
+              # Copy transform_mesh.py to working directory
+              cp $(SCRIPT_DIR)/transform_mesh.py ./transform_mesh.py
+
+              # Create unique output filenames
+              CONFIG_STR="c$(CACHE_MB)_n$(NODE_CHUNK_SIZE)_e$(ELEMENT_CHUNK_SIZE)_t$(TIME_CHUNK_SIZE)_p$(PREEMPTION)"
+              OUTPUT_MESH="$(RESULTS_DIR)/output_${CONFIG_STR}.exo"
+              RESULT_JSON="$(RESULTS_DIR)/result_${CONFIG_STR}.json"
+
+              # Record start time for timeout tracking
+              START_TIME=$(date +%s)
+
+              # Run the transform with timeout
+              # timeout returns exit code 124 if the command times out
+              set +e  # Disable exit on error to capture timeout exit code
+              timeout --signal=TERM --kill-after=30 ${TIMEOUT_SECONDS}s \
+                  python3 ./transform_mesh.py \
+                      --input "$LOCAL_MESH" \
+                      --output "$OUTPUT_MESH" \
+                      --cache-mb $(CACHE_MB) \
+                      --node-chunk-size $(NODE_CHUNK_SIZE) \
+                      --element-chunk-size $(ELEMENT_CHUNK_SIZE) \
+                      --time-chunk-size $(TIME_CHUNK_SIZE) \
+                      --preemption $(PREEMPTION) \
+                      --output-json "$RESULT_JSON"
+              EXIT_CODE=$?
+              set -e  # Re-enable exit on error
+
+              END_TIME=$(date +%s)
+              ELAPSED=$((END_TIME - START_TIME))
+
+              # Handle timeout case (exit code 124 from timeout command)
+              if [ $EXIT_CODE -eq 124 ]; then
+                  echo "========================================================================"
+                  echo "TIMEOUT: Benchmark exceeded ${TIMEOUT_SECONDS}s limit"
+                  echo "  Elapsed time before kill: ${ELAPSED}s"
+                  echo "========================================================================"
+
+                  # Create a timeout result JSON for postprocessing
+                  python3 $(SPECROOT)/write_result_json.py \
+                      --output "$RESULT_JSON" \
+                      --status timeout \
+                      --timeout-seconds ${TIMEOUT_SECONDS} \
+                      --elapsed-seconds ${ELAPSED} \
+                      --cache-mb $(CACHE_MB) \
+                      --node-chunk $(NODE_CHUNK_SIZE) \
+                      --elem-chunk $(ELEMENT_CHUNK_SIZE) \
+                      --time-chunk $(TIME_CHUNK_SIZE) \
+                      --preemption $(PREEMPTION) \
+                      --input-file "$(INPUT_MESH)" \
+                      --error "Benchmark exceeded ${TIMEOUT_SECONDS}s time limit and was terminated"
+
+                  # Cleanup any partial output mesh and local input mesh copy
+                  rm -f "$OUTPUT_MESH"
+                  rm -f "$LOCAL_MESH"
+
+                  # Exit successfully so workflow continues with other configs
+                  exit 0
+              fi
+
+              # Handle other errors
+              if [ $EXIT_CODE -ne 0 ]; then
+                  echo "========================================================================"
+                  echo "ERROR: Benchmark failed with exit code $EXIT_CODE"
+                  echo "  Elapsed time: ${ELAPSED}s"
+                  echo "========================================================================"
+
+                  # Create an error result JSON for postprocessing
+                  python3 $(SPECROOT)/write_result_json.py \
+                      --output "$RESULT_JSON" \
+                      --status error \
+                      --exit-code ${EXIT_CODE} \
+                      --elapsed-seconds ${ELAPSED} \
+                      --cache-mb $(CACHE_MB) \
+                      --node-chunk $(NODE_CHUNK_SIZE) \
+                      --elem-chunk $(ELEMENT_CHUNK_SIZE) \
+                      --time-chunk $(TIME_CHUNK_SIZE) \
+                      --preemption $(PREEMPTION) \
+                      --input-file "$(INPUT_MESH)" \
+                      --error "Benchmark failed with exit code ${EXIT_CODE}"
+
+                  # Cleanup any partial output mesh and local input mesh copy
+                  rm -f "$OUTPUT_MESH"
+                  rm -f "$LOCAL_MESH"
+
+                  # Exit successfully so workflow continues with other configs
+                  exit 0
+              fi
+
+              # Success case
+              echo "========================================================================"
+              echo "SUCCESS: Benchmark completed in ${ELAPSED}s"
+              echo "========================================================================"
+
+              # Cleanup output mesh and local input mesh copy to save space
+              rm -f "$OUTPUT_MESH"
+              rm -f "$LOCAL_MESH"
+
+              echo "Benchmark complete. Results saved to: $RESULT_JSON"
+          nodes: 1
+          procs: 1
+          walltime: "00:10:00"
+          depends: [generate_mesh]
+
+    ###########################################################################
+    # Step 4: Collect and aggregate results
+    ###########################################################################
+    - name: collect_results
+      description: Aggregate all benchmark results into single JSON file
+      run:
+          cmd: |
+              set -euo pipefail
+
+              echo "Collecting benchmark results..."
+              echo "Working directory: $(pwd)"
+
+              # Activate venv
+              source $(VENV_PATH)/bin/activate
+
+              # Copy collector script to working directory
+              cp $(SPECROOT)/collect_results.py ./collect_results.py
+
+              # Run collector script
+              python3 ./collect_results.py \
+                  --results-dir $(RESULTS_DIR) \
+                  --output $(RESULTS_DIR)/benchmark_results.json
+
+              echo "Results collected: $(RESULTS_DIR)/benchmark_results.json"
+          nodes: 1
+          procs: 1
+          walltime: "00:15:00"
+          depends: [run_benchmark_*]
+
+    ###########################################################################
+    # Step 5: Generate plots and reports
+    ###########################################################################
+    - name: generate_plots
+      description: Generate matplotlib visualizations from results
+      run:
+          cmd: |
+              set -euo pipefail
+
+              echo "Generating plots..."
+              echo "Working directory: $(pwd)"
+
+              # Activate venv
+              source $(VENV_PATH)/bin/activate
+
+              # Copy plot script to working directory
+              cp $(SCRIPT_DIR)/plot_results.py ./plot_results.py
+
+              # Generate plots
+              python3 ./plot_results.py \
+                  --results $(RESULTS_DIR)/benchmark_results.json \
+                  --output-dir $(PLOTS_DIR)
+
+              echo "Plots generated in: $(PLOTS_DIR)"
+
+              # Print summary
+              if [ -f "$(PLOTS_DIR)/benchmark_report.txt" ]; then
+                  echo ""
+                  echo "========================================================================"
+                  echo "BENCHMARK SUMMARY"
+                  echo "========================================================================"
+                  cat $(PLOTS_DIR)/benchmark_report.txt
+              fi
+          nodes: 1
+          procs: 1
+          walltime: "00:10:00"
+          depends: [collect_results]
+
+###############################################################################
+# Merlin Configuration
+###############################################################################
+# Note: Parameters (CACHE_MB, NODE_CHUNK_SIZE, etc.) are generated by
+# pgen_configs.py when using --pgen flag. Do NOT define them in
+# global.parameters as that conflicts with pgen-generated column_labels.
+merlin:
+    ###########################################################################
+    # Sample generation via pgen
+    ###########################################################################
+    # Options are passed via environment variables from run.sh:
+    #   PGEN_FULL=true   Full factorial design (324 configs)
+    #   PGEN_QUICK=true  Reduced parameter ranges
+    samples:
+        generate:
+            cmd: |
+                python3 $(SPECROOT)/pgen_configs.py \
+                    --outfile $(MERLIN_INFO)/samples.csv
+        file: $(MERLIN_INFO)/samples.csv
+        column_labels: [CACHE_MB, NODE_CHUNK_SIZE, ELEMENT_CHUNK_SIZE, TIME_CHUNK_SIZE, PREEMPTION]
+
+    ###########################################################################
+    # Resource configuration
+    ###########################################################################
+    resources:
+        task_server: celery
+        overlap: false
+        workers:
+            # Workers for the benchmark runs (can run many in parallel)
+            benchmark_workers:
+                args: -l INFO --concurrency 1 --prefetch-multiplier 1 -O fair
+                steps: [run_benchmark]
+                nodes: 16
+
+            # Workers for serial tasks (setup, collect, plot)
+            serial_workers:
+                args: -l INFO --concurrency 1 --prefetch-multiplier 1 -O fair
+                steps: [setup, generate_mesh, collect_results, generate_plots]
+                nodes: 1
