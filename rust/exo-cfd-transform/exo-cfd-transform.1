@@ -93,6 +93,55 @@ This subtracts the first time step value from all time steps in the file.
 .IP
 This is useful when combining meshes from simulations that started at
 different times, or when the absolute time values are not meaningful.
+.SS NetCDF5/HDF5 Performance Options
+These options control HDF5 chunk caching and chunking behavior for improved
+I/O performance with large mesh files.
+.TP
+.BI \-\-cache\-size " MB"
+Set the HDF5 chunk cache size in megabytes. Larger cache sizes improve I/O
+performance for large files at the cost of memory usage.
+.IP
+Default: Auto-detected based on environment (4 MB for login nodes,
+128 MB for compute nodes, 16 MB otherwise).
+.IP
+Example: \fB\-\-cache\-size 256\fR sets a 256 MB cache.
+.TP
+.BI \-\-preemption " VALUE"
+Set the HDF5 cache preemption policy, a value between 0.0 and 1.0.
+.RS
+.IP \(bu 2
+\fB0.0\fR \- Favor write performance (don't evict write-only chunks)
+.IP \(bu 2
+\fB0.75\fR \- Balanced (default)
+.IP \(bu 2
+\fB1.0\fR \- Favor read performance (aggressively evict write-only chunks)
+.RE
+.IP
+Example: \fB\-\-preemption 0.5\fR for balanced read/write performance.
+.TP
+.BI \-\-node\-chunk " SIZE"
+Set the number of nodes per HDF5 chunk for nodal data. This affects
+how data is organized in new files for optimal I/O patterns.
+.IP
+Default: 1,000-10,000 depending on environment.
+.TP
+.BI \-\-element\-chunk " SIZE"
+Set the number of elements per HDF5 chunk for element data.
+.IP
+Default: 1,000-10,000 depending on environment.
+.TP
+.BI \-\-time\-chunk " SIZE"
+Set the number of time steps per HDF5 chunk.
+.RS
+.IP \(bu 2
+\fB0\fR \- No time chunking (default, mesh-oriented I/O)
+.IP \(bu 2
+\fB1+\fR \- Chunk multiple time steps together (for time-series analysis)
+.RE
+.TP
+.B \-\-show\-perf\-config
+Print the current performance configuration and exit without processing
+any files. Useful for debugging and verifying settings.
 .SS General Options
 .TP
 .BR \-v ", " \-\-verbose
@@ -102,6 +151,8 @@ Enable verbose output. When enabled, the program prints:
 Input and output file paths
 .IP \(bu 2
 Number of operations to apply
+.IP \(bu 2
+Performance configuration settings
 .IP \(bu 2
 Mesh statistics (nodes, elements, dimensions)
 .IP \(bu 2
@@ -221,6 +272,24 @@ exo-cfd-transform mesh.exo ext.exo \-\-rotate "XYZ,30,45,60"
 
 # Intrinsic: rotations about moving body axes
 exo-cfd-transform mesh.exo int.exo \-\-rotate "xyz,30,45,60"
+.fi
+.TP
+\fBHigh-performance transformation for large files:\fR
+.nf
+exo-cfd-transform large_mesh.exo output.exo \\
+    \-\-cache\-size 256 \\
+    \-\-preemption 0.5 \\
+    \-\-node\-chunk 20000 \\
+    \-\-translate "100,0,0" \\
+    \-v
+.fi
+.IP
+This uses a 256 MB cache with balanced preemption for optimal I/O when
+processing large mesh files.
+.TP
+\fBCheck performance configuration:\fR
+.nf
+exo-cfd-transform dummy.exo dummy.exo \-\-show\-perf\-config
 .fi
 .SH EXIT STATUS
 .TP
