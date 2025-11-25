@@ -71,8 +71,3 @@ harness = false
 [[bench]]
 name = "variables"
 harness = false
-
-[[bin]]
-name = "transform_mesh"
-path = "src/bin/transform_mesh.rs"
-required-features = ["netcdf4", "cli"]
