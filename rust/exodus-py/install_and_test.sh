@@ -322,10 +322,40 @@ install_uv() {
         log_success "uv is already installed: $(uv --version)"
     else
         log_info "Installing uv package manager..."
-        curl -LsSf https://astral.sh/uv/install.sh | sh
+
+        # Try curl with retries (handles rate limiting from astral.sh)
+        local max_retries=4
+        local retry_delay=2
+        local attempt=1
+        local success=false
+
+        while [ $attempt -le $max_retries ] && [ "$success" = "false" ]; do
+            if [ $attempt -gt 1 ]; then
+                log_warning "Retry attempt $attempt/$max_retries after ${retry_delay}s delay..."
+                sleep $retry_delay
+                retry_delay=$((retry_delay * 2))
+            fi
+
+            if curl -LsSf https://astral.sh/uv/install.sh | sh; then
+                success=true
+            else
+                log_warning "curl failed (attempt $attempt/$max_retries)"
+                attempt=$((attempt + 1))
+            fi
+        done
+
+        if [ "$success" = "false" ]; then
+            # Fallback: try installing via pip/pipx
+            log_warning "curl installation failed after $max_retries attempts. Trying pip fallback..."
+            if command -v pip &> /dev/null; then
+                pip install uv && success=true
+            elif command -v pip3 &> /dev/null; then
+                pip3 install uv && success=true
+            fi
+        fi
 
         # Add uv to PATH for current session
-        export PATH="$HOME/.cargo/bin:$PATH"
+        export PATH="$HOME/.cargo/bin:$HOME/.local/bin:$PATH"
 
         if command -v uv &> /dev/null; then
             log_success "uv installed successfully: $(uv --version)"
