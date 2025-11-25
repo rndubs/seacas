@@ -930,12 +930,32 @@ impl ExodusFile<mode::Read> {
             Some(var) => {
                 let num_dim = self.metadata.num_dim.unwrap_or(3);
 
+                // Support both classic NetCDF fixed-length char arrays (NC_CHAR) and
+                // NetCDF-4 NC_STRING variables for name storage.
+                let dims = var.dimensions();
+
+                // If 1D, likely NC_STRING [num_dim]
+                if dims.len() == 1 {
+                    let mut names = Vec::with_capacity(num_dim);
+                    for i in 0..num_dim {
+                        let s = var.get_string(i..i + 1)?;
+                        names.push(s.trim_end_matches('\0').trim().to_string());
+                    }
+                    return Ok(names);
+                }
+
+                // Otherwise, expect 2D [num_dim, len_string] of NC_CHAR
                 let mut names = Vec::with_capacity(num_dim);
 
-                // Read each coordinate name
+                // Get len_string for fixed-length names
+                let len_string = dims.get(1).map(|d| d.len()).unwrap_or(33);
+
+                // Read each coordinate name (NC_CHAR stored as i8 in older files)
                 for i in 0..num_dim {
-                    let name_chars: Vec<u8> = var.get_values((i..i + 1, ..))?;
-                    let name = String::from_utf8_lossy(&name_chars)
+                    let name_chars_i8: Vec<i8> = var.get_values((i..i + 1, 0..len_string))?;
+                    // Convert i8 bytes to u8 slice for UTF-8 decoding
+                    let name_bytes: Vec<u8> = name_chars_i8.iter().map(|&b| b as u8).collect();
+                    let name = String::from_utf8_lossy(&name_bytes)
                         .trim_end_matches('\0')
                         .trim()
                         .to_string();
