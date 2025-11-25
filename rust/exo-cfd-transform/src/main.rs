@@ -308,9 +308,7 @@ fn show_man_page() -> Result<()> {
     }
 
     // Use the man command to display it
-    let status = Command::new("man")
-        .arg(man_page.as_os_str())
-        .status()?;
+    let status = Command::new("man").arg(man_page.as_os_str()).status()?;
 
     if !status.success() {
         eprintln!("Failed to display man page");
