@@ -322,6 +322,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "exo-cfd-transform"
+version = "0.1.0"
+dependencies = [
+ "clap",
+ "exodus-rs",
+ "thiserror",
+]
+
+[[package]]
 name = "exodus-c-to-rust-verifier"
 version = "0.1.0"
 dependencies = [
