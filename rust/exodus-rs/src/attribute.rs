@@ -298,7 +298,9 @@ impl ExodusFile<mode::Read> {
                     Ok(AttributeData::Double(values))
                 }
                 "char" => {
-                    let bytes: Vec<u8> = var.get_values(..).map_err(ExodusError::NetCdf)?;
+                    // NC_CHAR stored as i8 in older files - read as i8 and convert to u8
+                    let bytes_i8: Vec<i8> = var.get_values(..).map_err(ExodusError::NetCdf)?;
+                    let bytes: Vec<u8> = bytes_i8.iter().map(|&b| b as u8).collect();
                     let text = String::from_utf8(bytes).map_err(|_| {
                         ExodusError::Other(format!("Invalid UTF-8 in char attribute '{}'", name))
                     })?;

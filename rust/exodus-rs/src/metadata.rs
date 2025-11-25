@@ -218,17 +218,30 @@ impl ExodusFile<mode::Read> {
                     return Ok(Vec::new());
                 }
 
+                // Get the len_string dimension for field length
+                let len_string = self
+                    .nc_file
+                    .dimension("len_string")
+                    .map(|d| d.len())
+                    .unwrap_or(MAX_STR_LENGTH);
+
                 let mut qa_records = Vec::with_capacity(num_qa);
 
                 // Read each QA record
                 for qa_idx in 0..num_qa {
                     let mut fields = Vec::with_capacity(4);
 
-                    // Read each of the 4 fields
+                    // Read each of the 4 fields (NC_CHAR stored as i8 in older files)
                     for field_idx in 0..4 {
-                        let field_chars: Vec<u8> =
-                            var.get_values((qa_idx..qa_idx + 1, field_idx..field_idx + 1, ..))?;
-                        let field = String::from_utf8_lossy(&field_chars)
+                        let field_chars_i8: Vec<i8> = var.get_values((
+                            qa_idx..qa_idx + 1,
+                            field_idx..field_idx + 1,
+                            0..len_string,
+                        ))?;
+                        // Convert i8 bytes to u8 slice for UTF-8 decoding
+                        let field_bytes: Vec<u8> =
+                            field_chars_i8.iter().map(|&b| b as u8).collect();
+                        let field = String::from_utf8_lossy(&field_bytes)
                             .trim_end_matches('\0')
                             .trim()
                             .to_string();
@@ -284,12 +297,21 @@ impl ExodusFile<mode::Read> {
                     return Ok(Vec::new());
                 }
 
+                // Get len_line dimension for line length
+                let len_line = self
+                    .nc_file
+                    .dimension("len_line")
+                    .map(|d| d.len())
+                    .unwrap_or(MAX_LINE_LENGTH);
+
                 let mut info_records = Vec::with_capacity(num_info);
 
-                // Read each info record
+                // Read each info record (NC_CHAR stored as i8 in older files)
                 for i in 0..num_info {
-                    let line_chars: Vec<u8> = var.get_values((i..i + 1, ..))?;
-                    let line = String::from_utf8_lossy(&line_chars)
+                    let line_chars_i8: Vec<i8> = var.get_values((i..i + 1, 0..len_line))?;
+                    // Convert i8 bytes to u8 slice for UTF-8 decoding
+                    let line_bytes: Vec<u8> = line_chars_i8.iter().map(|&b| b as u8).collect();
+                    let line = String::from_utf8_lossy(&line_bytes)
                         .trim_end_matches('\0')
                         .trim()
                         .to_string();

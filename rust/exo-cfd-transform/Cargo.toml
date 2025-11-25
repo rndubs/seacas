@@ -1,0 +1,18 @@
+[package]
+name = "exo-cfd-transform"
+version = "0.1.0"
+edition = "2021"
+description = "CLI tool for transforming Exodus mesh files (translate, rotate, scale, mirror)"
+license = "BSD-3-Clause"
+repository = "https://github.com/sandialabs/seacas"
+keywords = ["exodus", "mesh", "cfd", "transform", "finite-element"]
+categories = ["command-line-utilities", "science"]
+
+[[bin]]
+name = "exo-cfd-transform"
+path = "src/main.rs"
+
+[dependencies]
+exodus-rs = { path = "../exodus-rs", features = ["netcdf4"] }
+clap = { workspace = true }
+thiserror = { workspace = true }
