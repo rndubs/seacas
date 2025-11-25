@@ -503,8 +503,9 @@ impl ExodusFile<mode::Write> {
 
         // Read each name (NC_CHAR stored as i8 in older files)
         for i in 0..num_names {
-            let name_chars_i8: Vec<i8> =
-                var.get_values((i..i + 1, 0..len_name)).map_err(ExodusError::NetCdf)?;
+            let name_chars_i8: Vec<i8> = var
+                .get_values((i..i + 1, 0..len_name))
+                .map_err(ExodusError::NetCdf)?;
             // Convert i8 bytes to u8 slice for UTF-8 decoding
             let name_bytes: Vec<u8> = name_chars_i8.iter().map(|&b| b as u8).collect();
 
@@ -605,8 +606,9 @@ impl ExodusFile<mode::Read> {
 
         // Read each name (NC_CHAR stored as i8 in older files)
         for i in 0..num_names {
-            let name_chars_i8: Vec<i8> =
-                var.get_values((i..i + 1, 0..len_name)).map_err(ExodusError::NetCdf)?;
+            let name_chars_i8: Vec<i8> = var
+                .get_values((i..i + 1, 0..len_name))
+                .map_err(ExodusError::NetCdf)?;
             // Convert i8 bytes to u8 slice for UTF-8 decoding
             let name_bytes: Vec<u8> = name_chars_i8.iter().map(|&b| b as u8).collect();
 

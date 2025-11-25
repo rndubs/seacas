@@ -948,10 +948,7 @@ impl ExodusFile<mode::Read> {
                 let mut names = Vec::with_capacity(num_dim);
 
                 // Get len_string for fixed-length names
-                let len_string = dims
-                    .get(1)
-                    .map(|d| d.len())
-                    .unwrap_or(33);
+                let len_string = dims.get(1).map(|d| d.len()).unwrap_or(33);
 
                 // Read each coordinate name (NC_CHAR stored as i8 in older files)
                 for i in 0..num_dim {
