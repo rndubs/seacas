@@ -381,6 +381,11 @@ fn parse_rotate(s: &str) -> Result<(String, Vec<f64>)> {
     Ok((sequence, angles?))
 }
 
+/// Check if an argument matches a flag (handles both "--flag" and "--flag=value" forms)
+fn arg_matches_flag(arg: &str, flag: &str) -> bool {
+    arg == flag || arg.starts_with(&format!("{}=", flag))
+}
+
 /// Extract operations from command-line args in the order they appear
 fn extract_ordered_operations(cli: &Cli) -> Result<Vec<Operation>> {
     let args: Vec<String> = std::env::args().collect();
@@ -393,35 +398,21 @@ fn extract_ordered_operations(cli: &Cli) -> Result<Vec<Operation>> {
     let mut rotate_idx = 0;
 
     for (pos, arg) in args.iter().enumerate() {
-        match arg.as_str() {
-            "--scale-len" => {
-                if scale_idx < cli.scale_len.len() {
-                    operations.push((pos, Operation::ScaleLen(cli.scale_len[scale_idx])));
-                    scale_idx += 1;
-                }
-            }
-            "--mirror" => {
-                if mirror_idx < cli.mirror.len() {
-                    let axis: Axis = cli.mirror[mirror_idx].parse()?;
-                    operations.push((pos, Operation::Mirror(axis)));
-                    mirror_idx += 1;
-                }
-            }
-            "--translate" => {
-                if translate_idx < cli.translate.len() {
-                    let offset = parse_translate(&cli.translate[translate_idx])?;
-                    operations.push((pos, Operation::Translate(offset)));
-                    translate_idx += 1;
-                }
-            }
-            "--rotate" => {
-                if rotate_idx < cli.rotate.len() {
-                    let (seq, angles) = parse_rotate(&cli.rotate[rotate_idx])?;
-                    operations.push((pos, Operation::Rotate(seq, angles)));
-                    rotate_idx += 1;
-                }
-            }
-            _ => {}
+        if arg_matches_flag(arg, "--scale-len") && scale_idx < cli.scale_len.len() {
+            operations.push((pos, Operation::ScaleLen(cli.scale_len[scale_idx])));
+            scale_idx += 1;
+        } else if arg_matches_flag(arg, "--mirror") && mirror_idx < cli.mirror.len() {
+            let axis: Axis = cli.mirror[mirror_idx].parse()?;
+            operations.push((pos, Operation::Mirror(axis)));
+            mirror_idx += 1;
+        } else if arg_matches_flag(arg, "--translate") && translate_idx < cli.translate.len() {
+            let offset = parse_translate(&cli.translate[translate_idx])?;
+            operations.push((pos, Operation::Translate(offset)));
+            translate_idx += 1;
+        } else if arg_matches_flag(arg, "--rotate") && rotate_idx < cli.rotate.len() {
+            let (seq, angles) = parse_rotate(&cli.rotate[rotate_idx])?;
+            operations.push((pos, Operation::Rotate(seq, angles)));
+            rotate_idx += 1;
         }
     }
 
@@ -794,5 +785,26 @@ mod tests {
         cli.preemption = Some(-0.5); // Out of range (should clamp to 0.0)
         let perf = PerformanceOptions::from_cli(&cli);
         assert!(perf.preemption.abs() < 0.001);
+    }
+
+    #[test]
+    fn test_arg_matches_flag() {
+        // Exact match (space-separated form: --flag value)
+        assert!(arg_matches_flag("--translate", "--translate"));
+        assert!(arg_matches_flag("--scale-len", "--scale-len"));
+        assert!(arg_matches_flag("--mirror", "--mirror"));
+        assert!(arg_matches_flag("--rotate", "--rotate"));
+
+        // Equals form (--flag=value)
+        assert!(arg_matches_flag("--translate=1,0,0", "--translate"));
+        assert!(arg_matches_flag("--scale-len=2.0", "--scale-len"));
+        assert!(arg_matches_flag("--mirror=x", "--mirror"));
+        assert!(arg_matches_flag("--rotate=Z,90", "--rotate"));
+
+        // Non-matches
+        assert!(!arg_matches_flag("--translatex", "--translate")); // No equals sign
+        assert!(!arg_matches_flag("--trans", "--translate")); // Partial match
+        assert!(!arg_matches_flag("-t", "--translate")); // Short form (not supported)
+        assert!(!arg_matches_flag("translate", "--translate")); // Missing dashes
     }
 }
