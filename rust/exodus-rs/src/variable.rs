@@ -439,13 +439,14 @@ impl ExodusFile<mode::Write> {
         }
 
         // Create the variable name storage variable
-        // Use NC_CHAR type for compatibility with Exodus readers like VisIt
+        // Use NC_STRING type (1D array) which netcdf-rs can write natively
+        // The exodus-rs reader supports both NC_CHAR 2D and NC_STRING 1D formats
         let var_name_exists = self.nc_file.variable(var_name_var).is_some();
         if !var_name_exists {
             self.nc_file.add_variable_with_type(
                 var_name_var,
-                &[num_var_dim, "len_string"],
-                &NcVariableType::Char,
+                &[num_var_dim],
+                &NcVariableType::String,
             )?;
         }
 
@@ -527,37 +528,13 @@ impl ExodusFile<mode::Write> {
             }
         }
 
-        // Now write the variable names (after all dimensions and variables are created)
-        // CRITICAL: Use the actual len_string dimension size, not max_name_len!
-        // The buffer size must match the variable's second dimension size
-        let actual_len_string = self
-            .nc_file
-            .dimension("len_string")
-            .ok_or_else(|| {
-                ExodusError::Other("len_string dimension not found after creation".to_string())
-            })?
-            .len();
-
+        // Write the variable names using NC_STRING (netcdf-rs native support)
         // CRITICAL: Must write the variable names or reading will fail!
-        let mut var = self.nc_file.variable_mut(var_name_var).ok_or_else(|| {
-            ExodusError::Other(format!(
-                "Cannot get mutable reference to variable '{}' after creation. \
-                This indicates a NetCDF define/data mode issue.",
-                var_name_var
-            ))
-        })?;
-
-        for (i, name) in names.iter().enumerate() {
-            let name_str = name.as_ref();
-            // Use actual dimension size for buffer
-            // NC_CHAR maps to i8 in NetCDF, so we need to cast u8 bytes to i8
-            let bytes = name_str.as_bytes();
-            let mut buf = vec![0i8; actual_len_string];
-            let copy_len = bytes.len().min(actual_len_string);
-            for (j, &b) in bytes[..copy_len].iter().enumerate() {
-                buf[j] = b as i8;
+        if let Some(mut var) = self.nc_file.variable_mut(var_name_var) {
+            for (i, name) in names.iter().enumerate() {
+                let name_str = name.as_ref();
+                var.put_string(name_str, i..i + 1)?;
             }
-            var.put_values(&buf, (i..i + 1, ..))?;
         }
 
         // Force sync to ensure all data is written and file is in consistent state
@@ -1464,12 +1441,13 @@ impl ExodusFile<mode::Write> {
         }
 
         // Create the variable name storage variable
-        // Use NC_CHAR type for compatibility with Exodus readers like VisIt
+        // Use NC_STRING type (1D array) which netcdf-rs can write natively
+        // The exodus-rs reader supports both NC_CHAR 2D and NC_STRING 1D formats
         if self.nc_file.variable(var_name_var).is_none() {
             self.nc_file.add_variable_with_type(
                 var_name_var,
-                &[num_var_dim, "len_string"],
-                &NcVariableType::Char,
+                &[num_var_dim],
+                &NcVariableType::String,
             )?;
         }
 
@@ -1480,32 +1458,12 @@ impl ExodusFile<mode::Write> {
                 .add_variable::<f64>("vals_glo_var", &["time_step", num_var_dim])?;
         }
 
-        // Write the variable names
-        let actual_len_string = self
-            .nc_file
-            .dimension("len_string")
-            .ok_or_else(|| {
-                ExodusError::Other("len_string dimension not found after creation".to_string())
-            })?
-            .len();
-
-        let mut var = self.nc_file.variable_mut(var_name_var).ok_or_else(|| {
-            ExodusError::Other(format!(
-                "Cannot get mutable reference to variable '{}' after creation",
-                var_name_var
-            ))
-        })?;
-
-        for (i, name) in names.iter().enumerate() {
-            let name_str = name.as_ref();
-            // NC_CHAR maps to i8 in NetCDF, so we need to cast u8 bytes to i8
-            let bytes = name_str.as_bytes();
-            let mut buf = vec![0i8; actual_len_string];
-            let copy_len = bytes.len().min(actual_len_string);
-            for (j, &b) in bytes[..copy_len].iter().enumerate() {
-                buf[j] = b as i8;
+        // Write the variable names using NC_STRING (netcdf-rs native support)
+        if let Some(mut var) = self.nc_file.variable_mut(var_name_var) {
+            for (i, name) in names.iter().enumerate() {
+                let name_str = name.as_ref();
+                var.put_string(name_str, i..i + 1)?;
             }
-            var.put_values(&buf, (i..i + 1, ..))?;
         }
 
         // Force sync to ensure all data is written

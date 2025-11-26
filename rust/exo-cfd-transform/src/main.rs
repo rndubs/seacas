@@ -790,7 +790,12 @@ fn read_mesh_data(file: &ExodusFile<mode::Read>, verbose: bool) -> Result<MeshDa
     let coords = file.coords()?;
     let x = coords.x;
     let y = coords.y;
-    let z = coords.z;
+    // For 2D meshes, z may be empty - fill with zeros for consistent handling
+    let z = if coords.z.is_empty() {
+        vec![0.0; x.len()]
+    } else {
+        coords.z
+    };
 
     // Read all element blocks
     let block_ids = file.block_ids(EntityType::ElemBlock)?;
