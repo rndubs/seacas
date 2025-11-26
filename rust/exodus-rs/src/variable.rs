@@ -4,7 +4,7 @@
 //! Implemented in Phase 6.
 
 use crate::error::{EntityId, ExodusError, Result};
-use crate::types::{EntityType, TruthTable};
+use crate::types::{EntityType, TruthTable, VarStorageMode};
 use crate::{mode, ExodusFile, FileMode};
 
 // ====================
@@ -1741,6 +1741,12 @@ impl ExodusFile<mode::Read> {
 
     /// Read variable values at a time step
     ///
+    /// This method automatically handles both storage formats:
+    /// - **Separate format**: Individual variables (e.g., `vals_nod_var1`, `vals_nod_var2`)
+    /// - **Combined format**: Single 3D array (e.g., `vals_nod_var(time_step, num_vars, num_nodes)`)
+    ///
+    /// The storage format is detected automatically when the file is opened.
+    ///
     /// # Arguments
     ///
     /// * `step` - Time step index (0-based)
@@ -1758,6 +1764,44 @@ impl ExodusFile<mode::Read> {
     /// - Variable not found
     /// - NetCDF read fails
     pub fn var(
+        &self,
+        step: usize,
+        var_type: EntityType,
+        entity_id: EntityId,
+        var_index: usize,
+    ) -> Result<Vec<f64>> {
+        // Get the storage mode for this entity type
+        let storage_mode = match var_type {
+            EntityType::Global => self.metadata.storage_format.global,
+            EntityType::Nodal => self.metadata.storage_format.nodal,
+            EntityType::ElemBlock => self.metadata.storage_format.elem_block,
+            EntityType::EdgeBlock => self.metadata.storage_format.edge_block,
+            EntityType::FaceBlock => self.metadata.storage_format.face_block,
+            EntityType::NodeSet => self.metadata.storage_format.node_set,
+            EntityType::EdgeSet => self.metadata.storage_format.edge_set,
+            EntityType::FaceSet => self.metadata.storage_format.face_set,
+            EntityType::SideSet => self.metadata.storage_format.side_set,
+            EntityType::ElemSet => self.metadata.storage_format.elem_set,
+            _ => {
+                return Err(ExodusError::InvalidEntityType(format!(
+                    "Unsupported variable type: {}",
+                    var_type
+                )))
+            }
+        };
+
+        match storage_mode {
+            VarStorageMode::Combined => {
+                self.read_var_combined(step, var_type, entity_id, var_index)
+            }
+            VarStorageMode::Separate | VarStorageMode::None => {
+                self.read_var_separate(step, var_type, entity_id, var_index)
+            }
+        }
+    }
+
+    /// Read variable from separate format (vals_nod_var1, vals_nod_var2, etc.)
+    fn read_var_separate(
         &self,
         step: usize,
         var_type: EntityType,
@@ -1792,6 +1836,68 @@ impl ExodusFile<mode::Read> {
             | EntityType::ElemSet => {
                 // Set vars: (time_step, num_entries_in_set)
                 Ok(var.get_values((step..step + 1, ..))?)
+            }
+            _ => Err(ExodusError::InvalidEntityType(format!(
+                "Unsupported variable type: {}",
+                var_type
+            ))),
+        }
+    }
+
+    /// Read variable from combined 3D format (vals_nod_var, vals_elem_var, etc.)
+    fn read_var_combined(
+        &self,
+        step: usize,
+        var_type: EntityType,
+        _entity_id: EntityId,
+        var_index: usize,
+    ) -> Result<Vec<f64>> {
+        let var_name = match var_type {
+            EntityType::Global => "vals_glo_var",
+            EntityType::Nodal => "vals_nod_var",
+            EntityType::ElemBlock => "vals_elem_var",
+            EntityType::EdgeBlock => "vals_edge_var",
+            EntityType::FaceBlock => "vals_face_var",
+            EntityType::NodeSet => "vals_nset_var",
+            EntityType::EdgeSet => "vals_eset_var",
+            EntityType::FaceSet => "vals_fset_var",
+            EntityType::SideSet => "vals_sset_var",
+            EntityType::ElemSet => "vals_elset_var",
+            _ => {
+                return Err(ExodusError::InvalidEntityType(format!(
+                    "Unsupported variable type: {}",
+                    var_type
+                )))
+            }
+        };
+
+        let var = self
+            .nc_file
+            .variable(var_name)
+            .ok_or_else(|| ExodusError::VariableNotDefined(var_name.to_string()))?;
+
+        match var_type {
+            EntityType::Global => {
+                // Global vars in combined format: (time_step, num_glo_var)
+                let value: f64 = var.get_value((step, var_index))?;
+                Ok(vec![value])
+            }
+            EntityType::Nodal => {
+                // Nodal vars in combined format: (time_step, num_nod_var, num_nodes)
+                // Read slice [step, var_index, :]
+                Ok(var.get_values((step..step + 1, var_index..var_index + 1, ..))?)
+            }
+            EntityType::ElemBlock
+            | EntityType::EdgeBlock
+            | EntityType::FaceBlock
+            | EntityType::NodeSet
+            | EntityType::EdgeSet
+            | EntityType::FaceSet
+            | EntityType::SideSet
+            | EntityType::ElemSet => {
+                // Combined format: (time_step, num_vars, num_entities)
+                // Read slice [step, var_index, :]
+                Ok(var.get_values((step..step + 1, var_index..var_index + 1, ..))?)
             }
             _ => Err(ExodusError::InvalidEntityType(format!(
                 "Unsupported variable type: {}",
@@ -2327,8 +2433,51 @@ impl ExodusFile<mode::Append> {
     }
 
     /// Read a variable at a specific time step (append mode - provides read access)
-    /// This is a simplified version that assumes the variable already exists
+    ///
+    /// This method automatically handles both storage formats:
+    /// - **Separate format**: Individual variables (e.g., `vals_nod_var1`, `vals_nod_var2`)
+    /// - **Combined format**: Single 3D array (e.g., `vals_nod_var(time_step, num_vars, num_nodes)`)
+    ///
+    /// The storage format is detected automatically when the file is opened.
     pub fn var(
+        &self,
+        step: usize,
+        var_type: EntityType,
+        entity_id: EntityId,
+        var_index: usize,
+    ) -> Result<Vec<f64>> {
+        // Get the storage mode for this entity type
+        let storage_mode = match var_type {
+            EntityType::Global => self.metadata.storage_format.global,
+            EntityType::Nodal => self.metadata.storage_format.nodal,
+            EntityType::ElemBlock => self.metadata.storage_format.elem_block,
+            EntityType::EdgeBlock => self.metadata.storage_format.edge_block,
+            EntityType::FaceBlock => self.metadata.storage_format.face_block,
+            EntityType::NodeSet => self.metadata.storage_format.node_set,
+            EntityType::EdgeSet => self.metadata.storage_format.edge_set,
+            EntityType::FaceSet => self.metadata.storage_format.face_set,
+            EntityType::SideSet => self.metadata.storage_format.side_set,
+            EntityType::ElemSet => self.metadata.storage_format.elem_set,
+            _ => {
+                return Err(ExodusError::InvalidEntityType(format!(
+                    "Unsupported variable type: {}",
+                    var_type
+                )))
+            }
+        };
+
+        match storage_mode {
+            VarStorageMode::Combined => {
+                self.read_var_combined_append(step, var_type, var_index)
+            }
+            VarStorageMode::Separate | VarStorageMode::None => {
+                self.read_var_separate_append(step, var_type, entity_id, var_index)
+            }
+        }
+    }
+
+    /// Read variable from separate format (vals_nod_var1, vals_nod_var2, etc.)
+    fn read_var_separate_append(
         &self,
         step: usize,
         var_type: EntityType,
@@ -2350,6 +2499,50 @@ impl ExodusFile<mode::Append> {
                     })?;
                 format!("vals_elem_var{}eb{}", var_index + 1, block_index + 1)
             }
+            EntityType::EdgeBlock => {
+                let block_ids = self.block_ids(EntityType::EdgeBlock)?;
+                let block_index = block_ids
+                    .iter()
+                    .position(|&id| id == entity_id)
+                    .ok_or_else(|| ExodusError::EntityNotFound {
+                        entity_type: EntityType::EdgeBlock.to_string(),
+                        id: entity_id,
+                    })?;
+                format!("vals_edge_var{}edb{}", var_index + 1, block_index + 1)
+            }
+            EntityType::FaceBlock => {
+                let block_ids = self.block_ids(EntityType::FaceBlock)?;
+                let block_index = block_ids
+                    .iter()
+                    .position(|&id| id == entity_id)
+                    .ok_or_else(|| ExodusError::EntityNotFound {
+                        entity_type: EntityType::FaceBlock.to_string(),
+                        id: entity_id,
+                    })?;
+                format!("vals_face_var{}fab{}", var_index + 1, block_index + 1)
+            }
+            EntityType::NodeSet => {
+                let set_ids = self.set_ids(EntityType::NodeSet)?;
+                let set_index = set_ids
+                    .iter()
+                    .position(|&id| id == entity_id)
+                    .ok_or_else(|| ExodusError::EntityNotFound {
+                        entity_type: EntityType::NodeSet.to_string(),
+                        id: entity_id,
+                    })?;
+                format!("vals_nset_var{}ns{}", var_index + 1, set_index + 1)
+            }
+            EntityType::SideSet => {
+                let set_ids = self.set_ids(EntityType::SideSet)?;
+                let set_index = set_ids
+                    .iter()
+                    .position(|&id| id == entity_id)
+                    .ok_or_else(|| ExodusError::EntityNotFound {
+                        entity_type: EntityType::SideSet.to_string(),
+                        id: entity_id,
+                    })?;
+                format!("vals_sset_var{}ss{}", var_index + 1, set_index + 1)
+            }
             _ => {
                 return Err(ExodusError::Other(format!(
                     "Variable reading not yet fully implemented for {:?} in append mode",
@@ -2368,11 +2561,52 @@ impl ExodusFile<mode::Append> {
                 let value: f64 = var.get_value((step, var_index))?;
                 Ok(vec![value])
             }
-            EntityType::Nodal | EntityType::ElemBlock => Ok(var.get_values((step..step + 1, ..))?),
-            _ => Err(ExodusError::Other(format!(
-                "Unsupported variable type: {:?}",
-                var_type
-            ))),
+            _ => Ok(var.get_values((step..step + 1, ..))?),
+        }
+    }
+
+    /// Read variable from combined 3D format (vals_nod_var, vals_elem_var, etc.)
+    fn read_var_combined_append(
+        &self,
+        step: usize,
+        var_type: EntityType,
+        var_index: usize,
+    ) -> Result<Vec<f64>> {
+        let var_name = match var_type {
+            EntityType::Global => "vals_glo_var",
+            EntityType::Nodal => "vals_nod_var",
+            EntityType::ElemBlock => "vals_elem_var",
+            EntityType::EdgeBlock => "vals_edge_var",
+            EntityType::FaceBlock => "vals_face_var",
+            EntityType::NodeSet => "vals_nset_var",
+            EntityType::EdgeSet => "vals_eset_var",
+            EntityType::FaceSet => "vals_fset_var",
+            EntityType::SideSet => "vals_sset_var",
+            EntityType::ElemSet => "vals_elset_var",
+            _ => {
+                return Err(ExodusError::InvalidEntityType(format!(
+                    "Unsupported variable type: {}",
+                    var_type
+                )))
+            }
+        };
+
+        let var = self
+            .nc_file
+            .variable(var_name)
+            .ok_or_else(|| ExodusError::VariableNotDefined(var_name.to_string()))?;
+
+        match var_type {
+            EntityType::Global => {
+                // Global vars in combined format: (time_step, num_glo_var)
+                let value: f64 = var.get_value((step, var_index))?;
+                Ok(vec![value])
+            }
+            _ => {
+                // Combined format: (time_step, num_vars, num_entities)
+                // Read slice [step, var_index, :]
+                Ok(var.get_values((step..step + 1, var_index..var_index + 1, ..))?)
+            }
         }
     }
 

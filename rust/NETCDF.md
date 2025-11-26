@@ -1,8 +1,12 @@
 # NetCDF/Exodus Variable Storage Format Support
 
+**Status: ✅ IMPLEMENTED (2025-11-26)**
+
 ## Issue Summary
 
-The exodus-rs library fails to read nodal variable data from files that use the **combined 3D storage format**. The error manifests as `Error: Exodus(NetCdf(Str("Conversion not supported")))` or `VariableNotDefined`.
+The exodus-rs library previously failed to read nodal variable data from files that use the **combined 3D storage format**. The error manifested as `Error: Exodus(NetCdf(Str("Conversion not supported")))` or `VariableNotDefined`.
+
+This has now been fixed by implementing automatic storage format detection.
 
 ## Root Cause
 
@@ -148,23 +152,45 @@ impl<M: FileMode> ExodusFile<M> {
 }
 ```
 
-## Files to Modify
+## Files Modified
 
-1. `rust/exodus-rs/src/types.rs` - Add `VarStorageMode` and `FileStorageFormat`
-2. `rust/exodus-rs/src/lib.rs` - Add `storage_format` field to `ExodusFile`
-3. `rust/exodus-rs/src/lib.rs` - Detect format in `open()` and `append()`
-4. `rust/exodus-rs/src/variable.rs` - Update `var()` to use detected format
+1. `rust/exodus-rs/src/types.rs` - Added `VarStorageMode` and `FileStorageFormat`
+2. `rust/exodus-rs/src/lib.rs` - Exports new types
+3. `rust/exodus-rs/src/file.rs` - Added `storage_format` field to `FileMetadata`, detect format in `open()` and `append()`, added `storage_format()` accessor
+4. `rust/exodus-rs/src/variable.rs` - Updated `var()` to use detected format with `read_var_combined()` and `read_var_separate()` helpers
 
 ## Testing
 
-1. Create test files with each storage format
-2. Create test file with mixed formats (like the user's file)
-3. Verify `var()` reads correctly based on detected format
-4. Verify `storage_format()` returns correct detection results
+Test file: `rust/exodus-rs/tests/test_storage_format.rs`
 
-## Temporary Workaround
+1. `test_storage_format_detection_separate` - Verifies detection of separate format files
+2. `test_storage_format_detection_no_vars` - Verifies detection when no variables present
+3. `test_storage_format_global_variables` - Tests global variable format detection
+4. `test_storage_format_accessor` - Tests the public `storage_format()` accessor
+5. `test_storage_format_append_mode` - Tests format detection in append mode
+6. `test_var_storage_mode_default` - Tests enum default value
+7. `test_file_storage_format_default` - Tests struct default values
 
-Until this is implemented, the copy-mirror-merge workflow handles read failures gracefully (commit 2d009c0):
-- Variable name reading uses `unwrap_or_default()`
-- Variable data reading catches errors and continues
-- Mesh geometry is preserved even when variables can't be read
+## Usage
+
+```rust
+use exodus_rs::{ExodusFile, mode, VarStorageMode};
+
+// Open a file - format is automatically detected
+let file = ExodusFile::<mode::Read>::open("mesh.exo")?;
+
+// Check the detected format
+let format = file.storage_format();
+match format.nodal {
+    VarStorageMode::Combined => println!("Uses combined format"),
+    VarStorageMode::Separate => println!("Uses separate format"),
+    VarStorageMode::None => println!("No nodal variables"),
+}
+
+// Read variables - works automatically regardless of format
+let values = file.var(0, EntityType::Nodal, 0, 0)?;
+```
+
+## Previous Workaround (No Longer Needed)
+
+The temporary workaround from commit 2d009c0 is no longer needed - the library now handles both formats automatically.
