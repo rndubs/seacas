@@ -6,6 +6,7 @@
 use crate::error::{EntityId, ExodusError, Result};
 use crate::types::{EntityType, TruthTable, VarStorageMode};
 use crate::{mode, ExodusFile, FileMode};
+use netcdf::types::NcVariableType;
 
 // ====================
 // Common Operations
@@ -26,7 +27,6 @@ impl<M: FileMode> ExodusFile<M> {
     ///
     /// Returns an error if NetCDF read fails
     pub fn variable_names(&self, var_type: EntityType) -> Result<Vec<String>> {
-        eprintln!("DEBUG: variable_names called for {:?}", var_type);
         let var_name_var = match var_type {
             EntityType::Global => "name_glo_var",
             EntityType::Nodal => "name_nod_var",
@@ -91,12 +91,7 @@ impl<M: FileMode> ExodusFile<M> {
                     .len();
 
                 // Read raw bytes directly (more reliable for 2D char arrays)
-                eprintln!(
-                    "DEBUG: Reading name array as raw bytes: {} vars x {} chars",
-                    num_vars, len_string
-                );
                 let raw_bytes: Vec<u8> = var.get_raw_values(..)?;
-                eprintln!("DEBUG: Got {} raw bytes", raw_bytes.len());
 
                 let mut names = Vec::new();
                 for i in 0..num_vars {
@@ -444,10 +439,15 @@ impl ExodusFile<mode::Write> {
         }
 
         // Create the variable name storage variable
+        // Use NC_STRING type (1D array) which netcdf-rs can write natively
+        // The exodus-rs reader supports both NC_CHAR 2D and NC_STRING 1D formats
         let var_name_exists = self.nc_file.variable(var_name_var).is_some();
         if !var_name_exists {
-            self.nc_file
-                .add_variable::<u8>(var_name_var, &[num_var_dim, "len_string"])?;
+            self.nc_file.add_variable_with_type(
+                var_name_var,
+                &[num_var_dim],
+                &NcVariableType::String,
+            )?;
         }
 
         // Get chunking configuration (raw requested values)
@@ -528,34 +528,13 @@ impl ExodusFile<mode::Write> {
             }
         }
 
-        // Now write the variable names (after all dimensions and variables are created)
-        // CRITICAL: Use the actual len_string dimension size, not max_name_len!
-        // The buffer size must match the variable's second dimension size
-        let actual_len_string = self
-            .nc_file
-            .dimension("len_string")
-            .ok_or_else(|| {
-                ExodusError::Other("len_string dimension not found after creation".to_string())
-            })?
-            .len();
-
+        // Write the variable names using NC_STRING (netcdf-rs native support)
         // CRITICAL: Must write the variable names or reading will fail!
-        let mut var = self.nc_file.variable_mut(var_name_var).ok_or_else(|| {
-            ExodusError::Other(format!(
-                "Cannot get mutable reference to variable '{}' after creation. \
-                This indicates a NetCDF define/data mode issue.",
-                var_name_var
-            ))
-        })?;
-
-        for (i, name) in names.iter().enumerate() {
-            let name_str = name.as_ref();
-            // Use actual dimension size for buffer
-            let mut buf = vec![0u8; actual_len_string];
-            let bytes = name_str.as_bytes();
-            let copy_len = bytes.len().min(actual_len_string);
-            buf[..copy_len].copy_from_slice(&bytes[..copy_len]);
-            var.put_values(&buf, (i..i + 1, ..))?;
+        if let Some(mut var) = self.nc_file.variable_mut(var_name_var) {
+            for (i, name) in names.iter().enumerate() {
+                let name_str = name.as_ref();
+                var.put_string(name_str, i..i + 1)?;
+            }
         }
 
         // Force sync to ensure all data is written and file is in consistent state
@@ -708,6 +687,9 @@ impl ExodusFile<mode::Write> {
             }
         };
 
+        // Ensure we're in define mode for adding the truth table variable
+        self.ensure_define_mode()?;
+
         // Validate that table var_type matches parameter
         if table.var_type != var_type {
             return Err(ExodusError::Other(format!(
@@ -757,12 +739,18 @@ impl ExodusFile<mode::Write> {
                 .add_variable::<i32>(var_name, &[num_blocks_dim, num_vars_dim])?;
         }
 
+        // Switch to data mode for writing values
+        self.ensure_data_mode()?;
+
         // Convert bool to i32 and write
         let table_i32: Vec<i32> = table.table.iter().map(|&b| if b { 1 } else { 0 }).collect();
 
         if let Some(mut var) = self.nc_file.variable_mut(var_name) {
             var.put_values(&table_i32, ..)?;
         }
+
+        // Sync to ensure data is written
+        self.nc_file.sync()?;
 
         Ok(())
     }
@@ -1453,9 +1441,14 @@ impl ExodusFile<mode::Write> {
         }
 
         // Create the variable name storage variable
+        // Use NC_STRING type (1D array) which netcdf-rs can write natively
+        // The exodus-rs reader supports both NC_CHAR 2D and NC_STRING 1D formats
         if self.nc_file.variable(var_name_var).is_none() {
-            self.nc_file
-                .add_variable::<u8>(var_name_var, &[num_var_dim, "len_string"])?;
+            self.nc_file.add_variable_with_type(
+                var_name_var,
+                &[num_var_dim],
+                &NcVariableType::String,
+            )?;
         }
 
         // For global reduction variables, create the storage variable now
@@ -1465,29 +1458,12 @@ impl ExodusFile<mode::Write> {
                 .add_variable::<f64>("vals_glo_var", &["time_step", num_var_dim])?;
         }
 
-        // Write the variable names
-        let actual_len_string = self
-            .nc_file
-            .dimension("len_string")
-            .ok_or_else(|| {
-                ExodusError::Other("len_string dimension not found after creation".to_string())
-            })?
-            .len();
-
-        let mut var = self.nc_file.variable_mut(var_name_var).ok_or_else(|| {
-            ExodusError::Other(format!(
-                "Cannot get mutable reference to variable '{}' after creation",
-                var_name_var
-            ))
-        })?;
-
-        for (i, name) in names.iter().enumerate() {
-            let name_str = name.as_ref();
-            let mut buf = vec![0u8; actual_len_string];
-            let bytes = name_str.as_bytes();
-            let copy_len = bytes.len().min(actual_len_string);
-            buf[..copy_len].copy_from_slice(&bytes[..copy_len]);
-            var.put_values(&buf, (i..i + 1, ..))?;
+        // Write the variable names using NC_STRING (netcdf-rs native support)
+        if let Some(mut var) = self.nc_file.variable_mut(var_name_var) {
+            for (i, name) in names.iter().enumerate() {
+                let name_str = name.as_ref();
+                var.put_string(name_str, i..i + 1)?;
+            }
         }
 
         // Force sync to ensure all data is written
@@ -1783,10 +1759,6 @@ impl ExodusFile<mode::Read> {
         var_index: usize,
     ) -> Result<Vec<f64>> {
         // Get the storage mode for this entity type
-        eprintln!(
-            "DEBUG: Detected storage formats - nodal:{:?}, elem:{:?}",
-            self.metadata.storage_format.nodal, self.metadata.storage_format.elem_block
-        );
         let storage_mode = match var_type {
             EntityType::Global => self.metadata.storage_format.global,
             EntityType::Nodal => self.metadata.storage_format.nodal,
@@ -1806,10 +1778,6 @@ impl ExodusFile<mode::Read> {
             }
         };
 
-        eprintln!(
-            "DEBUG: var() for {:?}, storage_mode={:?}",
-            var_type, storage_mode
-        );
         match storage_mode {
             VarStorageMode::Combined => {
                 self.read_var_combined(step, var_type, entity_id, var_index)
@@ -1872,10 +1840,6 @@ impl ExodusFile<mode::Read> {
         _entity_id: EntityId,
         var_index: usize,
     ) -> Result<Vec<f64>> {
-        eprintln!(
-            "DEBUG: read_var_combined called for {:?}, step={}, var_index={}",
-            var_type, step, var_index
-        );
         let var_name = match var_type {
             EntityType::Global => "vals_glo_var",
             EntityType::Nodal => "vals_nod_var",

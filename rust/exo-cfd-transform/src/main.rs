@@ -675,6 +675,9 @@ struct MeshData {
     // Nodal variables (name, values for each time step)
     nodal_var_names: Vec<String>,
     nodal_var_values: Vec<Vec<Vec<f64>>>, // [var_idx][time_step][node_idx]
+    // Element block variables (name, values for each block and time step)
+    elem_var_names: Vec<String>,
+    elem_var_values: Vec<Vec<Vec<Vec<f64>>>>, // [block_idx][var_idx][time_step][elem_idx]
     // Global variables
     global_var_names: Vec<String>,
     global_var_values: Vec<Vec<f64>>, // [time_step][var_idx]
@@ -787,7 +790,12 @@ fn read_mesh_data(file: &ExodusFile<mode::Read>, verbose: bool) -> Result<MeshDa
     let coords = file.coords()?;
     let x = coords.x;
     let y = coords.y;
-    let z = coords.z;
+    // For 2D meshes, z may be empty - fill with zeros for consistent handling
+    let z = if coords.z.is_empty() {
+        vec![0.0; x.len()]
+    } else {
+        coords.z
+    };
 
     // Read all element blocks
     let block_ids = file.block_ids(EntityType::ElemBlock)?;
@@ -854,25 +862,21 @@ fn read_mesh_data(file: &ExodusFile<mode::Read>, verbose: bool) -> Result<MeshDa
     let num_time_steps = times.len();
 
     // Read nodal variables
-    eprintln!("DEBUG: About to call variable_names for Nodal");
     let nodal_var_names = file.variable_names(EntityType::Nodal)?;
-    eprintln!(
-        "DEBUG: Got {} nodal variable names: {:?}",
-        nodal_var_names.len(),
-        nodal_var_names
-    );
     let mut nodal_var_values: Vec<Vec<Vec<f64>>> = Vec::new();
 
+    if verbose {
+        println!(
+            "  Found {} nodal variables, {} time steps",
+            nodal_var_names.len(),
+            num_time_steps
+        );
+    }
+
     for var_idx in 0..nodal_var_names.len() {
-        eprintln!("DEBUG: Reading nodal var_idx={}", var_idx);
         let mut var_time_series = Vec::new();
         for step in 0..num_time_steps {
-            eprintln!(
-                "DEBUG: About to call file.var(step={}, EntityType::Nodal, 0, var_idx={})",
-                step, var_idx
-            );
             let values = file.var(step, EntityType::Nodal, 0, var_idx)?;
-            eprintln!("DEBUG: Successfully read {} values", values.len());
             var_time_series.push(values);
         }
         nodal_var_values.push(var_time_series);
@@ -880,6 +884,59 @@ fn read_mesh_data(file: &ExodusFile<mode::Read>, verbose: bool) -> Result<MeshDa
 
     if verbose && !nodal_var_names.is_empty() {
         println!("  Nodal variables: {:?}", nodal_var_names);
+    }
+
+    // Read element block variables
+    let elem_var_names = file.variable_names(EntityType::ElemBlock)?;
+    let mut elem_var_values: Vec<Vec<Vec<Vec<f64>>>> = Vec::new(); // [block_idx][var_idx][time_step][elem_idx]
+
+    if verbose {
+        println!(
+            "  Found {} element variables across {} blocks",
+            elem_var_names.len(),
+            blocks.len()
+        );
+    }
+
+    for (block_idx, block) in blocks.iter().enumerate() {
+        let mut block_vars: Vec<Vec<Vec<f64>>> = Vec::new(); // [var_idx][time_step][elem_idx]
+
+        for var_idx in 0..elem_var_names.len() {
+            let mut var_time_series: Vec<Vec<f64>> = Vec::new();
+            for step in 0..num_time_steps {
+                // Use block.id as entity_id for element block variables
+                match file.var(step, EntityType::ElemBlock, block.id, var_idx) {
+                    Ok(values) => {
+                        if verbose && step == 0 && block_idx == 0 {
+                            println!(
+                                "    Read {} values for elem var {} on block {}",
+                                values.len(),
+                                var_idx,
+                                block.id
+                            );
+                        }
+                        var_time_series.push(values);
+                    }
+                    Err(e) => {
+                        if verbose && step == 0 {
+                            println!(
+                                "    Warning: Could not read elem var {} on block {}: {}",
+                                var_idx, block.id, e
+                            );
+                        }
+                        // Variable might not be defined for this block (truth table)
+                        // Use empty vector to indicate no data
+                        var_time_series.push(Vec::new());
+                    }
+                }
+            }
+            block_vars.push(var_time_series);
+        }
+        elem_var_values.push(block_vars);
+
+        if verbose && !elem_var_names.is_empty() && block_idx == 0 {
+            println!("  Element variables: {:?}", elem_var_names);
+        }
     }
 
     // Read global variables
@@ -918,6 +975,8 @@ fn read_mesh_data(file: &ExodusFile<mode::Read>, verbose: bool) -> Result<MeshDa
         side_sets,
         nodal_var_names,
         nodal_var_values,
+        elem_var_names,
+        elem_var_values,
         global_var_names,
         global_var_values,
         times,
@@ -1202,6 +1261,46 @@ fn copy_mirror_merge(
         }
     }
 
+    // Create mirrored element variable values
+    // Structure: [block_idx][var_idx][time_step][elem_idx]
+    // After mirroring, we have original blocks followed by mirrored blocks
+    let mut new_elem_var_values: Vec<Vec<Vec<Vec<f64>>>> = Vec::new();
+
+    // First, keep original block values unchanged
+    for block_vars in &data.elem_var_values {
+        new_elem_var_values.push(block_vars.clone());
+    }
+
+    // Then, add mirrored block values (duplicating original values with vector negation)
+    for (block_idx, block_vars) in data.elem_var_values.iter().enumerate() {
+        let mut mirror_block_vars: Vec<Vec<Vec<f64>>> = Vec::new();
+
+        for (var_idx, var_time_series) in block_vars.iter().enumerate() {
+            let var_name = data
+                .elem_var_names
+                .get(var_idx)
+                .map(|s| s.as_str())
+                .unwrap_or("");
+            let is_mirror_component = is_vector_component(var_name, axis);
+
+            let mut mirror_var_time_series: Vec<Vec<f64>> = Vec::new();
+            for step_values in var_time_series {
+                let mirror_values: Vec<f64> = if is_mirror_component {
+                    step_values.iter().map(|&v| -v).collect()
+                } else {
+                    step_values.clone()
+                };
+                mirror_var_time_series.push(mirror_values);
+            }
+            mirror_block_vars.push(mirror_var_time_series);
+
+            if verbose && is_mirror_component && block_idx == 0 {
+                println!("  Negating element vector component: {}", var_name);
+            }
+        }
+        new_elem_var_values.push(mirror_block_vars);
+    }
+
     // Create new params
     let mut new_params = data.params.clone();
     new_params.num_nodes = num_new_nodes;
@@ -1222,6 +1321,8 @@ fn copy_mirror_merge(
         side_sets: new_side_sets,
         nodal_var_names: data.nodal_var_names.clone(),
         nodal_var_values: new_nodal_var_values,
+        elem_var_names: data.elem_var_names.clone(),
+        elem_var_values: new_elem_var_values,
         global_var_names: data.global_var_names.clone(),
         global_var_values: data.global_var_values.clone(),
         times: data.times.clone(),
@@ -1317,6 +1418,19 @@ fn write_mesh_data(path: &PathBuf, data: &MeshData, verbose: bool) -> Result<()>
 
     // Write time steps and variables
     if !data.times.is_empty() {
+        if verbose {
+            println!(
+                "  Writing {} time steps with {} nodal vars, {} elem vars",
+                data.times.len(),
+                data.nodal_var_names.len(),
+                data.elem_var_names.len()
+            );
+            println!(
+                "  Elem var values array: {} blocks",
+                data.elem_var_values.len()
+            );
+        }
+
         // Define nodal variables
         if !data.nodal_var_names.is_empty() {
             let names: Vec<&str> = data.nodal_var_names.iter().map(|s| s.as_str()).collect();
@@ -1327,6 +1441,28 @@ fn write_mesh_data(path: &PathBuf, data: &MeshData, verbose: bool) -> Result<()>
         if !data.global_var_names.is_empty() {
             let names: Vec<&str> = data.global_var_names.iter().map(|s| s.as_str()).collect();
             file.define_variables(EntityType::Global, &names)?;
+        }
+
+        // Define element block variables
+        if !data.elem_var_names.is_empty() {
+            let names: Vec<&str> = data.elem_var_names.iter().map(|s| s.as_str()).collect();
+            file.define_variables(EntityType::ElemBlock, &names)?;
+
+            // Write truth table (all blocks have all variables)
+            let truth_table = TruthTable::new(
+                EntityType::ElemBlock,
+                data.blocks.len(),
+                data.elem_var_names.len(),
+            );
+            file.put_truth_table(EntityType::ElemBlock, &truth_table)?;
+
+            if verbose {
+                println!(
+                    "  Wrote elem_var_tab: {} blocks x {} vars",
+                    data.blocks.len(),
+                    data.elem_var_names.len()
+                );
+            }
         }
 
         // Write time values and variable data
@@ -1345,7 +1481,44 @@ fn write_mesh_data(path: &PathBuf, data: &MeshData, verbose: bool) -> Result<()>
                     file.put_var(step, EntityType::Global, 0, var_idx, &[*value])?;
                 }
             }
+
+            // Write element block variables
+            for (block_idx, block) in data.blocks.iter().enumerate() {
+                if let Some(block_vars) = data.elem_var_values.get(block_idx) {
+                    for (var_idx, var_time_series) in block_vars.iter().enumerate() {
+                        if let Some(values) = var_time_series.get(step) {
+                            if !values.is_empty() {
+                                if verbose && step == 0 {
+                                    println!(
+                                        "    Writing {} values for elem var {} on block {} (id={})",
+                                        values.len(),
+                                        var_idx,
+                                        block_idx,
+                                        block.id
+                                    );
+                                }
+                                file.put_var(
+                                    step,
+                                    EntityType::ElemBlock,
+                                    block.id,
+                                    var_idx,
+                                    values,
+                                )?;
+                            } else if verbose && step == 0 {
+                                println!(
+                                    "    Skipping empty elem var {} on block {} (id={})",
+                                    var_idx, block_idx, block.id
+                                );
+                            }
+                        }
+                    }
+                } else if verbose && step == 0 {
+                    println!("    No elem var data for block {}", block_idx);
+                }
+            }
         }
+    } else if verbose {
+        println!("  No time steps - skipping variable output");
     }
 
     file.sync()?;

@@ -585,7 +585,7 @@ fn test_variable_name_length_limits() {
     })
     .unwrap();
 
-    // Very long variable name (will be truncated to 32 chars)
+    // Long variable name - with NC_STRING format, names are not truncated
     let long_name = "ThisIsAVeryLongVariableNameThatExceedsThirtyTwoCharacters";
 
     file.define_variables(EntityType::Nodal, &[long_name])
@@ -597,8 +597,8 @@ fn test_variable_name_length_limits() {
     let file = ExodusFile::<mode::Read>::open(tmp.path()).unwrap();
     let vars = file.variable_names(EntityType::Nodal).unwrap();
 
-    // Should be truncated to 32 characters
-    assert!(vars[0].len() <= 32);
+    // With NC_STRING format, names are preserved in full (not truncated)
+    assert_eq!(vars[0], long_name);
 }
 
 #[test]
