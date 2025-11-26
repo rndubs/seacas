@@ -1,4 +1,4 @@
-//! exo-cfd-transform: CLI tool for transforming Exodus mesh files
+//! rexonator: CLI tool for transforming Exodus mesh files
 //!
 //! This tool applies geometric transformations to Exodus II mesh files,
 //! including translation, rotation, scaling, and mirroring. Transformations
@@ -35,7 +35,7 @@ type Result<T> = std::result::Result<T, TransformError>;
 /// For example: `--translate 1,0,0 --rotate "Z,90" --scale-len 2` will first
 /// translate, then rotate, then scale.
 #[derive(Parser, Debug)]
-#[command(name = "exo-cfd-transform")]
+#[command(name = "rexonator")]
 #[command(author, version, about, long_about = None)]
 struct Cli {
     /// Input Exodus file
@@ -628,11 +628,11 @@ fn show_man_page() -> Result<()> {
     })?;
 
     // Look for the man page in the same directory as the executable
-    let man_page = exe_dir.join("exo-cfd-transform.1");
+    let man_page = exe_dir.join("rexonator.1");
 
     if !man_page.exists() {
         eprintln!("Man page not found at: {}", man_page.display());
-        eprintln!("Please ensure exo-cfd-transform.1 is in the same directory as the executable.");
+        eprintln!("Please ensure rexonator.1 is in the same directory as the executable.");
         eprintln!("\nYou can view it with: man {}", man_page.display());
         std::process::exit(1);
     }
@@ -2023,9 +2023,9 @@ mod tests {
 
     #[test]
     fn test_operation_order_translate_then_rotate() {
-        // Simulate: exo-cfd-transform in.exo out.exo --translate 1,0,0 --rotate Z,90
+        // Simulate: rexonator in.exo out.exo --translate 1,0,0 --rotate Z,90
         let args: Vec<String> = vec![
-            "exo-cfd-transform",
+            "rexonator",
             "in.exo",
             "out.exo",
             "--translate",
@@ -2053,9 +2053,9 @@ mod tests {
 
     #[test]
     fn test_operation_order_rotate_then_translate() {
-        // Simulate: exo-cfd-transform in.exo out.exo --rotate Z,90 --translate 1,0,0
+        // Simulate: rexonator in.exo out.exo --rotate Z,90 --translate 1,0,0
         let args: Vec<String> = vec![
-            "exo-cfd-transform",
+            "rexonator",
             "in.exo",
             "out.exo",
             "--rotate",
@@ -2083,9 +2083,9 @@ mod tests {
 
     #[test]
     fn test_operation_order_interleaved() {
-        // Simulate: exo-cfd-transform in.exo out.exo --translate 1,0,0 --rotate Z,90 --translate 2,0,0
+        // Simulate: rexonator in.exo out.exo --translate 1,0,0 --rotate Z,90 --translate 2,0,0
         let args: Vec<String> = vec![
-            "exo-cfd-transform",
+            "rexonator",
             "in.exo",
             "out.exo",
             "--translate",
@@ -2116,9 +2116,9 @@ mod tests {
 
     #[test]
     fn test_operation_order_all_types() {
-        // Simulate: exo-cfd-transform in.exo out.exo --mirror x --translate 1,0,0 --scale-len 2 --rotate Z,90
+        // Simulate: rexonator in.exo out.exo --mirror x --translate 1,0,0 --scale-len 2 --rotate Z,90
         let args: Vec<String> = vec![
-            "exo-cfd-transform",
+            "rexonator",
             "in.exo",
             "out.exo",
             "--mirror",
@@ -2152,9 +2152,9 @@ mod tests {
 
     #[test]
     fn test_operation_order_equals_syntax() {
-        // Simulate: exo-cfd-transform in.exo out.exo --translate=1,0,0 --rotate=Z,90
+        // Simulate: rexonator in.exo out.exo --translate=1,0,0 --rotate=Z,90
         let args: Vec<String> = vec![
-            "exo-cfd-transform",
+            "rexonator",
             "in.exo",
             "out.exo",
             "--translate=1,0,0",
@@ -2180,9 +2180,9 @@ mod tests {
 
     #[test]
     fn test_operation_order_equals_syntax_reversed() {
-        // Simulate: exo-cfd-transform in.exo out.exo --rotate=Z,90 --translate=1,0,0
+        // Simulate: rexonator in.exo out.exo --rotate=Z,90 --translate=1,0,0
         let args: Vec<String> = vec![
-            "exo-cfd-transform",
+            "rexonator",
             "in.exo",
             "out.exo",
             "--rotate=Z,90",
@@ -2257,7 +2257,7 @@ mod tests {
     fn test_scale_field_operation_order() {
         // Test that scale-field operations are ordered correctly
         let args: Vec<String> = vec![
-            "exo-cfd-transform",
+            "rexonator",
             "in.exo",
             "out.exo",
             "--scale-field",
@@ -2286,7 +2286,7 @@ mod tests {
     fn test_multiple_scale_field_operations() {
         // Test multiple field scaling operations
         let args: Vec<String> = vec![
-            "exo-cfd-transform",
+            "rexonator",
             "in.exo",
             "out.exo",
             "--scale-field",
@@ -2328,7 +2328,7 @@ mod tests {
     fn test_scale_field_with_other_operations() {
         // Test scale-field mixed with other operations
         let args: Vec<String> = vec![
-            "exo-cfd-transform",
+            "rexonator",
             "in.exo",
             "out.exo",
             "--translate",
@@ -2371,7 +2371,7 @@ mod tests {
     fn test_scale_field_equals_syntax() {
         // Test --scale-field=value syntax
         let args: Vec<String> = vec![
-            "exo-cfd-transform",
+            "rexonator",
             "in.exo",
             "out.exo",
             "--scale-field=temperature,1.5",
@@ -2502,17 +2502,11 @@ mod tests {
 
     #[test]
     fn test_copy_mirror_merge_operation_parsing() {
-        // Simulate: exo-cfd-transform in.exo out.exo --copy-mirror-merge x
-        let args: Vec<String> = vec![
-            "exo-cfd-transform",
-            "in.exo",
-            "out.exo",
-            "--copy-mirror-merge",
-            "x",
-        ]
-        .into_iter()
-        .map(String::from)
-        .collect();
+        // Simulate: rexonator in.exo out.exo --copy-mirror-merge x
+        let args: Vec<String> = vec!["rexonator", "in.exo", "out.exo", "--copy-mirror-merge", "x"]
+            .into_iter()
+            .map(String::from)
+            .collect();
 
         let cli =
             make_test_cli_with_cmm(vec![], vec![], vec![], vec![], vec!["x".to_string()], 0.001);
@@ -2527,9 +2521,9 @@ mod tests {
 
     #[test]
     fn test_copy_mirror_merge_with_other_ops() {
-        // Simulate: exo-cfd-transform in.exo out.exo --translate 1,0,0 --copy-mirror-merge x --rotate Z,90
+        // Simulate: rexonator in.exo out.exo --translate 1,0,0 --copy-mirror-merge x --rotate Z,90
         let args: Vec<String> = vec![
-            "exo-cfd-transform",
+            "rexonator",
             "in.exo",
             "out.exo",
             "--translate",
@@ -2564,16 +2558,11 @@ mod tests {
 
     #[test]
     fn test_copy_mirror_merge_equals_syntax() {
-        // Simulate: exo-cfd-transform in.exo out.exo --copy-mirror-merge=y
-        let args: Vec<String> = vec![
-            "exo-cfd-transform",
-            "in.exo",
-            "out.exo",
-            "--copy-mirror-merge=y",
-        ]
-        .into_iter()
-        .map(String::from)
-        .collect();
+        // Simulate: rexonator in.exo out.exo --copy-mirror-merge=y
+        let args: Vec<String> = vec!["rexonator", "in.exo", "out.exo", "--copy-mirror-merge=y"]
+            .into_iter()
+            .map(String::from)
+            .collect();
 
         let cli =
             make_test_cli_with_cmm(vec![], vec![], vec![], vec![], vec!["y".to_string()], 0.001);
