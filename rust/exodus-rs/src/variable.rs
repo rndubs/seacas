@@ -2467,9 +2467,7 @@ impl ExodusFile<mode::Append> {
         };
 
         match storage_mode {
-            VarStorageMode::Combined => {
-                self.read_var_combined_append(step, var_type, var_index)
-            }
+            VarStorageMode::Combined => self.read_var_combined_append(step, var_type, var_index),
             VarStorageMode::Separate | VarStorageMode::None => {
                 self.read_var_separate_append(step, var_type, entity_id, var_index)
             }
@@ -2523,24 +2521,26 @@ impl ExodusFile<mode::Append> {
             }
             EntityType::NodeSet => {
                 let set_ids = self.set_ids(EntityType::NodeSet)?;
-                let set_index = set_ids
-                    .iter()
-                    .position(|&id| id == entity_id)
-                    .ok_or_else(|| ExodusError::EntityNotFound {
-                        entity_type: EntityType::NodeSet.to_string(),
-                        id: entity_id,
-                    })?;
+                let set_index =
+                    set_ids
+                        .iter()
+                        .position(|&id| id == entity_id)
+                        .ok_or_else(|| ExodusError::EntityNotFound {
+                            entity_type: EntityType::NodeSet.to_string(),
+                            id: entity_id,
+                        })?;
                 format!("vals_nset_var{}ns{}", var_index + 1, set_index + 1)
             }
             EntityType::SideSet => {
                 let set_ids = self.set_ids(EntityType::SideSet)?;
-                let set_index = set_ids
-                    .iter()
-                    .position(|&id| id == entity_id)
-                    .ok_or_else(|| ExodusError::EntityNotFound {
-                        entity_type: EntityType::SideSet.to_string(),
-                        id: entity_id,
-                    })?;
+                let set_index =
+                    set_ids
+                        .iter()
+                        .position(|&id| id == entity_id)
+                        .ok_or_else(|| ExodusError::EntityNotFound {
+                            entity_type: EntityType::SideSet.to_string(),
+                            id: entity_id,
+                        })?;
                 format!("vals_sset_var{}ss{}", var_index + 1, set_index + 1)
             }
             _ => {

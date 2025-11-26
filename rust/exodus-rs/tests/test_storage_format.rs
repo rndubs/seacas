@@ -188,7 +188,8 @@ fn test_storage_format_global_variables() {
 
         // Write time step and global variable data
         file.put_time(0, 0.0).unwrap();
-        file.put_var(0, EntityType::Global, 0, 0, &[1000.0]).unwrap();
+        file.put_var(0, EntityType::Global, 0, 0, &[1000.0])
+            .unwrap();
         file.put_var(0, EntityType::Global, 0, 1, &[500.0]).unwrap();
     }
 
