@@ -26,7 +26,6 @@ impl<M: FileMode> ExodusFile<M> {
     ///
     /// Returns an error if NetCDF read fails
     pub fn variable_names(&self, var_type: EntityType) -> Result<Vec<String>> {
-        eprintln!("DEBUG: variable_names called for {:?}", var_type);
         let var_name_var = match var_type {
             EntityType::Global => "name_glo_var",
             EntityType::Nodal => "name_nod_var",
@@ -91,12 +90,7 @@ impl<M: FileMode> ExodusFile<M> {
                     .len();
 
                 // Read raw bytes directly (more reliable for 2D char arrays)
-                eprintln!(
-                    "DEBUG: Reading name array as raw bytes: {} vars x {} chars",
-                    num_vars, len_string
-                );
                 let raw_bytes: Vec<u8> = var.get_raw_values(..)?;
-                eprintln!("DEBUG: Got {} raw bytes", raw_bytes.len());
 
                 let mut names = Vec::new();
                 for i in 0..num_vars {
@@ -1783,10 +1777,6 @@ impl ExodusFile<mode::Read> {
         var_index: usize,
     ) -> Result<Vec<f64>> {
         // Get the storage mode for this entity type
-        eprintln!(
-            "DEBUG: Detected storage formats - nodal:{:?}, elem:{:?}",
-            self.metadata.storage_format.nodal, self.metadata.storage_format.elem_block
-        );
         let storage_mode = match var_type {
             EntityType::Global => self.metadata.storage_format.global,
             EntityType::Nodal => self.metadata.storage_format.nodal,
@@ -1806,10 +1796,6 @@ impl ExodusFile<mode::Read> {
             }
         };
 
-        eprintln!(
-            "DEBUG: var() for {:?}, storage_mode={:?}",
-            var_type, storage_mode
-        );
         match storage_mode {
             VarStorageMode::Combined => {
                 self.read_var_combined(step, var_type, entity_id, var_index)
@@ -1872,10 +1858,6 @@ impl ExodusFile<mode::Read> {
         _entity_id: EntityId,
         var_index: usize,
     ) -> Result<Vec<f64>> {
-        eprintln!(
-            "DEBUG: read_var_combined called for {:?}, step={}, var_index={}",
-            var_type, step, var_index
-        );
         let var_name = match var_type {
             EntityType::Global => "vals_glo_var",
             EntityType::Nodal => "vals_nod_var",
