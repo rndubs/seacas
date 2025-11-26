@@ -2341,12 +2341,13 @@ impl ExodusFile<mode::Append> {
             EntityType::Nodal => format!("vals_nod_var{}", var_index + 1),
             EntityType::ElemBlock => {
                 let block_ids = self.block_ids(EntityType::ElemBlock)?;
-                let block_index = block_ids.iter().position(|&id| id == entity_id).ok_or_else(|| {
-                    ExodusError::EntityNotFound {
+                let block_index = block_ids
+                    .iter()
+                    .position(|&id| id == entity_id)
+                    .ok_or_else(|| ExodusError::EntityNotFound {
                         entity_type: EntityType::ElemBlock.to_string(),
                         id: entity_id,
-                    }
-                })?;
+                    })?;
                 format!("vals_elem_var{}eb{}", var_index + 1, block_index + 1)
             }
             _ => {
@@ -2367,9 +2368,7 @@ impl ExodusFile<mode::Append> {
                 let value: f64 = var.get_value((step, var_index))?;
                 Ok(vec![value])
             }
-            EntityType::Nodal | EntityType::ElemBlock => {
-                Ok(var.get_values((step..step + 1, ..))?)
-            }
+            EntityType::Nodal | EntityType::ElemBlock => Ok(var.get_values((step..step + 1, ..))?),
             _ => Err(ExodusError::Other(format!(
                 "Unsupported variable type: {:?}",
                 var_type
@@ -2393,12 +2392,13 @@ impl ExodusFile<mode::Append> {
             EntityType::Nodal => format!("vals_nod_var{}", var_index + 1),
             EntityType::ElemBlock => {
                 let block_ids = self.block_ids(EntityType::ElemBlock)?;
-                let block_index = block_ids.iter().position(|&id| id == entity_id).ok_or_else(|| {
-                    ExodusError::EntityNotFound {
+                let block_index = block_ids
+                    .iter()
+                    .position(|&id| id == entity_id)
+                    .ok_or_else(|| ExodusError::EntityNotFound {
                         entity_type: EntityType::ElemBlock.to_string(),
                         id: entity_id,
-                    }
-                })?;
+                    })?;
                 format!("vals_elem_var{}eb{}", var_index + 1, block_index + 1)
             }
             _ => {

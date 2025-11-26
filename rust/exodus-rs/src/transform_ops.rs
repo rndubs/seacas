@@ -368,10 +368,7 @@ impl ExodusFile<mode::Append> {
                 // Get number of time steps
                 let num_time_steps = self.num_time_steps()?;
                 if verbose {
-                    println!(
-                        "    Scaling across {} time step(s)",
-                        num_time_steps
-                    );
+                    println!("    Scaling across {} time step(s)", num_time_steps);
                 }
 
                 // Get entity IDs for this type
@@ -380,10 +377,7 @@ impl ExodusFile<mode::Append> {
                 // Scale the variable for each entity
                 for &entity_id in &entity_ids {
                     // Check if this variable exists for this entity (truth table)
-                    let exists = match self.is_var_in_truth_table(entity_type, entity_id, var_idx) {
-                        Ok(exists) => exists,
-                        Err(_) => true, // If no truth table, assume variable exists
-                    };
+                    let exists = self.is_var_in_truth_table(entity_type, entity_id, var_idx).unwrap_or(true);
 
                     if !exists {
                         continue;
@@ -442,7 +436,10 @@ impl ExodusFile<mode::Append> {
                 // Assemblies and blobs use different methods
                 Ok(vec![]) // For now, return empty - these are less common
             }
-            EntityType::NodeMap | EntityType::ElemMap | EntityType::EdgeMap | EntityType::FaceMap => {
+            EntityType::NodeMap
+            | EntityType::ElemMap
+            | EntityType::EdgeMap
+            | EntityType::FaceMap => {
                 // Maps don't have variables
                 Ok(vec![])
             }
@@ -857,8 +854,7 @@ mod tests {
         // Scale by negative factor (reverse direction)
         {
             let mut file = ExodusFile::append(path).unwrap();
-            file.scale_field_variable("velocity", -1.0, false)
-                .unwrap();
+            file.scale_field_variable("velocity", -1.0, false).unwrap();
 
             let velocity = file.var(0, EntityType::Nodal, 0, 0).unwrap();
             assert_relative_eq!(velocity[0], -10.0, epsilon = 1e-10);
