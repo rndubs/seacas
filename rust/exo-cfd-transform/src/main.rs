@@ -664,9 +664,10 @@ struct MeshData {
     x: Vec<f64>,
     y: Vec<f64>,
     z: Vec<f64>,
-    // Element block
-    block: Block,
-    connectivity: Vec<i64>,
+    // Element blocks (supports multiple blocks)
+    blocks: Vec<Block>,
+    connectivities: Vec<Vec<i64>>,
+    block_names: Vec<String>,
     // Node sets (id, nodes, dist_factors)
     node_sets: Vec<(i64, Vec<i64>, Vec<f64>)>,
     // Side sets (id, elements, sides, dist_factors)
@@ -788,40 +789,45 @@ fn read_mesh_data(file: &ExodusFile<mode::Read>, verbose: bool) -> Result<MeshDa
     let y = coords.y;
     let z = coords.z;
 
-    // Verify exactly one element block
+    // Read all element blocks
     let block_ids = file.block_ids(EntityType::ElemBlock)?;
     if block_ids.is_empty() {
         return Err(TransformError::InvalidFormat(
             "No element blocks found in mesh".to_string(),
         ));
     }
-    if block_ids.len() > 1 {
-        return Err(TransformError::InvalidFormat(format!(
-            "Copy-mirror-merge requires exactly one element block, found {}. \
-             Multiple element blocks are not supported.",
-            block_ids.len()
-        )));
+
+    let mut blocks = Vec::new();
+    let mut connectivities = Vec::new();
+
+    for &block_id in &block_ids {
+        let block = file.block(block_id)?;
+
+        // Check for supported topology
+        let perm = get_mirror_permutation(&block.topology, Axis::X);
+        if perm.is_none() {
+            return Err(TransformError::InvalidFormat(format!(
+                "Unsupported element topology '{}' in block {} for copy-mirror-merge. \
+                 Supported: HEX8, TET4, WEDGE6, PYRAMID5, QUAD4, TRI3",
+                block.topology, block_id
+            )));
+        }
+
+        let connectivity = file.connectivity(block_id)?;
+
+        if verbose {
+            println!(
+                "  Element block {}: {} elements, topology: {}",
+                block_id, block.num_entries, block.topology
+            );
+        }
+
+        blocks.push(block);
+        connectivities.push(connectivity);
     }
 
-    let block = file.block(block_ids[0])?;
-    let connectivity = file.connectivity(block_ids[0])?;
-
-    // Check for supported topology
-    let perm = get_mirror_permutation(&block.topology, Axis::X);
-    if perm.is_none() {
-        return Err(TransformError::InvalidFormat(format!(
-            "Unsupported element topology '{}' for copy-mirror-merge. \
-             Supported: HEX8, TET4, WEDGE6, PYRAMID5, QUAD4, TRI3",
-            block.topology
-        )));
-    }
-
-    if verbose {
-        println!(
-            "  Element block: {} elements, topology: {}",
-            block.num_entries, block.topology
-        );
-    }
+    // Read block names
+    let block_names = file.names(EntityType::ElemBlock).unwrap_or_default();
 
     // Read node sets
     let mut node_sets = Vec::new();
@@ -905,8 +911,9 @@ fn read_mesh_data(file: &ExodusFile<mode::Read>, verbose: bool) -> Result<MeshDa
         x,
         y,
         z,
-        block,
-        connectivity,
+        blocks,
+        connectivities,
+        block_names,
         node_sets,
         side_sets,
         nodal_var_names,
@@ -1007,37 +1014,80 @@ fn copy_mirror_merge(
         }
     }
 
-    // Create mirrored connectivity with winding order fix
-    let nodes_per_elem = data.block.num_nodes_per_entry;
-    let permutation = get_mirror_permutation(&data.block.topology, axis).ok_or_else(|| {
-        TransformError::InvalidFormat(format!("Unsupported topology: {}", data.block.topology))
-    })?;
+    // Create mirrored element blocks with connectivity
+    let mut new_blocks = data.blocks.clone();
+    let mut new_connectivities = data.connectivities.clone();
+    let mut new_block_names = data.block_names.clone();
 
-    let mut new_connectivity = data.connectivity.clone();
+    // Find max block ID to assign new IDs for mirrored blocks
+    let max_block_id = data.blocks.iter().map(|b| b.id).max().unwrap_or(0);
+    let mut next_block_id = max_block_id + 1;
 
-    for elem_idx in 0..orig_num_elems {
-        let elem_start = elem_idx * nodes_per_elem;
+    for (block_idx, (block, connectivity)) in data
+        .blocks
+        .iter()
+        .zip(data.connectivities.iter())
+        .enumerate()
+    {
+        let nodes_per_elem = block.num_nodes_per_entry;
+        let permutation = get_mirror_permutation(&block.topology, axis).ok_or_else(|| {
+            TransformError::InvalidFormat(format!("Unsupported topology: {}", block.topology))
+        })?;
 
-        // Get original element nodes
-        let orig_elem: Vec<i64> =
-            data.connectivity[elem_start..elem_start + nodes_per_elem].to_vec();
+        // Create mirrored connectivity for this block
+        let mut mirror_connectivity = Vec::new();
 
-        // Create mirrored element with permuted node order
-        let mut mirror_elem = vec![0i64; nodes_per_elem];
-        for (new_pos, &old_pos) in permutation.iter().enumerate() {
-            let orig_node_id = orig_elem[old_pos] as usize - 1; // 0-based
-            mirror_elem[new_pos] = mirror_node_map[&orig_node_id];
+        for elem_idx in 0..block.num_entries {
+            let elem_start = elem_idx * nodes_per_elem;
+
+            // Get original element nodes
+            let orig_elem: Vec<i64> =
+                connectivity[elem_start..elem_start + nodes_per_elem].to_vec();
+
+            // Create mirrored element with permuted node order
+            let mut mirror_elem = vec![0i64; nodes_per_elem];
+            for (new_pos, &old_pos) in permutation.iter().enumerate() {
+                let orig_node_id = orig_elem[old_pos] as usize - 1; // 0-based
+                mirror_elem[new_pos] = mirror_node_map[&orig_node_id];
+            }
+
+            mirror_connectivity.extend(mirror_elem);
         }
 
-        new_connectivity.extend(mirror_elem);
+        // Create mirrored block
+        let mut mirror_block = block.clone();
+        mirror_block.id = next_block_id;
+
+        new_blocks.push(mirror_block);
+        new_connectivities.push(mirror_connectivity);
+
+        // Create name with _mirror suffix
+        let default_name = format!("block_{}", block.id);
+        let orig_name = data
+            .block_names
+            .get(block_idx)
+            .filter(|s| !s.is_empty())
+            .map(|s| s.as_str())
+            .unwrap_or(&default_name);
+        new_block_names.push(format!("{}_mirror", orig_name));
+
+        if verbose {
+            println!(
+                "  Created mirrored block {} from block {} ({} elements)",
+                next_block_id, block.id, block.num_entries
+            );
+        }
+
+        next_block_id += 1;
     }
 
     if verbose {
         println!(
-            "  New mesh: {} elements ({} original + {} mirrored)",
+            "  New mesh: {} elements ({} original + {} mirrored) in {} blocks",
             orig_num_elems * 2,
             orig_num_elems,
-            orig_num_elems
+            orig_num_elems,
+            new_blocks.len()
         );
     }
 
@@ -1156,20 +1206,18 @@ fn copy_mirror_merge(
     let mut new_params = data.params.clone();
     new_params.num_nodes = num_new_nodes;
     new_params.num_elems = orig_num_elems * 2;
+    new_params.num_elem_blocks = new_blocks.len();
     new_params.num_node_sets = new_node_sets.len();
     new_params.num_side_sets = new_side_sets.len();
-
-    // Create new block with doubled elements
-    let mut new_block = data.block.clone();
-    new_block.num_entries = orig_num_elems * 2;
 
     Ok(MeshData {
         params: new_params,
         x: new_x,
         y: new_y,
         z: new_z,
-        block: new_block,
-        connectivity: new_connectivity,
+        blocks: new_blocks,
+        connectivities: new_connectivities,
+        block_names: new_block_names,
         node_sets: new_node_sets,
         side_sets: new_side_sets,
         nodal_var_names: data.nodal_var_names.clone(),
@@ -1216,9 +1264,23 @@ fn write_mesh_data(path: &PathBuf, data: &MeshData, verbose: bool) -> Result<()>
     };
     file.put_coords(&data.x, y_opt, z_opt)?;
 
-    // Write element block
-    file.put_block(&data.block)?;
-    file.put_connectivity(data.block.id, &data.connectivity)?;
+    // Write all element blocks
+    for (idx, (block, connectivity)) in data
+        .blocks
+        .iter()
+        .zip(data.connectivities.iter())
+        .enumerate()
+    {
+        file.put_block(block)?;
+        file.put_connectivity(block.id, connectivity)?;
+
+        // Write block name if available
+        if let Some(name) = data.block_names.get(idx) {
+            if !name.is_empty() {
+                file.put_name(EntityType::ElemBlock, idx, name)?;
+            }
+        }
+    }
 
     // Write node sets
     for (idx, (set_id, nodes, dist_factors)) in data.node_sets.iter().enumerate() {
