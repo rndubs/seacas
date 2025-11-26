@@ -54,8 +54,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let z_coords: Vec<f64> = vec![
         // z=0 layer
-        0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
-        // z=1 layer
+        0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, // z=1 layer
         1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0,
     ];
 
@@ -73,12 +72,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let connectivity: Vec<i64> = vec![
         // Element 1
-        1, 2, 5, 4, 10, 11, 14, 13,
-        // Element 2
-        2, 3, 6, 5, 11, 12, 15, 14,
-        // Element 3
-        4, 5, 8, 7, 13, 14, 17, 16,
-        // Element 4
+        1, 2, 5, 4, 10, 11, 14, 13, // Element 2
+        2, 3, 6, 5, 11, 12, 15, 14, // Element 3
+        4, 5, 8, 7, 13, 14, 17, 16, // Element 4
         5, 6, 9, 8, 14, 15, 18, 17,
     ];
 
@@ -137,7 +133,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     file.put_name(EntityType::SideSet, 0, "wall")?;
 
     // Define nodal variables
-    file.define_variables(EntityType::Nodal, &["temperature", "velocity_x", "velocity_y", "velocity_z"])?;
+    file.define_variables(
+        EntityType::Nodal,
+        &["temperature", "velocity_x", "velocity_y", "velocity_z"],
+    )?;
 
     // Write time step and variable data
     file.put_time(0, 0.0)?;
