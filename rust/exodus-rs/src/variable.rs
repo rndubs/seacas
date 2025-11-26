@@ -702,6 +702,9 @@ impl ExodusFile<mode::Write> {
             }
         };
 
+        // Ensure we're in define mode for adding the truth table variable
+        self.ensure_define_mode()?;
+
         // Validate that table var_type matches parameter
         if table.var_type != var_type {
             return Err(ExodusError::Other(format!(
@@ -751,12 +754,18 @@ impl ExodusFile<mode::Write> {
                 .add_variable::<i32>(var_name, &[num_blocks_dim, num_vars_dim])?;
         }
 
+        // Switch to data mode for writing values
+        self.ensure_data_mode()?;
+
         // Convert bool to i32 and write
         let table_i32: Vec<i32> = table.table.iter().map(|&b| if b { 1 } else { 0 }).collect();
 
         if let Some(mut var) = self.nc_file.variable_mut(var_name) {
             var.put_values(&table_i32, ..)?;
         }
+
+        // Sync to ensure data is written
+        self.nc_file.sync()?;
 
         Ok(())
     }
