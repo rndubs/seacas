@@ -54,48 +54,14 @@ impl<M: FileMode> ExodusFile<M> {
 
                 // If 1D, likely NC_STRING [num_vars]
                 if dims.len() == 1 {
-                    // Try NC_STRING case first: read each entry using get_string
+                    // NC_STRING case: read each entry using get_string
                     let num_vars = dims[0].len();
                     let mut names = Vec::with_capacity(num_vars);
-                    let mut all_ok = true;
                     for i in 0..num_vars {
-                        match var.get_string(i..i + 1) {
-                            Ok(s) => {
-                                names.push(s.trim_end_matches('\0').trim().to_string());
-                            }
-                            Err(_) => {
-                                // get_string failed - likely not NC_STRING type
-                                // Try reading as bytes (NC_CHAR stored as 1D - unusual but possible)
-                                all_ok = false;
-                                break;
-                            }
-                        }
+                        let s = var.get_string(i..i + 1)?;
+                        names.push(s.trim_end_matches('\0').trim().to_string());
                     }
-                    if all_ok {
-                        return Ok(names);
-                    }
-                    // Fall back to trying to read as i8 bytes for 1D NC_CHAR
-                    // This handles edge cases where NC_CHAR data is stored in 1D
-                    names.clear();
-                    match var.get_values::<i8, _>(..) {
-                        Ok(all_bytes) => {
-                            // Try to interpret as null-separated strings
-                            let bytes_u8: Vec<u8> = all_bytes.iter().map(|&b| b as u8).collect();
-                            let full_str = String::from_utf8_lossy(&bytes_u8);
-                            for s in full_str.split('\0').filter(|s| !s.is_empty()) {
-                                names.push(s.trim().to_string());
-                            }
-                            // If we got names, return them
-                            if !names.is_empty() {
-                                return Ok(names);
-                            }
-                        }
-                        Err(_) => {
-                            // Reading as bytes also failed - return empty
-                        }
-                    }
-                    // If all attempts failed, return empty vector (non-fatal)
-                    return Ok(Vec::new());
+                    return Ok(names);
                 }
 
                 // Otherwise, expect 2D [num_vars, len_string] of NC_CHAR
@@ -201,40 +167,13 @@ impl<M: FileMode> ExodusFile<M> {
                 let dims = var.dimensions();
 
                 if dims.len() == 1 {
-                    // Try NC_STRING case first
                     let num_vars = dims[0].len();
                     let mut names = Vec::with_capacity(num_vars);
-                    let mut all_ok = true;
                     for i in 0..num_vars {
-                        match var.get_string(i..i + 1) {
-                            Ok(s) => {
-                                names.push(s.trim_end_matches('\0').trim().to_string());
-                            }
-                            Err(_) => {
-                                all_ok = false;
-                                break;
-                            }
-                        }
+                        let s = var.get_string(i..i + 1)?;
+                        names.push(s.trim_end_matches('\0').trim().to_string());
                     }
-                    if all_ok {
-                        return Ok(names);
-                    }
-                    // Fall back to reading as i8 bytes
-                    names.clear();
-                    match var.get_values::<i8, _>(..) {
-                        Ok(all_bytes) => {
-                            let bytes_u8: Vec<u8> = all_bytes.iter().map(|&b| b as u8).collect();
-                            let full_str = String::from_utf8_lossy(&bytes_u8);
-                            for s in full_str.split('\0').filter(|s| !s.is_empty()) {
-                                names.push(s.trim().to_string());
-                            }
-                            if !names.is_empty() {
-                                return Ok(names);
-                            }
-                        }
-                        Err(_) => {}
-                    }
-                    return Ok(Vec::new());
+                    return Ok(names);
                 }
 
                 let num_vars = if let Some(dim) = dims.first() {
