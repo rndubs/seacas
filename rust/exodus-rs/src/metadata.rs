@@ -306,12 +306,15 @@ impl ExodusFile<mode::Read> {
 
                 let mut info_records = Vec::with_capacity(num_info);
 
-                // Read each info record (NC_CHAR stored as i8 in older files)
+                // Read raw bytes directly (more reliable for 2D char arrays)
+                let raw_bytes: Vec<u8> = var.get_raw_values(..)?;
+
+                // Read each info record
                 for i in 0..num_info {
-                    let line_chars_i8: Vec<i8> = var.get_values((i..i + 1, 0..len_line))?;
-                    // Convert i8 bytes to u8 slice for UTF-8 decoding
-                    let line_bytes: Vec<u8> = line_chars_i8.iter().map(|&b| b as u8).collect();
-                    let line = String::from_utf8_lossy(&line_bytes)
+                    let start = i * len_line;
+                    let end = start + len_line;
+                    let line_bytes = &raw_bytes[start..end];
+                    let line = String::from_utf8_lossy(line_bytes)
                         .trim_end_matches('\0')
                         .trim()
                         .to_string();

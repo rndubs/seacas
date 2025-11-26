@@ -848,13 +848,25 @@ fn read_mesh_data(file: &ExodusFile<mode::Read>, verbose: bool) -> Result<MeshDa
     let num_time_steps = times.len();
 
     // Read nodal variables
+    eprintln!("DEBUG: About to call variable_names for Nodal");
     let nodal_var_names = file.variable_names(EntityType::Nodal)?;
+    eprintln!(
+        "DEBUG: Got {} nodal variable names: {:?}",
+        nodal_var_names.len(),
+        nodal_var_names
+    );
     let mut nodal_var_values: Vec<Vec<Vec<f64>>> = Vec::new();
 
     for var_idx in 0..nodal_var_names.len() {
+        eprintln!("DEBUG: Reading nodal var_idx={}", var_idx);
         let mut var_time_series = Vec::new();
         for step in 0..num_time_steps {
+            eprintln!(
+                "DEBUG: About to call file.var(step={}, EntityType::Nodal, 0, var_idx={})",
+                step, var_idx
+            );
             let values = file.var(step, EntityType::Nodal, 0, var_idx)?;
+            eprintln!("DEBUG: Successfully read {} values", values.len());
             var_time_series.push(values);
         }
         nodal_var_values.push(var_time_series);

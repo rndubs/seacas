@@ -950,12 +950,14 @@ impl ExodusFile<mode::Read> {
                 // Get len_string for fixed-length names
                 let len_string = dims.get(1).map(|d| d.len()).unwrap_or(33);
 
-                // Read each coordinate name (NC_CHAR stored as i8 in older files)
+                // Read raw bytes directly (more reliable for 2D char arrays)
+                let raw_bytes: Vec<u8> = var.get_raw_values(..)?;
+
                 for i in 0..num_dim {
-                    let name_chars_i8: Vec<i8> = var.get_values((i..i + 1, 0..len_string))?;
-                    // Convert i8 bytes to u8 slice for UTF-8 decoding
-                    let name_bytes: Vec<u8> = name_chars_i8.iter().map(|&b| b as u8).collect();
-                    let name = String::from_utf8_lossy(&name_bytes)
+                    let start = i * len_string;
+                    let end = start + len_string;
+                    let name_bytes = &raw_bytes[start..end];
+                    let name = String::from_utf8_lossy(name_bytes)
                         .trim_end_matches('\0')
                         .trim()
                         .to_string();
