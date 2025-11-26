@@ -65,6 +65,13 @@ struct Cli {
     #[arg(long, value_name = "SEQ,ANGLES")]
     rotate: Vec<String>,
 
+    /// Scale individual field variables by name.
+    /// Format: "field_name,scale_factor"
+    /// Examples: "stress,1.23" or "temperature,0.5"
+    /// Can be specified multiple times to scale different fields
+    #[arg(long = "scale-field", value_name = "NAME,FACTOR")]
+    scale_field: Vec<String>,
+
     /// Copy, mirror, and merge mesh about a symmetry plane.
     /// Creates a full model from a half-symmetry model by mirroring about the
     /// specified axis and merging nodes on the symmetry plane.
@@ -139,6 +146,8 @@ enum Operation {
     Translate([f64; 3]),
     /// Rotate using Euler angles (sequence, angles in degrees)
     Rotate(String, Vec<f64>),
+    /// Scale a specific field variable (name, scale_factor)
+    ScaleField(String, f64),
     /// Copy, mirror, and merge about symmetry plane (axis, tolerance)
     CopyMirrorMerge(Axis, f64),
 }
@@ -399,6 +408,30 @@ fn parse_rotate(s: &str) -> Result<(String, Vec<f64>)> {
     Ok((sequence, angles?))
 }
 
+/// Parse a scale-field argument "field_name,scale_factor" into (name, factor)
+fn parse_scale_field(s: &str) -> Result<(String, f64)> {
+    let parts: Vec<&str> = s.split(',').collect();
+    if parts.len() != 2 {
+        return Err(TransformError::InvalidFormat(format!(
+            "Scale field requires 2 values (name,factor), got {}",
+            parts.len()
+        )));
+    }
+
+    let field_name = parts[0].trim().to_string();
+    if field_name.is_empty() {
+        return Err(TransformError::InvalidFormat(
+            "Field name cannot be empty".to_string(),
+        ));
+    }
+
+    let scale_factor = parts[1].trim().parse::<f64>().map_err(|_| {
+        TransformError::InvalidFormat(format!("Invalid scale factor: {}", parts[1]))
+    })?;
+
+    Ok((field_name, scale_factor))
+}
+
 /// Check if an argument matches a flag (handles both "--flag" and "--flag=value" forms)
 fn arg_matches_flag(arg: &str, flag: &str) -> bool {
     arg == flag || arg.starts_with(&format!("{}=", flag))
@@ -415,8 +448,8 @@ fn extract_ordered_operations_from_args(
     if verbose {
         println!("DEBUG: Raw args: {:?}", args);
         println!(
-            "DEBUG: Clap parsed - translate: {:?}, rotate: {:?}, scale_len: {:?}, mirror: {:?}, copy_mirror_merge: {:?}",
-            cli.translate, cli.rotate, cli.scale_len, cli.mirror, cli.copy_mirror_merge
+            "DEBUG: Clap parsed - translate: {:?}, rotate: {:?}, scale_len: {:?}, mirror: {:?}, scale_field: {:?}, copy_mirror_merge: {:?}",
+            cli.translate, cli.rotate, cli.scale_len, cli.mirror, cli.scale_field, cli.copy_mirror_merge
         );
     }
 
@@ -425,6 +458,7 @@ fn extract_ordered_operations_from_args(
     let mut mirror_idx = 0;
     let mut translate_idx = 0;
     let mut rotate_idx = 0;
+    let mut scale_field_idx = 0;
     let mut copy_mirror_merge_idx = 0;
 
     for (pos, arg) in args.iter().enumerate() {
@@ -467,6 +501,17 @@ fn extract_ordered_operations_from_args(
             let (seq, angles) = parse_rotate(&cli.rotate[rotate_idx])?;
             operations.push((pos, Operation::Rotate(seq, angles)));
             rotate_idx += 1;
+        } else if arg_matches_flag(arg, "--scale-field") && scale_field_idx < cli.scale_field.len()
+        {
+            if verbose {
+                println!(
+                    "DEBUG: Found --scale-field at pos {}, value: {}",
+                    pos, cli.scale_field[scale_field_idx]
+                );
+            }
+            let (field_name, scale_factor) = parse_scale_field(&cli.scale_field[scale_field_idx])?;
+            operations.push((pos, Operation::ScaleField(field_name, scale_factor)));
+            scale_field_idx += 1;
         } else if arg_matches_flag(arg, "--copy-mirror-merge")
             && copy_mirror_merge_idx < cli.copy_mirror_merge.len()
         {
@@ -549,6 +594,15 @@ fn apply_simple_operation(
             // Get the rotation matrix and apply it
             let matrix = rotation_matrix_from_euler(sequence, angles, true)?;
             file.apply_rotation(&matrix)?;
+        }
+        Operation::ScaleField(field_name, scale_factor) => {
+            if verbose {
+                println!(
+                    "  Scaling field variable '{}' by factor {}",
+                    field_name, scale_factor
+                );
+            }
+            file.scale_field_variable(field_name, *scale_factor, verbose)?;
         }
         Operation::CopyMirrorMerge(_, _) => {
             // This should be handled separately, not through apply_simple_operation
@@ -1546,6 +1600,7 @@ mod tests {
             mirror: vec![],
             translate: vec![],
             rotate: vec![],
+            scale_field: vec![],
             copy_mirror_merge: vec![],
             merge_tolerance: 0.001,
             zero_time: false,
@@ -1584,6 +1639,7 @@ mod tests {
             mirror: vec![],
             translate: vec![],
             rotate: vec![],
+            scale_field: vec![],
             copy_mirror_merge: vec![],
             merge_tolerance: 0.001,
             zero_time: false,
@@ -1615,6 +1671,7 @@ mod tests {
             mirror: vec![],
             translate: vec![],
             rotate: vec![],
+            scale_field: vec![],
             copy_mirror_merge: vec![],
             merge_tolerance: 0.001,
             zero_time: false,
@@ -1671,6 +1728,7 @@ mod tests {
             mirror,
             translate,
             rotate,
+            scale_field: vec![],
             copy_mirror_merge: vec![],
             merge_tolerance: 0.001,
             zero_time: false,
@@ -1701,6 +1759,7 @@ mod tests {
             mirror,
             translate,
             rotate,
+            scale_field: vec![],
             copy_mirror_merge,
             merge_tolerance,
             zero_time: false,
@@ -1898,6 +1957,225 @@ mod tests {
         assert_eq!(ops.len(), 2);
         assert!(matches!(ops[0], Operation::Rotate(_, _)));
         assert!(matches!(ops[1], Operation::Translate(_)));
+    }
+
+    #[test]
+    fn test_parse_scale_field_valid() {
+        // Valid inputs
+        let result = parse_scale_field("temperature,1.5").unwrap();
+        assert_eq!(result.0, "temperature");
+        assert!((result.1 - 1.5).abs() < 1e-10);
+
+        let result = parse_scale_field("stress,2.0").unwrap();
+        assert_eq!(result.0, "stress");
+        assert!((result.1 - 2.0).abs() < 1e-10);
+
+        let result = parse_scale_field("pressure,0.5").unwrap();
+        assert_eq!(result.0, "pressure");
+        assert!((result.1 - 0.5).abs() < 1e-10);
+
+        // With spaces
+        let result = parse_scale_field("  velocity  ,  3.14  ").unwrap();
+        assert_eq!(result.0, "velocity");
+        assert!((result.1 - 3.14).abs() < 1e-10);
+
+        // Negative scale factor
+        let result = parse_scale_field("displacement,-1.0").unwrap();
+        assert_eq!(result.0, "displacement");
+        assert!((result.1 - (-1.0)).abs() < 1e-10);
+    }
+
+    #[test]
+    fn test_parse_scale_field_invalid() {
+        // Missing scale factor
+        assert!(parse_scale_field("temperature").is_err());
+
+        // Too many parts
+        assert!(parse_scale_field("temperature,1.5,extra").is_err());
+
+        // Empty field name
+        assert!(parse_scale_field(",1.5").is_err());
+        assert!(parse_scale_field("  ,1.5").is_err());
+
+        // Invalid scale factor
+        assert!(parse_scale_field("temperature,abc").is_err());
+        assert!(parse_scale_field("temperature,").is_err());
+        assert!(parse_scale_field("temperature,1.5.6").is_err());
+
+        // Empty string
+        assert!(parse_scale_field("").is_err());
+    }
+
+    #[test]
+    fn test_scale_field_operation_order() {
+        // Test that scale-field operations are ordered correctly
+        let args: Vec<String> = vec![
+            "exo-cfd-transform",
+            "in.exo",
+            "out.exo",
+            "--scale-field",
+            "temperature,1.5",
+            "--scale-len",
+            "2.0",
+        ]
+        .into_iter()
+        .map(String::from)
+        .collect();
+
+        let mut cli = make_test_cli(vec![], vec![], vec![2.0], vec![]);
+        cli.scale_field = vec!["temperature,1.5".to_string()];
+
+        let ops = extract_ordered_operations_from_args(&args, &cli, false).unwrap();
+
+        assert_eq!(ops.len(), 2);
+        assert!(matches!(
+            ops[0],
+            Operation::ScaleField(ref name, factor) if name == "temperature" && (factor - 1.5).abs() < 1e-10
+        ));
+        assert!(matches!(ops[1], Operation::ScaleLen(_)));
+    }
+
+    #[test]
+    fn test_multiple_scale_field_operations() {
+        // Test multiple field scaling operations
+        let args: Vec<String> = vec![
+            "exo-cfd-transform",
+            "in.exo",
+            "out.exo",
+            "--scale-field",
+            "temperature,1.5",
+            "--scale-field",
+            "pressure,0.5",
+            "--scale-field",
+            "velocity,2.0",
+        ]
+        .into_iter()
+        .map(String::from)
+        .collect();
+
+        let mut cli = make_test_cli(vec![], vec![], vec![], vec![]);
+        cli.scale_field = vec![
+            "temperature,1.5".to_string(),
+            "pressure,0.5".to_string(),
+            "velocity,2.0".to_string(),
+        ];
+
+        let ops = extract_ordered_operations_from_args(&args, &cli, false).unwrap();
+
+        assert_eq!(ops.len(), 3);
+        assert!(matches!(
+            ops[0],
+            Operation::ScaleField(ref name, factor) if name == "temperature" && (factor - 1.5).abs() < 1e-10
+        ));
+        assert!(matches!(
+            ops[1],
+            Operation::ScaleField(ref name, factor) if name == "pressure" && (factor - 0.5).abs() < 1e-10
+        ));
+        assert!(matches!(
+            ops[2],
+            Operation::ScaleField(ref name, factor) if name == "velocity" && (factor - 2.0).abs() < 1e-10
+        ));
+    }
+
+    #[test]
+    fn test_scale_field_with_other_operations() {
+        // Test scale-field mixed with other operations
+        let args: Vec<String> = vec![
+            "exo-cfd-transform",
+            "in.exo",
+            "out.exo",
+            "--translate",
+            "1,0,0",
+            "--scale-field",
+            "stress,1.23",
+            "--rotate",
+            "Z,90",
+            "--scale-field",
+            "temperature,1.8",
+        ]
+        .into_iter()
+        .map(String::from)
+        .collect();
+
+        let mut cli = make_test_cli(
+            vec!["1,0,0".to_string()],
+            vec!["Z,90".to_string()],
+            vec![],
+            vec![],
+        );
+        cli.scale_field = vec!["stress,1.23".to_string(), "temperature,1.8".to_string()];
+
+        let ops = extract_ordered_operations_from_args(&args, &cli, false).unwrap();
+
+        assert_eq!(ops.len(), 4);
+        assert!(matches!(ops[0], Operation::Translate(_)));
+        assert!(matches!(
+            ops[1],
+            Operation::ScaleField(ref name, factor) if name == "stress" && (factor - 1.23).abs() < 1e-10
+        ));
+        assert!(matches!(ops[2], Operation::Rotate(_, _)));
+        assert!(matches!(
+            ops[3],
+            Operation::ScaleField(ref name, factor) if name == "temperature" && (factor - 1.8).abs() < 1e-10
+        ));
+    }
+
+    #[test]
+    fn test_scale_field_equals_syntax() {
+        // Test --scale-field=value syntax
+        let args: Vec<String> = vec![
+            "exo-cfd-transform",
+            "in.exo",
+            "out.exo",
+            "--scale-field=temperature,1.5",
+            "--scale-field=pressure,0.5",
+        ]
+        .into_iter()
+        .map(String::from)
+        .collect();
+
+        let mut cli = make_test_cli(vec![], vec![], vec![], vec![]);
+        cli.scale_field = vec!["temperature,1.5".to_string(), "pressure,0.5".to_string()];
+
+        let ops = extract_ordered_operations_from_args(&args, &cli, false).unwrap();
+
+        assert_eq!(ops.len(), 2);
+        assert!(matches!(
+            ops[0],
+            Operation::ScaleField(ref name, factor) if name == "temperature" && (factor - 1.5).abs() < 1e-10
+        ));
+        assert!(matches!(
+            ops[1],
+            Operation::ScaleField(ref name, factor) if name == "pressure" && (factor - 0.5).abs() < 1e-10
+        ));
+    }
+
+    #[test]
+    fn test_scale_field_with_underscores_and_numbers() {
+        // Test field names with underscores and numbers
+        let result = parse_scale_field("velocity_x,2.5").unwrap();
+        assert_eq!(result.0, "velocity_x");
+        assert!((result.1 - 2.5).abs() < 1e-10);
+
+        let result = parse_scale_field("stress_11,1.0").unwrap();
+        assert_eq!(result.0, "stress_11");
+        assert!((result.1 - 1.0).abs() < 1e-10);
+
+        let result = parse_scale_field("field_var_123,0.75").unwrap();
+        assert_eq!(result.0, "field_var_123");
+        assert!((result.1 - 0.75).abs() < 1e-10);
+    }
+
+    #[test]
+    fn test_scale_field_scientific_notation() {
+        // Test scale factors in scientific notation
+        let result = parse_scale_field("temperature,1.5e-3").unwrap();
+        assert_eq!(result.0, "temperature");
+        assert!((result.1 - 1.5e-3).abs() < 1e-10);
+
+        let result = parse_scale_field("pressure,2.5E+2").unwrap();
+        assert_eq!(result.0, "pressure");
+        assert!((result.1 - 2.5e2).abs() < 1e-10);
     }
 
     // =========================================================================
