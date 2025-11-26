@@ -52,17 +52,16 @@ fn test_storage_format_detection_separate() {
         })
         .unwrap();
 
-        // Add coordinates
+        // Add coordinates (y and z are Option<&[T]>)
         file.put_coords(
             &[0.0, 1.0, 0.0, 0.5],
-            &[0.0, 0.0, 1.0, 0.5],
-            &[0.0, 0.0, 0.0, 1.0],
+            Some(&[0.0, 0.0, 1.0, 0.5]),
+            Some(&[0.0, 0.0, 0.0, 1.0]),
         )
         .unwrap();
 
-        // Add connectivity
-        file.put_connectivity(EntityType::ElemBlock, 1, &[1, 2, 3, 4])
-            .unwrap();
+        // Add connectivity (only block_id and connectivity, no EntityType)
+        file.put_connectivity(1, &[1, 2, 3, 4]).unwrap();
 
         // Define nodal variables - this creates separate format variables
         file.define_variables(EntityType::Nodal, &["temperature", "pressure"])
@@ -124,13 +123,12 @@ fn test_storage_format_detection_no_vars() {
 
         file.put_coords(
             &[0.0, 1.0, 0.0, 0.5],
-            &[0.0, 0.0, 1.0, 0.5],
-            &[0.0, 0.0, 0.0, 1.0],
+            Some(&[0.0, 0.0, 1.0, 0.5]),
+            Some(&[0.0, 0.0, 0.0, 1.0]),
         )
         .unwrap();
 
-        file.put_connectivity(EntityType::ElemBlock, 1, &[1, 2, 3, 4])
-            .unwrap();
+        file.put_connectivity(1, &[1, 2, 3, 4]).unwrap();
     }
 
     // Open and check storage format detection
@@ -174,13 +172,12 @@ fn test_storage_format_global_variables() {
 
         file.put_coords(
             &[0.0, 1.0, 0.0, 0.5],
-            &[0.0, 0.0, 1.0, 0.5],
-            &[0.0, 0.0, 0.0, 1.0],
+            Some(&[0.0, 0.0, 1.0, 0.5]),
+            Some(&[0.0, 0.0, 0.0, 1.0]),
         )
         .unwrap();
 
-        file.put_connectivity(EntityType::ElemBlock, 1, &[1, 2, 3, 4])
-            .unwrap();
+        file.put_connectivity(1, &[1, 2, 3, 4]).unwrap();
 
         // Define global variables
         file.define_variables(EntityType::Global, &["total_energy", "kinetic_energy"])
@@ -219,7 +216,7 @@ fn test_storage_format_accessor() {
             ..Default::default()
         })
         .unwrap();
-        file.put_coords(&[0.0], &[0.0], &[0.0]).unwrap();
+        file.put_coords(&[0.0], Some(&[0.0]), Some(&[0.0])).unwrap();
     }
 
     let file = ExodusFile::<mode::Read>::open(tmp.path()).unwrap();
@@ -266,13 +263,12 @@ fn test_storage_format_append_mode() {
 
         file.put_coords(
             &[0.0, 1.0, 0.0, 0.5],
-            &[0.0, 0.0, 1.0, 0.5],
-            &[0.0, 0.0, 0.0, 1.0],
+            Some(&[0.0, 0.0, 1.0, 0.5]),
+            Some(&[0.0, 0.0, 0.0, 1.0]),
         )
         .unwrap();
 
-        file.put_connectivity(EntityType::ElemBlock, 1, &[1, 2, 3, 4])
-            .unwrap();
+        file.put_connectivity(1, &[1, 2, 3, 4]).unwrap();
 
         file.define_variables(EntityType::Nodal, &["velocity"])
             .unwrap();
