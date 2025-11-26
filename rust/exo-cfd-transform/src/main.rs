@@ -5,7 +5,8 @@
 //! are applied in the order they appear on the command line.
 
 use clap::Parser;
-use exodus_rs::{transformations::rotation_matrix_from_euler, ExodusFile};
+use exodus_rs::{mode, transformations::rotation_matrix_from_euler, types::*, ExodusFile};
+use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::{env, fmt};
 use thiserror::Error;
@@ -63,6 +64,17 @@ struct Cli {
     /// Examples: "Z,90" or "XYZ,30,45,60" or "zyx,10,20,30"
     #[arg(long, value_name = "SEQ,ANGLES")]
     rotate: Vec<String>,
+
+    /// Copy, mirror, and merge mesh about a symmetry plane.
+    /// Creates a full model from a half-symmetry model by mirroring about the
+    /// specified axis and merging nodes on the symmetry plane.
+    /// Nodes within merge-tolerance of the symmetry plane (axis=0) are merged.
+    #[arg(long = "copy-mirror-merge", value_name = "AXIS")]
+    copy_mirror_merge: Vec<String>,
+
+    /// Tolerance for merging nodes on the symmetry plane (default: 0.001)
+    #[arg(long = "merge-tolerance", value_name = "VALUE", default_value = "0.001")]
+    merge_tolerance: f64,
 
     /// Normalize time values so the first time step is zero
     #[arg(short = 'z', long = "zero-time")]
@@ -123,6 +135,8 @@ enum Operation {
     Translate([f64; 3]),
     /// Rotate using Euler angles (sequence, angles in degrees)
     Rotate(String, Vec<f64>),
+    /// Copy, mirror, and merge about symmetry plane (axis, tolerance)
+    CopyMirrorMerge(Axis, f64),
 }
 
 /// Axis for mirroring
@@ -397,8 +411,8 @@ fn extract_ordered_operations_from_args(
     if verbose {
         println!("DEBUG: Raw args: {:?}", args);
         println!(
-            "DEBUG: Clap parsed - translate: {:?}, rotate: {:?}, scale_len: {:?}, mirror: {:?}",
-            cli.translate, cli.rotate, cli.scale_len, cli.mirror
+            "DEBUG: Clap parsed - translate: {:?}, rotate: {:?}, scale_len: {:?}, mirror: {:?}, copy_mirror_merge: {:?}",
+            cli.translate, cli.rotate, cli.scale_len, cli.mirror, cli.copy_mirror_merge
         );
     }
 
@@ -407,6 +421,7 @@ fn extract_ordered_operations_from_args(
     let mut mirror_idx = 0;
     let mut translate_idx = 0;
     let mut rotate_idx = 0;
+    let mut copy_mirror_merge_idx = 0;
 
     for (pos, arg) in args.iter().enumerate() {
         if arg_matches_flag(arg, "--scale-len") && scale_idx < cli.scale_len.len() {
@@ -448,6 +463,21 @@ fn extract_ordered_operations_from_args(
             let (seq, angles) = parse_rotate(&cli.rotate[rotate_idx])?;
             operations.push((pos, Operation::Rotate(seq, angles)));
             rotate_idx += 1;
+        } else if arg_matches_flag(arg, "--copy-mirror-merge")
+            && copy_mirror_merge_idx < cli.copy_mirror_merge.len()
+        {
+            if verbose {
+                println!(
+                    "DEBUG: Found --copy-mirror-merge at pos {}, value: {}",
+                    pos, cli.copy_mirror_merge[copy_mirror_merge_idx]
+                );
+            }
+            let axis: Axis = cli.copy_mirror_merge[copy_mirror_merge_idx].parse()?;
+            operations.push((
+                pos,
+                Operation::CopyMirrorMerge(axis, cli.merge_tolerance),
+            ));
+            copy_mirror_merge_idx += 1;
         }
     }
 
@@ -470,8 +500,8 @@ fn extract_ordered_operations(cli: &Cli, verbose: bool) -> Result<Vec<Operation>
     extract_ordered_operations_from_args(&args, cli, verbose)
 }
 
-/// Apply a single transformation operation to the mesh
-fn apply_operation(
+/// Apply a single simple transformation operation to the mesh
+fn apply_simple_operation(
     file: &mut ExodusFile<exodus_rs::mode::Append>,
     op: &Operation,
     verbose: bool,
@@ -519,6 +549,12 @@ fn apply_operation(
             let matrix = rotation_matrix_from_euler(sequence, angles, true)?;
             file.apply_rotation(&matrix)?;
         }
+        Operation::CopyMirrorMerge(_, _) => {
+            // This should be handled separately, not through apply_simple_operation
+            return Err(TransformError::InvalidFormat(
+                "CopyMirrorMerge must be handled specially".to_string(),
+            ));
+        }
     }
     Ok(())
 }
@@ -556,6 +592,610 @@ fn show_man_page() -> Result<()> {
 
     Ok(())
 }
+
+// ============================================================================
+// Copy-Mirror-Merge Implementation
+// ============================================================================
+
+/// Data structure to hold all mesh data for copy-mirror-merge operation
+#[derive(Debug)]
+struct MeshData {
+    // Initialization parameters
+    params: InitParams,
+    // Coordinates
+    x: Vec<f64>,
+    y: Vec<f64>,
+    z: Vec<f64>,
+    // Element block
+    block: Block,
+    connectivity: Vec<i64>,
+    // Node sets (id, nodes, dist_factors)
+    node_sets: Vec<(i64, Vec<i64>, Vec<f64>)>,
+    // Side sets (id, elements, sides, dist_factors)
+    side_sets: Vec<(i64, Vec<i64>, Vec<i64>, Vec<f64>)>,
+    // Nodal variables (name, values for each time step)
+    nodal_var_names: Vec<String>,
+    nodal_var_values: Vec<Vec<Vec<f64>>>, // [var_idx][time_step][node_idx]
+    // Global variables
+    global_var_names: Vec<String>,
+    global_var_values: Vec<Vec<f64>>, // [time_step][var_idx]
+    // Time values
+    times: Vec<f64>,
+    // Set names (for creating _mirror variants)
+    node_set_names: Vec<String>,
+    side_set_names: Vec<String>,
+}
+
+/// Find nodes on the symmetry plane
+fn find_symmetry_plane_nodes(
+    coords: &[f64],
+    _axis: Axis,
+    tolerance: f64,
+) -> Vec<usize> {
+    coords
+        .iter()
+        .enumerate()
+        .filter_map(|(i, &val)| {
+            if val.abs() <= tolerance {
+                Some(i)
+            } else {
+                None
+            }
+        })
+        .collect()
+}
+
+/// Get the coordinate array for a given axis
+fn get_axis_coords<'a>(x: &'a [f64], y: &'a [f64], z: &'a [f64], axis: Axis) -> &'a [f64] {
+    match axis {
+        Axis::X => x,
+        Axis::Y => y,
+        Axis::Z => z,
+    }
+}
+
+/// Get the winding order permutation for mirroring an element
+/// Returns indices to reorder element connectivity to maintain proper winding
+fn get_mirror_permutation(topology: &str, axis: Axis) -> Option<Vec<usize>> {
+    let topo_upper = topology.to_uppercase();
+
+    match topo_upper.as_str() {
+        "HEX" | "HEX8" => {
+            // HEX8 node ordering:
+            //     7-------6
+            //    /|      /|
+            //   4-------5 |
+            //   | |     | |
+            //   | 3-----|-2
+            //   |/      |/
+            //   0-------1
+            Some(match axis {
+                Axis::X => vec![1, 0, 3, 2, 5, 4, 7, 6], // Swap X pairs
+                Axis::Y => vec![3, 2, 1, 0, 7, 6, 5, 4], // Swap Y pairs
+                Axis::Z => vec![4, 5, 6, 7, 0, 1, 2, 3], // Swap Z pairs (top/bottom)
+            })
+        }
+        "TET" | "TET4" | "TETRA" | "TETRA4" => {
+            // TET4: swap any two nodes reverses orientation
+            Some(vec![0, 2, 1, 3])
+        }
+        "WEDGE" | "WEDGE6" => {
+            // Wedge: swap triangular faces
+            Some(match axis {
+                Axis::X => vec![1, 0, 2, 4, 3, 5],
+                Axis::Y => vec![2, 1, 0, 5, 4, 3],
+                Axis::Z => vec![3, 4, 5, 0, 1, 2],
+            })
+        }
+        "PYRAMID" | "PYRAMID5" => {
+            // Pyramid: reverse base ordering
+            Some(vec![3, 2, 1, 0, 4])
+        }
+        "QUAD" | "QUAD4" | "SHELL" | "SHELL4" => {
+            // 2D quad: reverse winding
+            Some(vec![0, 3, 2, 1])
+        }
+        "TRI" | "TRI3" | "TRIANGLE" => {
+            // 2D triangle: reverse winding
+            Some(vec![0, 2, 1])
+        }
+        _ => None, // Unsupported topology
+    }
+}
+
+/// Check if a variable name suggests it's a vector component
+fn is_vector_component(name: &str, axis: Axis) -> bool {
+    let name_lower = name.to_lowercase();
+    let suffix = match axis {
+        Axis::X => ["_x", "x", "_u", "u"],
+        Axis::Y => ["_y", "y", "_v", "v"],
+        Axis::Z => ["_z", "z", "_w", "w"],
+    };
+
+    suffix.iter().any(|s| {
+        name_lower.ends_with(s) ||
+        (name_lower.len() == 1 && name_lower == *s)
+    })
+}
+
+/// Read all mesh data from a file
+fn read_mesh_data(file: &ExodusFile<mode::Read>, verbose: bool) -> Result<MeshData> {
+    let params = file.init_params()?;
+
+    if verbose {
+        println!("  Reading mesh: {} nodes, {} elements", params.num_nodes, params.num_elems);
+    }
+
+    // Read coordinates
+    let coords = file.coords()?;
+    let x = coords.x;
+    let y = coords.y;
+    let z = coords.z;
+
+    // Verify exactly one element block
+    let block_ids = file.block_ids(EntityType::ElemBlock)?;
+    if block_ids.is_empty() {
+        return Err(TransformError::InvalidFormat(
+            "No element blocks found in mesh".to_string(),
+        ));
+    }
+    if block_ids.len() > 1 {
+        return Err(TransformError::InvalidFormat(format!(
+            "Copy-mirror-merge requires exactly one element block, found {}. \
+             Multiple element blocks are not supported.",
+            block_ids.len()
+        )));
+    }
+
+    let block = file.block(block_ids[0])?;
+    let connectivity = file.connectivity(block_ids[0])?;
+
+    // Check for supported topology
+    let perm = get_mirror_permutation(&block.topology, Axis::X);
+    if perm.is_none() {
+        return Err(TransformError::InvalidFormat(format!(
+            "Unsupported element topology '{}' for copy-mirror-merge. \
+             Supported: HEX8, TET4, WEDGE6, PYRAMID5, QUAD4, TRI3",
+            block.topology
+        )));
+    }
+
+    if verbose {
+        println!("  Element block: {} elements, topology: {}", block.num_entries, block.topology);
+    }
+
+    // Read node sets
+    let mut node_sets = Vec::new();
+    let node_set_ids = file.set_ids(EntityType::NodeSet)?;
+    for &set_id in &node_set_ids {
+        let ns = file.node_set(set_id)?;
+        node_sets.push((set_id, ns.nodes, ns.dist_factors));
+    }
+
+    // Read side sets
+    let mut side_sets = Vec::new();
+    let side_set_ids = file.set_ids(EntityType::SideSet)?;
+    for &set_id in &side_set_ids {
+        let ss = file.side_set(set_id)?;
+        side_sets.push((set_id, ss.elements, ss.sides, ss.dist_factors));
+    }
+
+    // Read set names
+    let node_set_names = file.names(EntityType::NodeSet).unwrap_or_default();
+    let side_set_names = file.names(EntityType::SideSet).unwrap_or_default();
+
+    // Read time values
+    let times = file.times()?;
+    let num_time_steps = times.len();
+
+    // Read nodal variables
+    let nodal_var_names = file.variable_names(EntityType::Nodal)?;
+    let mut nodal_var_values: Vec<Vec<Vec<f64>>> = Vec::new();
+
+    for var_idx in 0..nodal_var_names.len() {
+        let mut var_time_series = Vec::new();
+        for step in 0..num_time_steps {
+            let values = file.var(step, EntityType::Nodal, 0, var_idx)?;
+            var_time_series.push(values);
+        }
+        nodal_var_values.push(var_time_series);
+    }
+
+    if verbose && !nodal_var_names.is_empty() {
+        println!("  Nodal variables: {:?}", nodal_var_names);
+    }
+
+    // Read global variables
+    let global_var_names = file.variable_names(EntityType::Global)?;
+    let mut global_var_values: Vec<Vec<f64>> = Vec::new();
+
+    for step in 0..num_time_steps {
+        let mut step_values = Vec::new();
+        for var_idx in 0..global_var_names.len() {
+            let values = file.var(step, EntityType::Global, 0, var_idx)?;
+            step_values.extend(values);
+        }
+        global_var_values.push(step_values);
+    }
+
+    if verbose && !global_var_names.is_empty() {
+        println!("  Global variables: {:?}", global_var_names);
+        eprintln!("WARNING: Global variables found. These may need manual adjustment after mirroring:");
+        for name in &global_var_names {
+            eprintln!("  - {}", name);
+        }
+        eprintln!("         (e.g., total mass may need doubling, time step size is unchanged)");
+    }
+
+    Ok(MeshData {
+        params,
+        x,
+        y,
+        z,
+        block,
+        connectivity,
+        node_sets,
+        side_sets,
+        nodal_var_names,
+        nodal_var_values,
+        global_var_names,
+        global_var_values,
+        times,
+        node_set_names,
+        side_set_names,
+    })
+}
+
+/// Perform the copy-mirror-merge operation
+fn copy_mirror_merge(
+    data: &MeshData,
+    axis: Axis,
+    tolerance: f64,
+    verbose: bool,
+) -> Result<MeshData> {
+    let orig_num_nodes = data.params.num_nodes;
+    let orig_num_elems = data.params.num_elems;
+
+    // Find nodes on the symmetry plane
+    let axis_coords = get_axis_coords(&data.x, &data.y, &data.z, axis);
+    let symmetry_nodes: HashSet<usize> = find_symmetry_plane_nodes(axis_coords, axis, tolerance)
+        .into_iter()
+        .collect();
+
+    if verbose {
+        println!("  Found {} nodes on symmetry plane (tolerance: {})",
+                 symmetry_nodes.len(), tolerance);
+    }
+
+    if symmetry_nodes.is_empty() {
+        eprintln!("WARNING: No nodes found on the symmetry plane (axis={:?}, tolerance={}).",
+                  axis, tolerance);
+        eprintln!("         Node merging will be skipped. Consider using a larger tolerance.");
+    }
+
+    // Build node mapping: original node i -> new node id
+    // Original nodes: 1..N (1-based in Exodus)
+    // Mirrored nodes: start at N+1, but skip symmetry plane nodes
+    let mut mirror_node_map: HashMap<usize, i64> = HashMap::new();
+    let mut next_mirror_id = (orig_num_nodes + 1) as i64;
+
+    for i in 0..orig_num_nodes {
+        if symmetry_nodes.contains(&i) {
+            // Symmetry plane node: maps to itself (1-based)
+            mirror_node_map.insert(i, (i + 1) as i64);
+        } else {
+            // Non-symmetry node: gets a new ID
+            mirror_node_map.insert(i, next_mirror_id);
+            next_mirror_id += 1;
+        }
+    }
+
+    let num_new_nodes = (next_mirror_id - 1) as usize;
+    let num_mirror_nodes = num_new_nodes - orig_num_nodes;
+
+    if verbose {
+        println!("  New mesh: {} nodes ({} original + {} mirrored)",
+                 num_new_nodes, orig_num_nodes, num_mirror_nodes);
+    }
+
+    // Create new coordinates
+    let mut new_x = data.x.clone();
+    let mut new_y = data.y.clone();
+    let mut new_z = data.z.clone();
+
+    // Add mirrored coordinates (for non-symmetry nodes)
+    for i in 0..orig_num_nodes {
+        if !symmetry_nodes.contains(&i) {
+            let mx = if matches!(axis, Axis::X) { -data.x[i] } else { data.x[i] };
+            let my = if matches!(axis, Axis::Y) { -data.y[i] } else { data.y[i] };
+            let mz = if matches!(axis, Axis::Z) { -data.z[i] } else { data.z[i] };
+            new_x.push(mx);
+            new_y.push(my);
+            new_z.push(mz);
+        }
+    }
+
+    // Create mirrored connectivity with winding order fix
+    let nodes_per_elem = data.block.num_nodes_per_entry;
+    let permutation = get_mirror_permutation(&data.block.topology, axis)
+        .ok_or_else(|| TransformError::InvalidFormat(
+            format!("Unsupported topology: {}", data.block.topology)
+        ))?;
+
+    let mut new_connectivity = data.connectivity.clone();
+
+    for elem_idx in 0..orig_num_elems {
+        let elem_start = elem_idx * nodes_per_elem;
+
+        // Get original element nodes
+        let orig_elem: Vec<i64> = data.connectivity[elem_start..elem_start + nodes_per_elem].to_vec();
+
+        // Create mirrored element with permuted node order
+        let mut mirror_elem = vec![0i64; nodes_per_elem];
+        for (new_pos, &old_pos) in permutation.iter().enumerate() {
+            let orig_node_id = orig_elem[old_pos] as usize - 1; // 0-based
+            mirror_elem[new_pos] = mirror_node_map[&orig_node_id];
+        }
+
+        new_connectivity.extend(mirror_elem);
+    }
+
+    if verbose {
+        println!("  New mesh: {} elements ({} original + {} mirrored)",
+                 orig_num_elems * 2, orig_num_elems, orig_num_elems);
+    }
+
+    // Create mirrored node sets with _mirror suffix
+    let mut new_node_sets = data.node_sets.clone();
+    let mut new_node_set_names = data.node_set_names.clone();
+
+    // Find next available set ID
+    let max_ns_id = data.node_sets.iter().map(|(id, _, _)| *id).max().unwrap_or(0);
+    let mut next_ns_id = max_ns_id + 1;
+
+    for (idx, (orig_id, nodes, dist_factors)) in data.node_sets.iter().enumerate() {
+        // Create mirrored node set
+        let mirror_nodes: Vec<i64> = nodes.iter().map(|&n| {
+            let orig_idx = (n - 1) as usize;
+            mirror_node_map[&orig_idx]
+        }).collect();
+
+        // Distribution factors are copied as-is
+        let mirror_df = dist_factors.clone();
+
+        new_node_sets.push((next_ns_id, mirror_nodes, mirror_df));
+
+        // Create name with _mirror suffix
+        let default_name = format!("nodeset_{}", orig_id);
+        let orig_name = data.node_set_names.get(idx)
+            .map(|s| s.as_str())
+            .unwrap_or(&default_name);
+        new_node_set_names.push(format!("{}_mirror", orig_name));
+
+        next_ns_id += 1;
+    }
+
+    // Create mirrored side sets with _mirror suffix
+    let mut new_side_sets = data.side_sets.clone();
+    let mut new_side_set_names = data.side_set_names.clone();
+
+    let max_ss_id = data.side_sets.iter().map(|(id, _, _, _)| *id).max().unwrap_or(0);
+    let mut next_ss_id = max_ss_id + 1;
+
+    for (idx, (orig_id, elements, sides, dist_factors)) in data.side_sets.iter().enumerate() {
+        // Mirrored elements have IDs offset by orig_num_elems
+        let mirror_elements: Vec<i64> = elements.iter()
+            .map(|&e| e + orig_num_elems as i64)
+            .collect();
+
+        // Side numbers need adjustment based on topology and axis
+        // For now, keep same side numbers (this is a simplification)
+        // TODO: Implement proper side number mapping for different topologies
+        let mirror_sides = sides.clone();
+
+        let mirror_df = dist_factors.clone();
+
+        new_side_sets.push((next_ss_id, mirror_elements, mirror_sides, mirror_df));
+
+        let default_name = format!("sideset_{}", orig_id);
+        let orig_name = data.side_set_names.get(idx)
+            .map(|s| s.as_str())
+            .unwrap_or(&default_name);
+        new_side_set_names.push(format!("{}_mirror", orig_name));
+
+        next_ss_id += 1;
+    }
+
+    // Create mirrored nodal variable values
+    let mut new_nodal_var_values: Vec<Vec<Vec<f64>>> = Vec::new();
+
+    for (var_idx, var_name) in data.nodal_var_names.iter().enumerate() {
+        let is_mirror_component = is_vector_component(var_name, axis);
+
+        let mut var_time_series = Vec::new();
+        for step in 0..data.times.len() {
+            let orig_values = &data.nodal_var_values[var_idx][step];
+            let mut new_values = orig_values.clone();
+
+            // Add mirrored values
+            for i in 0..orig_num_nodes {
+                if !symmetry_nodes.contains(&i) {
+                    let mirror_val = if is_mirror_component {
+                        -orig_values[i] // Negate vector component
+                    } else {
+                        orig_values[i]
+                    };
+                    new_values.push(mirror_val);
+                }
+            }
+
+            var_time_series.push(new_values);
+        }
+        new_nodal_var_values.push(var_time_series);
+
+        if verbose && is_mirror_component {
+            println!("  Negating vector component: {}", var_name);
+        }
+    }
+
+    // Create new params
+    let mut new_params = data.params.clone();
+    new_params.num_nodes = num_new_nodes;
+    new_params.num_elems = orig_num_elems * 2;
+    new_params.num_node_sets = new_node_sets.len();
+    new_params.num_side_sets = new_side_sets.len();
+
+    // Create new block with doubled elements
+    let mut new_block = data.block.clone();
+    new_block.num_entries = orig_num_elems * 2;
+
+    Ok(MeshData {
+        params: new_params,
+        x: new_x,
+        y: new_y,
+        z: new_z,
+        block: new_block,
+        connectivity: new_connectivity,
+        node_sets: new_node_sets,
+        side_sets: new_side_sets,
+        nodal_var_names: data.nodal_var_names.clone(),
+        nodal_var_values: new_nodal_var_values,
+        global_var_names: data.global_var_names.clone(),
+        global_var_values: data.global_var_values.clone(),
+        times: data.times.clone(),
+        node_set_names: new_node_set_names,
+        side_set_names: new_side_set_names,
+    })
+}
+
+/// Write mesh data to a new file
+fn write_mesh_data(
+    path: &PathBuf,
+    data: &MeshData,
+    verbose: bool,
+) -> Result<()> {
+    use exodus_rs::types::CreateOptions;
+
+    if verbose {
+        println!("  Writing output: {} nodes, {} elements",
+                 data.params.num_nodes, data.params.num_elems);
+    }
+
+    // Create new file with clobber mode
+    let options = CreateOptions {
+        mode: CreateMode::Clobber,
+        ..Default::default()
+    };
+    let mut file = ExodusFile::create(path, options)?;
+
+    // Initialize with params
+    file.init(&data.params)?;
+
+    // Write coordinates
+    let y_opt = if data.params.num_dim >= 2 { Some(&data.y[..]) } else { None };
+    let z_opt = if data.params.num_dim >= 3 { Some(&data.z[..]) } else { None };
+    file.put_coords(&data.x, y_opt, z_opt)?;
+
+    // Write element block
+    file.put_block(&data.block)?;
+    file.put_connectivity(data.block.id, &data.connectivity)?;
+
+    // Write node sets
+    for (idx, (set_id, nodes, dist_factors)) in data.node_sets.iter().enumerate() {
+        let df_opt = if dist_factors.is_empty() { None } else { Some(&dist_factors[..]) };
+        file.put_node_set(*set_id, nodes, df_opt)?;
+
+        // Write name if available
+        if let Some(name) = data.node_set_names.get(idx) {
+            if !name.is_empty() {
+                file.put_name(EntityType::NodeSet, idx, name)?;
+            }
+        }
+    }
+
+    // Write side sets
+    for (idx, (set_id, elements, sides, dist_factors)) in data.side_sets.iter().enumerate() {
+        let df_opt = if dist_factors.is_empty() { None } else { Some(&dist_factors[..]) };
+        file.put_side_set(*set_id, elements, sides, df_opt)?;
+
+        if let Some(name) = data.side_set_names.get(idx) {
+            if !name.is_empty() {
+                file.put_name(EntityType::SideSet, idx, name)?;
+            }
+        }
+    }
+
+    // Write time steps and variables
+    if !data.times.is_empty() {
+        // Define nodal variables
+        if !data.nodal_var_names.is_empty() {
+            let names: Vec<&str> = data.nodal_var_names.iter().map(|s| s.as_str()).collect();
+            file.define_variables(EntityType::Nodal, &names)?;
+        }
+
+        // Define global variables
+        if !data.global_var_names.is_empty() {
+            let names: Vec<&str> = data.global_var_names.iter().map(|s| s.as_str()).collect();
+            file.define_variables(EntityType::Global, &names)?;
+        }
+
+        // Write time values and variable data
+        for (step, &time) in data.times.iter().enumerate() {
+            file.put_time(step, time)?;
+
+            // Write nodal variables
+            for (var_idx, _) in data.nodal_var_names.iter().enumerate() {
+                let values = &data.nodal_var_values[var_idx][step];
+                file.put_var(step, EntityType::Nodal, 0, var_idx, values)?;
+            }
+
+            // Write global variables
+            if !data.global_var_values.is_empty() && !data.global_var_values[step].is_empty() {
+                for (var_idx, value) in data.global_var_values[step].iter().enumerate() {
+                    file.put_var(step, EntityType::Global, 0, var_idx, &[*value])?;
+                }
+            }
+        }
+    }
+
+    file.sync()?;
+
+    if verbose {
+        println!("  Output written successfully");
+    }
+
+    Ok(())
+}
+
+/// Apply copy-mirror-merge operation (requires reading entire mesh and creating new file)
+fn apply_copy_mirror_merge(
+    input_path: &PathBuf,
+    output_path: &PathBuf,
+    axis: Axis,
+    tolerance: f64,
+    verbose: bool,
+) -> Result<()> {
+    if verbose {
+        println!("  Copy-mirror-merge about {:?} axis (tolerance: {})", axis, tolerance);
+    }
+
+    // Read input mesh
+    let input_file = ExodusFile::<mode::Read>::open(input_path)?;
+    let mesh_data = read_mesh_data(&input_file, verbose)?;
+    drop(input_file);
+
+    // Apply copy-mirror-merge
+    let merged_data = copy_mirror_merge(&mesh_data, axis, tolerance, verbose)?;
+
+    // Write output mesh
+    write_mesh_data(output_path, &merged_data, verbose)?;
+
+    Ok(())
+}
+
+// ============================================================================
+// End Copy-Mirror-Merge Implementation
+// ============================================================================
 
 /// Normalize time values so the first time step is zero
 fn normalize_time(file: &mut ExodusFile<exodus_rs::mode::Append>, verbose: bool) -> Result<()> {
@@ -623,38 +1263,125 @@ fn main() -> Result<()> {
         println!();
     }
 
-    // Copy input file to output location
-    if cli.verbose {
-        println!("Copying input file to output location...");
-    }
-    std::fs::copy(input, output)?;
+    // Check if any CopyMirrorMerge operations are present
+    let has_cmm = operations.iter().any(|op| matches!(op, Operation::CopyMirrorMerge(_, _)));
 
-    // Open the output file in append mode for modifications
-    let mut file = ExodusFile::append(output)?;
+    if has_cmm {
+        // Complex path: handle CopyMirrorMerge with pre/post operations
+        // Split operations into groups: before CMM, CMM itself, after CMM
+        let mut pre_cmm_ops = Vec::new();
+        let mut cmm_op: Option<(Axis, f64)> = None;
+        let mut post_cmm_ops = Vec::new();
+        let mut found_cmm = false;
 
-    if cli.verbose {
-        let params = file.init_params()?;
-        println!(
-            "Mesh: {} nodes, {} elements, {} dimensions",
-            params.num_nodes, params.num_elems, params.num_dim
-        );
-    }
-
-    // Apply transformations in order
-    if cli.verbose && !operations.is_empty() {
-        println!("Applying transformations:");
-    }
-
-    for op in &operations {
-        apply_operation(&mut file, op, cli.verbose)?;
-    }
-
-    // Apply time normalization if requested
-    if cli.zero_time {
-        if cli.verbose {
-            println!("Normalizing time values:");
+        for op in &operations {
+            if let Operation::CopyMirrorMerge(axis, tolerance) = op {
+                if found_cmm {
+                    return Err(TransformError::InvalidFormat(
+                        "Only one --copy-mirror-merge operation is supported per invocation".to_string(),
+                    ));
+                }
+                cmm_op = Some((*axis, *tolerance));
+                found_cmm = true;
+            } else if found_cmm {
+                post_cmm_ops.push(op.clone());
+            } else {
+                pre_cmm_ops.push(op.clone());
+            }
         }
-        normalize_time(&mut file, cli.verbose)?;
+
+        let (cmm_axis, cmm_tolerance) = cmm_op.unwrap();
+
+        // Step 1: Apply pre-CMM operations (if any)
+        if !pre_cmm_ops.is_empty() {
+            if cli.verbose {
+                println!("Copying input file to output location...");
+            }
+            std::fs::copy(input, output)?;
+
+            let mut file = ExodusFile::append(output)?;
+            if cli.verbose {
+                let params = file.init_params()?;
+                println!(
+                    "Mesh: {} nodes, {} elements, {} dimensions",
+                    params.num_nodes, params.num_elems, params.num_dim
+                );
+                println!("Applying pre-merge transformations:");
+            }
+
+            for op in &pre_cmm_ops {
+                apply_simple_operation(&mut file, op, cli.verbose)?;
+            }
+            file.sync()?;
+            drop(file);
+
+            // Step 2: Apply CopyMirrorMerge (reads from output, writes to output)
+            if cli.verbose {
+                println!("Applying copy-mirror-merge:");
+            }
+            apply_copy_mirror_merge(output, output, cmm_axis, cmm_tolerance, cli.verbose)?;
+        } else {
+            // No pre-CMM ops, apply CMM directly from input to output
+            if cli.verbose {
+                println!("Applying copy-mirror-merge:");
+            }
+            apply_copy_mirror_merge(input, output, cmm_axis, cmm_tolerance, cli.verbose)?;
+        }
+
+        // Step 3: Apply post-CMM operations (if any)
+        if !post_cmm_ops.is_empty() {
+            let mut file = ExodusFile::append(output)?;
+            if cli.verbose {
+                println!("Applying post-merge transformations:");
+            }
+            for op in &post_cmm_ops {
+                apply_simple_operation(&mut file, op, cli.verbose)?;
+            }
+            file.sync()?;
+        }
+
+        // Apply time normalization if requested
+        if cli.zero_time {
+            let mut file = ExodusFile::append(output)?;
+            if cli.verbose {
+                println!("Normalizing time values:");
+            }
+            normalize_time(&mut file, cli.verbose)?;
+        }
+    } else {
+        // Simple path: no CopyMirrorMerge, use existing approach
+        if cli.verbose {
+            println!("Copying input file to output location...");
+        }
+        std::fs::copy(input, output)?;
+
+        // Open the output file in append mode for modifications
+        let mut file = ExodusFile::append(output)?;
+
+        if cli.verbose {
+            let params = file.init_params()?;
+            println!(
+                "Mesh: {} nodes, {} elements, {} dimensions",
+                params.num_nodes, params.num_elems, params.num_dim
+            );
+        }
+
+        // Apply transformations in order
+        if cli.verbose && !operations.is_empty() {
+            println!("Applying transformations:");
+        }
+
+        for op in &operations {
+            apply_simple_operation(&mut file, op, cli.verbose)?;
+        }
+
+        // Apply time normalization if requested
+        if cli.zero_time {
+            if cli.verbose {
+                println!("Normalizing time values:");
+            }
+            normalize_time(&mut file, cli.verbose)?;
+        }
     }
 
     if cli.verbose {
