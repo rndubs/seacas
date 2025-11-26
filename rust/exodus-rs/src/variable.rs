@@ -2325,4 +2325,208 @@ impl ExodusFile<mode::Append> {
             ))
         }
     }
+
+    /// Read a variable at a specific time step (append mode - provides read access)
+    /// This is a simplified version that assumes the variable already exists
+    pub fn var(
+        &self,
+        step: usize,
+        var_type: EntityType,
+        entity_id: EntityId,
+        var_index: usize,
+    ) -> Result<Vec<f64>> {
+        // Simplified variable name construction (same logic as Read mode)
+        let var_name = match var_type {
+            EntityType::Global => "vals_glo_var".to_string(),
+            EntityType::Nodal => format!("vals_nod_var{}", var_index + 1),
+            EntityType::ElemBlock => {
+                let block_ids = self.block_ids(EntityType::ElemBlock)?;
+                let block_index = block_ids.iter().position(|&id| id == entity_id).ok_or_else(|| {
+                    ExodusError::EntityNotFound {
+                        entity_type: EntityType::ElemBlock.to_string(),
+                        id: entity_id,
+                    }
+                })?;
+                format!("vals_elem_var{}eb{}", var_index + 1, block_index + 1)
+            }
+            _ => {
+                return Err(ExodusError::Other(format!(
+                    "Variable reading not yet fully implemented for {:?} in append mode",
+                    var_type
+                )))
+            }
+        };
+
+        let var = self
+            .nc_file
+            .variable(&var_name)
+            .ok_or_else(|| ExodusError::VariableNotDefined(var_name.clone()))?;
+
+        match var_type {
+            EntityType::Global => {
+                let value: f64 = var.get_value((step, var_index))?;
+                Ok(vec![value])
+            }
+            EntityType::Nodal | EntityType::ElemBlock => {
+                Ok(var.get_values((step..step + 1, ..))?)
+            }
+            _ => Err(ExodusError::Other(format!(
+                "Unsupported variable type: {:?}",
+                var_type
+            ))),
+        }
+    }
+
+    /// Write a variable at a specific time step (append mode - provides write access)
+    /// This is a simplified version that assumes the variable already exists
+    pub fn put_var(
+        &mut self,
+        step: usize,
+        var_type: EntityType,
+        entity_id: EntityId,
+        var_index: usize,
+        values: &[f64],
+    ) -> Result<()> {
+        // Simplified variable name construction (same as var method)
+        let var_name = match var_type {
+            EntityType::Global => "vals_glo_var".to_string(),
+            EntityType::Nodal => format!("vals_nod_var{}", var_index + 1),
+            EntityType::ElemBlock => {
+                let block_ids = self.block_ids(EntityType::ElemBlock)?;
+                let block_index = block_ids.iter().position(|&id| id == entity_id).ok_or_else(|| {
+                    ExodusError::EntityNotFound {
+                        entity_type: EntityType::ElemBlock.to_string(),
+                        id: entity_id,
+                    }
+                })?;
+                format!("vals_elem_var{}eb{}", var_index + 1, block_index + 1)
+            }
+            _ => {
+                return Err(ExodusError::Other(format!(
+                    "Variable writing not yet fully implemented for {:?} in append mode",
+                    var_type
+                )))
+            }
+        };
+
+        // Ensure we're in data mode for writing
+        self.ensure_data_mode()?;
+
+        // Write the values
+        if let Some(mut var) = self.nc_file.variable_mut(&var_name) {
+            match var_type {
+                EntityType::Global => {
+                    if values.len() != 1 {
+                        return Err(ExodusError::InvalidArrayLength {
+                            expected: 1,
+                            actual: values.len(),
+                        });
+                    }
+                    var.put_value(values[0], (step..step + 1, var_index..var_index + 1))?;
+                }
+                EntityType::Nodal | EntityType::ElemBlock => {
+                    var.put_values(values, (step..step + 1, ..))?;
+                }
+                _ => {
+                    return Err(ExodusError::Other(format!(
+                        "Unsupported variable type: {:?}",
+                        var_type
+                    )))
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Check if a variable is in the truth table (append mode)
+    pub fn is_var_in_truth_table(
+        &self,
+        var_type: EntityType,
+        entity_id: EntityId,
+        var_index: usize,
+    ) -> Result<bool> {
+        // Only block types use truth tables
+        match var_type {
+            EntityType::ElemBlock | EntityType::EdgeBlock | EntityType::FaceBlock => {
+                let truth_table = self.truth_table(var_type)?;
+                let block_ids = self.block_ids(var_type)?;
+
+                let block_idx = block_ids
+                    .iter()
+                    .position(|&id| id == entity_id)
+                    .ok_or_else(|| ExodusError::EntityNotFound {
+                        entity_type: var_type.to_string(),
+                        id: entity_id,
+                    })?;
+
+                Ok(truth_table.get(block_idx, var_index))
+            }
+            _ => Ok(true), // Non-block types don't use truth tables
+        }
+    }
+
+    /// Get the truth table for a variable type (append mode - delegates to common implementation)
+    pub fn truth_table(&self, var_type: EntityType) -> Result<TruthTable> {
+        // Get the dimension name for the number of variables
+        let num_var_dim = match var_type {
+            EntityType::ElemBlock => "num_elem_var",
+            EntityType::EdgeBlock => "num_edge_var",
+            EntityType::FaceBlock => "num_face_var",
+            _ => {
+                return Err(ExodusError::Other(format!(
+                    "Truth tables only supported for block types, got: {:?}",
+                    var_type
+                )))
+            }
+        };
+
+        // Get number of variables
+        let num_vars = self
+            .nc_file
+            .dimension(num_var_dim)
+            .map(|d| d.len())
+            .unwrap_or(0);
+
+        if num_vars == 0 {
+            return Ok(TruthTable::new(var_type, 0, 0));
+        }
+
+        // Get block IDs
+        let block_ids = self.block_ids(var_type)?;
+        let num_blocks = block_ids.len();
+
+        if num_blocks == 0 {
+            return Ok(TruthTable::new(var_type, 0, num_vars));
+        }
+
+        // Try to read the truth table variable
+        let truth_var_name = match var_type {
+            EntityType::ElemBlock => "elem_var_tab",
+            EntityType::EdgeBlock => "edge_var_tab",
+            EntityType::FaceBlock => "face_var_tab",
+            _ => unreachable!(),
+        };
+
+        let mut table = TruthTable::new(var_type, num_blocks, num_vars);
+
+        if let Some(var) = self.nc_file.variable(truth_var_name) {
+            let truth_data: Vec<i32> = var.get_values((.., ..))?;
+            for block_idx in 0..num_blocks {
+                for var_idx in 0..num_vars {
+                    let value = truth_data[block_idx * num_vars + var_idx];
+                    table.set(block_idx, var_idx, value != 0);
+                }
+            }
+        } else {
+            // If no truth table exists, assume all variables exist for all blocks
+            for block_idx in 0..num_blocks {
+                for var_idx in 0..num_vars {
+                    table.set(block_idx, var_idx, true);
+                }
+            }
+        }
+
+        Ok(table)
+    }
 }

@@ -1,15 +1,16 @@
 //! High-level transformation operations for ExodusFile
 //!
 //! This module provides transformation methods on ExodusFile for translating,
-//! rotating, and scaling mesh coordinates.
+//! rotating, and scaling mesh coordinates and field variables.
 
-use crate::error::Result;
+use crate::error::{ExodusError, Result};
 use crate::file::ExodusFile;
 use crate::mode;
 use crate::transformations::{
     apply_rotation_to_vector, rotation_matrix_from_euler, rotation_matrix_x, rotation_matrix_y,
     rotation_matrix_z, Matrix3x3,
 };
+use crate::types::EntityType;
 use std::f64::consts::PI;
 
 /// Convert degrees to radians
@@ -294,6 +295,158 @@ impl ExodusFile<mode::Append> {
         self.put_coords(&coords.x, Some(&coords.y), Some(&coords.z))?;
 
         Ok(())
+    }
+
+    /// Scale a specific field variable by name
+    ///
+    /// Searches through all entity types (Global, Nodal, ElemBlock, etc.) to find
+    /// a variable with the given name, then scales all its values across all time steps.
+    ///
+    /// # Arguments
+    ///
+    /// * `field_name` - Name of the field variable to scale
+    /// * `scale_factor` - Factor to multiply all variable values by
+    /// * `verbose` - Print detailed information about the scaling operation
+    ///
+    /// # Returns
+    ///
+    /// Ok(()) on success
+    ///
+    /// # Errors
+    ///
+    /// - Variable not found
+    /// - Variable read/write errors
+    ///
+    /// # Example
+    ///
+    /// ```rust,ignore
+    /// use exodus_rs::ExodusFile;
+    ///
+    /// let mut file = ExodusFile::append("mesh.exo")?;
+    /// file.scale_field_variable("temperature", 1.8, false)?; // Convert C to F slope
+    /// # Ok::<(), exodus_rs::ExodusError>(())
+    /// ```
+    pub fn scale_field_variable(
+        &mut self,
+        field_name: &str,
+        scale_factor: f64,
+        verbose: bool,
+    ) -> Result<()> {
+        // Try all supported entity types
+        let entity_types = [
+            EntityType::Global,
+            EntityType::Nodal,
+            EntityType::ElemBlock,
+            EntityType::EdgeBlock,
+            EntityType::FaceBlock,
+            EntityType::NodeSet,
+            EntityType::EdgeSet,
+            EntityType::FaceSet,
+            EntityType::SideSet,
+            EntityType::ElemSet,
+        ];
+
+        let mut found = false;
+
+        for &entity_type in &entity_types {
+            // Try to get variable names for this entity type
+            let var_names = match self.variable_names(entity_type) {
+                Ok(names) => names,
+                Err(_) => continue, // No variables of this type
+            };
+
+            // Find the variable index
+            if let Some(var_idx) = var_names.iter().position(|name| name == field_name) {
+                found = true;
+                if verbose {
+                    println!(
+                        "    Found '{}' as {:?} variable {} (index {})",
+                        field_name, entity_type, var_idx, var_idx
+                    );
+                }
+
+                // Get number of time steps
+                let num_time_steps = self.num_time_steps()?;
+                if verbose {
+                    println!(
+                        "    Scaling across {} time step(s)",
+                        num_time_steps
+                    );
+                }
+
+                // Get entity IDs for this type
+                let entity_ids = self.get_entity_ids_for_type(entity_type)?;
+
+                // Scale the variable for each entity
+                for &entity_id in &entity_ids {
+                    // Check if this variable exists for this entity (truth table)
+                    let exists = match self.is_var_in_truth_table(entity_type, entity_id, var_idx) {
+                        Ok(exists) => exists,
+                        Err(_) => true, // If no truth table, assume variable exists
+                    };
+
+                    if !exists {
+                        continue;
+                    }
+
+                    // Process each time step
+                    for time_step in 0..num_time_steps {
+                        // Read the variable values
+                        let mut values = self.var(time_step, entity_type, entity_id, var_idx)?;
+
+                        // Apply scaling
+                        for value in &mut values {
+                            *value *= scale_factor;
+                        }
+
+                        // Write back
+                        self.put_var(time_step, entity_type, entity_id, var_idx, &values)?;
+                    }
+
+                    if verbose {
+                        println!(
+                            "    Scaled {:?} entity {} across {} time steps",
+                            entity_type, entity_id, num_time_steps
+                        );
+                    }
+                }
+
+                break; // Found and processed the variable
+            }
+        }
+
+        if !found {
+            return Err(ExodusError::Other(format!(
+                "Field variable '{}' not found in any entity type",
+                field_name
+            )));
+        }
+
+        Ok(())
+    }
+
+    /// Helper function to get entity IDs for a given entity type
+    fn get_entity_ids_for_type(&self, entity_type: EntityType) -> Result<Vec<i64>> {
+        match entity_type {
+            EntityType::Global => Ok(vec![0]), // Global variables use entity_id 0
+            EntityType::Nodal => Ok(vec![0]),  // Nodal variables use entity_id 0
+            EntityType::ElemBlock | EntityType::EdgeBlock | EntityType::FaceBlock => {
+                self.block_ids(entity_type)
+            }
+            EntityType::NodeSet
+            | EntityType::EdgeSet
+            | EntityType::FaceSet
+            | EntityType::SideSet
+            | EntityType::ElemSet => self.set_ids(entity_type),
+            EntityType::Assembly | EntityType::Blob => {
+                // Assemblies and blobs use different methods
+                Ok(vec![]) // For now, return empty - these are less common
+            }
+            EntityType::NodeMap | EntityType::ElemMap | EntityType::EdgeMap | EntityType::FaceMap => {
+                // Maps don't have variables
+                Ok(vec![])
+            }
+        }
     }
 }
 

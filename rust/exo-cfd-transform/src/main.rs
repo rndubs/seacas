@@ -64,6 +64,13 @@ struct Cli {
     #[arg(long, value_name = "SEQ,ANGLES")]
     rotate: Vec<String>,
 
+    /// Scale individual field variables by name.
+    /// Format: "field_name,scale_factor"
+    /// Examples: "stress,1.23" or "temperature,0.5"
+    /// Can be specified multiple times to scale different fields
+    #[arg(long = "scale-field", value_name = "NAME,FACTOR")]
+    scale_field: Vec<String>,
+
     /// Normalize time values so the first time step is zero
     #[arg(short = 'z', long = "zero-time")]
     zero_time: bool,
@@ -123,6 +130,8 @@ enum Operation {
     Translate([f64; 3]),
     /// Rotate using Euler angles (sequence, angles in degrees)
     Rotate(String, Vec<f64>),
+    /// Scale a specific field variable (name, scale_factor)
+    ScaleField(String, f64),
 }
 
 /// Axis for mirroring
@@ -381,6 +390,30 @@ fn parse_rotate(s: &str) -> Result<(String, Vec<f64>)> {
     Ok((sequence, angles?))
 }
 
+/// Parse a scale-field argument "field_name,scale_factor" into (name, factor)
+fn parse_scale_field(s: &str) -> Result<(String, f64)> {
+    let parts: Vec<&str> = s.split(',').collect();
+    if parts.len() != 2 {
+        return Err(TransformError::InvalidFormat(format!(
+            "Scale field requires 2 values (name,factor), got {}",
+            parts.len()
+        )));
+    }
+
+    let field_name = parts[0].trim().to_string();
+    if field_name.is_empty() {
+        return Err(TransformError::InvalidFormat(
+            "Field name cannot be empty".to_string(),
+        ));
+    }
+
+    let scale_factor = parts[1].trim().parse::<f64>().map_err(|_| {
+        TransformError::InvalidFormat(format!("Invalid scale factor: {}", parts[1]))
+    })?;
+
+    Ok((field_name, scale_factor))
+}
+
 /// Check if an argument matches a flag (handles both "--flag" and "--flag=value" forms)
 fn arg_matches_flag(arg: &str, flag: &str) -> bool {
     arg == flag || arg.starts_with(&format!("{}=", flag))
@@ -397,8 +430,8 @@ fn extract_ordered_operations_from_args(
     if verbose {
         println!("DEBUG: Raw args: {:?}", args);
         println!(
-            "DEBUG: Clap parsed - translate: {:?}, rotate: {:?}, scale_len: {:?}, mirror: {:?}",
-            cli.translate, cli.rotate, cli.scale_len, cli.mirror
+            "DEBUG: Clap parsed - translate: {:?}, rotate: {:?}, scale_len: {:?}, mirror: {:?}, scale_field: {:?}",
+            cli.translate, cli.rotate, cli.scale_len, cli.mirror, cli.scale_field
         );
     }
 
@@ -407,6 +440,7 @@ fn extract_ordered_operations_from_args(
     let mut mirror_idx = 0;
     let mut translate_idx = 0;
     let mut rotate_idx = 0;
+    let mut scale_field_idx = 0;
 
     for (pos, arg) in args.iter().enumerate() {
         if arg_matches_flag(arg, "--scale-len") && scale_idx < cli.scale_len.len() {
@@ -448,6 +482,17 @@ fn extract_ordered_operations_from_args(
             let (seq, angles) = parse_rotate(&cli.rotate[rotate_idx])?;
             operations.push((pos, Operation::Rotate(seq, angles)));
             rotate_idx += 1;
+        } else if arg_matches_flag(arg, "--scale-field") && scale_field_idx < cli.scale_field.len()
+        {
+            if verbose {
+                println!(
+                    "DEBUG: Found --scale-field at pos {}, value: {}",
+                    pos, cli.scale_field[scale_field_idx]
+                );
+            }
+            let (field_name, scale_factor) = parse_scale_field(&cli.scale_field[scale_field_idx])?;
+            operations.push((pos, Operation::ScaleField(field_name, scale_factor)));
+            scale_field_idx += 1;
         }
     }
 
@@ -518,6 +563,15 @@ fn apply_operation(
             // Get the rotation matrix and apply it
             let matrix = rotation_matrix_from_euler(sequence, angles, true)?;
             file.apply_rotation(&matrix)?;
+        }
+        Operation::ScaleField(field_name, scale_factor) => {
+            if verbose {
+                println!(
+                    "  Scaling field variable '{}' by factor {}",
+                    field_name, scale_factor
+                );
+            }
+            file.scale_field_variable(field_name, *scale_factor, verbose)?;
         }
     }
     Ok(())
@@ -870,6 +924,7 @@ mod tests {
             mirror,
             translate,
             rotate,
+            scale_field: vec![],
             zero_time: false,
             verbose: false,
             cache_size: None,
