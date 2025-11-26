@@ -623,4 +623,246 @@ mod tests {
             assert_relative_eq!(coords.y[0], 1.0, epsilon = 1e-10);
         }
     }
+
+    #[test]
+    fn test_scale_field_variable_nodal() {
+        use crate::types::EntityType;
+
+        let temp_file = NamedTempFile::new().unwrap();
+        let path = temp_file.path();
+
+        // Create a file with nodal variables
+        {
+            let mut file = ExodusFile::create(
+                path,
+                CreateOptions {
+                    mode: CreateMode::Clobber,
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+
+            let params = InitParams {
+                num_dim: 3,
+                num_nodes: 3,
+                ..Default::default()
+            };
+            file.init(&params).unwrap();
+
+            // Set coordinates
+            let x = vec![0.0, 1.0, 2.0];
+            let y = vec![0.0, 1.0, 2.0];
+            let z = vec![0.0, 0.0, 0.0];
+            file.put_coords(&x, Some(&y), Some(&z)).unwrap();
+
+            // Define nodal variables
+            file.define_variables(EntityType::Nodal, &["temperature", "pressure"])
+                .unwrap();
+
+            // Write time step 0
+            file.put_time(0, 0.0).unwrap();
+            file.put_var(0, EntityType::Nodal, 0, 0, &[10.0, 20.0, 30.0])
+                .unwrap(); // temperature
+            file.put_var(0, EntityType::Nodal, 0, 1, &[100.0, 200.0, 300.0])
+                .unwrap(); // pressure
+
+            // Write time step 1
+            file.put_time(1, 1.0).unwrap();
+            file.put_var(1, EntityType::Nodal, 0, 0, &[15.0, 25.0, 35.0])
+                .unwrap();
+            file.put_var(1, EntityType::Nodal, 0, 1, &[150.0, 250.0, 350.0])
+                .unwrap();
+        }
+
+        // Scale the temperature field by 2.0
+        {
+            let mut file = ExodusFile::append(path).unwrap();
+            file.scale_field_variable("temperature", 2.0, false)
+                .unwrap();
+
+            // Verify temperature was scaled
+            let temp_t0 = file.var(0, EntityType::Nodal, 0, 0).unwrap();
+            assert_relative_eq!(temp_t0[0], 20.0, epsilon = 1e-10);
+            assert_relative_eq!(temp_t0[1], 40.0, epsilon = 1e-10);
+            assert_relative_eq!(temp_t0[2], 60.0, epsilon = 1e-10);
+
+            let temp_t1 = file.var(1, EntityType::Nodal, 0, 0).unwrap();
+            assert_relative_eq!(temp_t1[0], 30.0, epsilon = 1e-10);
+            assert_relative_eq!(temp_t1[1], 50.0, epsilon = 1e-10);
+            assert_relative_eq!(temp_t1[2], 70.0, epsilon = 1e-10);
+
+            // Verify pressure was NOT scaled
+            let pressure_t0 = file.var(0, EntityType::Nodal, 0, 1).unwrap();
+            assert_relative_eq!(pressure_t0[0], 100.0, epsilon = 1e-10);
+            assert_relative_eq!(pressure_t0[1], 200.0, epsilon = 1e-10);
+            assert_relative_eq!(pressure_t0[2], 300.0, epsilon = 1e-10);
+        }
+    }
+
+    #[test]
+    fn test_scale_field_variable_multiple() {
+        use crate::types::EntityType;
+
+        let temp_file = NamedTempFile::new().unwrap();
+        let path = temp_file.path();
+
+        // Create a file with multiple nodal variables
+        {
+            let mut file = ExodusFile::create(
+                path,
+                CreateOptions {
+                    mode: CreateMode::Clobber,
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+
+            let params = InitParams {
+                num_dim: 3,
+                num_nodes: 2,
+                ..Default::default()
+            };
+            file.init(&params).unwrap();
+
+            let x = vec![0.0, 1.0];
+            let y = vec![0.0, 1.0];
+            let z = vec![0.0, 0.0];
+            file.put_coords(&x, Some(&y), Some(&z)).unwrap();
+
+            file.define_variables(EntityType::Nodal, &["temp", "velocity", "stress"])
+                .unwrap();
+
+            file.put_time(0, 0.0).unwrap();
+            file.put_var(0, EntityType::Nodal, 0, 0, &[100.0, 200.0])
+                .unwrap();
+            file.put_var(0, EntityType::Nodal, 0, 1, &[10.0, 20.0])
+                .unwrap();
+            file.put_var(0, EntityType::Nodal, 0, 2, &[1000.0, 2000.0])
+                .unwrap();
+        }
+
+        // Scale multiple fields
+        {
+            let mut file = ExodusFile::append(path).unwrap();
+
+            // Scale temp by 0.5
+            file.scale_field_variable("temp", 0.5, false).unwrap();
+
+            // Scale velocity by 2.0
+            file.scale_field_variable("velocity", 2.0, false).unwrap();
+
+            // Verify scaling
+            let temp = file.var(0, EntityType::Nodal, 0, 0).unwrap();
+            assert_relative_eq!(temp[0], 50.0, epsilon = 1e-10);
+            assert_relative_eq!(temp[1], 100.0, epsilon = 1e-10);
+
+            let velocity = file.var(0, EntityType::Nodal, 0, 1).unwrap();
+            assert_relative_eq!(velocity[0], 20.0, epsilon = 1e-10);
+            assert_relative_eq!(velocity[1], 40.0, epsilon = 1e-10);
+
+            // Stress should remain unchanged
+            let stress = file.var(0, EntityType::Nodal, 0, 2).unwrap();
+            assert_relative_eq!(stress[0], 1000.0, epsilon = 1e-10);
+            assert_relative_eq!(stress[1], 2000.0, epsilon = 1e-10);
+        }
+    }
+
+    #[test]
+    fn test_scale_field_variable_not_found() {
+        let temp_file = NamedTempFile::new().unwrap();
+        let path = temp_file.path();
+
+        // Create a file with one variable
+        {
+            let mut file = ExodusFile::create(
+                path,
+                CreateOptions {
+                    mode: CreateMode::Clobber,
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+
+            let params = InitParams {
+                num_dim: 3,
+                num_nodes: 2,
+                ..Default::default()
+            };
+            file.init(&params).unwrap();
+
+            let x = vec![0.0, 1.0];
+            let y = vec![0.0, 1.0];
+            let z = vec![0.0, 0.0];
+            file.put_coords(&x, Some(&y), Some(&z)).unwrap();
+
+            use crate::types::EntityType;
+            file.define_variables(EntityType::Nodal, &["temperature"])
+                .unwrap();
+
+            file.put_time(0, 0.0).unwrap();
+            file.put_var(0, EntityType::Nodal, 0, 0, &[10.0, 20.0])
+                .unwrap();
+        }
+
+        // Try to scale a non-existent field
+        {
+            let mut file = ExodusFile::append(path).unwrap();
+            let result = file.scale_field_variable("pressure", 2.0, false);
+            assert!(result.is_err());
+            assert!(result
+                .unwrap_err()
+                .to_string()
+                .contains("not found in any entity type"));
+        }
+    }
+
+    #[test]
+    fn test_scale_field_variable_negative_factor() {
+        use crate::types::EntityType;
+
+        let temp_file = NamedTempFile::new().unwrap();
+        let path = temp_file.path();
+
+        // Create a file
+        {
+            let mut file = ExodusFile::create(
+                path,
+                CreateOptions {
+                    mode: CreateMode::Clobber,
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+
+            let params = InitParams {
+                num_dim: 3,
+                num_nodes: 2,
+                ..Default::default()
+            };
+            file.init(&params).unwrap();
+
+            let x = vec![0.0, 1.0];
+            let y = vec![0.0, 1.0];
+            let z = vec![0.0, 0.0];
+            file.put_coords(&x, Some(&y), Some(&z)).unwrap();
+
+            file.define_variables(EntityType::Nodal, &["velocity"])
+                .unwrap();
+
+            file.put_time(0, 0.0).unwrap();
+            file.put_var(0, EntityType::Nodal, 0, 0, &[10.0, 20.0])
+                .unwrap();
+        }
+
+        // Scale by negative factor (reverse direction)
+        {
+            let mut file = ExodusFile::append(path).unwrap();
+            file.scale_field_variable("velocity", -1.0, false)
+                .unwrap();
+
+            let velocity = file.var(0, EntityType::Nodal, 0, 0).unwrap();
+            assert_relative_eq!(velocity[0], -10.0, epsilon = 1e-10);
+            assert_relative_eq!(velocity[1], -20.0, epsilon = 1e-10);
+        }
+    }
 }

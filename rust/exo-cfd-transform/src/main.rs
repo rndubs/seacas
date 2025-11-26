@@ -805,6 +805,7 @@ mod tests {
             mirror: vec![],
             translate: vec![],
             rotate: vec![],
+            scale_field: vec![],
             zero_time: false,
             verbose: false,
             cache_size: None,
@@ -841,6 +842,7 @@ mod tests {
             mirror: vec![],
             translate: vec![],
             rotate: vec![],
+            scale_field: vec![],
             zero_time: false,
             verbose: false,
             cache_size: Some(256),      // 256 MB
@@ -870,6 +872,7 @@ mod tests {
             mirror: vec![],
             translate: vec![],
             rotate: vec![],
+            scale_field: vec![],
             zero_time: false,
             verbose: false,
             cache_size: None,
@@ -1120,5 +1123,224 @@ mod tests {
         assert_eq!(ops.len(), 2);
         assert!(matches!(ops[0], Operation::Rotate(_, _)));
         assert!(matches!(ops[1], Operation::Translate(_)));
+    }
+
+    #[test]
+    fn test_parse_scale_field_valid() {
+        // Valid inputs
+        let result = parse_scale_field("temperature,1.5").unwrap();
+        assert_eq!(result.0, "temperature");
+        assert!((result.1 - 1.5).abs() < 1e-10);
+
+        let result = parse_scale_field("stress,2.0").unwrap();
+        assert_eq!(result.0, "stress");
+        assert!((result.1 - 2.0).abs() < 1e-10);
+
+        let result = parse_scale_field("pressure,0.5").unwrap();
+        assert_eq!(result.0, "pressure");
+        assert!((result.1 - 0.5).abs() < 1e-10);
+
+        // With spaces
+        let result = parse_scale_field("  velocity  ,  3.14  ").unwrap();
+        assert_eq!(result.0, "velocity");
+        assert!((result.1 - 3.14).abs() < 1e-10);
+
+        // Negative scale factor
+        let result = parse_scale_field("displacement,-1.0").unwrap();
+        assert_eq!(result.0, "displacement");
+        assert!((result.1 - (-1.0)).abs() < 1e-10);
+    }
+
+    #[test]
+    fn test_parse_scale_field_invalid() {
+        // Missing scale factor
+        assert!(parse_scale_field("temperature").is_err());
+
+        // Too many parts
+        assert!(parse_scale_field("temperature,1.5,extra").is_err());
+
+        // Empty field name
+        assert!(parse_scale_field(",1.5").is_err());
+        assert!(parse_scale_field("  ,1.5").is_err());
+
+        // Invalid scale factor
+        assert!(parse_scale_field("temperature,abc").is_err());
+        assert!(parse_scale_field("temperature,").is_err());
+        assert!(parse_scale_field("temperature,1.5.6").is_err());
+
+        // Empty string
+        assert!(parse_scale_field("").is_err());
+    }
+
+    #[test]
+    fn test_scale_field_operation_order() {
+        // Test that scale-field operations are ordered correctly
+        let args: Vec<String> = vec![
+            "exo-cfd-transform",
+            "in.exo",
+            "out.exo",
+            "--scale-field",
+            "temperature,1.5",
+            "--scale-len",
+            "2.0",
+        ]
+        .into_iter()
+        .map(String::from)
+        .collect();
+
+        let mut cli = make_test_cli(vec![], vec![], vec![2.0], vec![]);
+        cli.scale_field = vec!["temperature,1.5".to_string()];
+
+        let ops = extract_ordered_operations_from_args(&args, &cli, false).unwrap();
+
+        assert_eq!(ops.len(), 2);
+        assert!(matches!(
+            ops[0],
+            Operation::ScaleField(ref name, factor) if name == "temperature" && (factor - 1.5).abs() < 1e-10
+        ));
+        assert!(matches!(ops[1], Operation::ScaleLen(_)));
+    }
+
+    #[test]
+    fn test_multiple_scale_field_operations() {
+        // Test multiple field scaling operations
+        let args: Vec<String> = vec![
+            "exo-cfd-transform",
+            "in.exo",
+            "out.exo",
+            "--scale-field",
+            "temperature,1.5",
+            "--scale-field",
+            "pressure,0.5",
+            "--scale-field",
+            "velocity,2.0",
+        ]
+        .into_iter()
+        .map(String::from)
+        .collect();
+
+        let mut cli = make_test_cli(vec![], vec![], vec![], vec![]);
+        cli.scale_field = vec![
+            "temperature,1.5".to_string(),
+            "pressure,0.5".to_string(),
+            "velocity,2.0".to_string(),
+        ];
+
+        let ops = extract_ordered_operations_from_args(&args, &cli, false).unwrap();
+
+        assert_eq!(ops.len(), 3);
+        assert!(matches!(
+            ops[0],
+            Operation::ScaleField(ref name, factor) if name == "temperature" && (factor - 1.5).abs() < 1e-10
+        ));
+        assert!(matches!(
+            ops[1],
+            Operation::ScaleField(ref name, factor) if name == "pressure" && (factor - 0.5).abs() < 1e-10
+        ));
+        assert!(matches!(
+            ops[2],
+            Operation::ScaleField(ref name, factor) if name == "velocity" && (factor - 2.0).abs() < 1e-10
+        ));
+    }
+
+    #[test]
+    fn test_scale_field_with_other_operations() {
+        // Test scale-field mixed with other operations
+        let args: Vec<String> = vec![
+            "exo-cfd-transform",
+            "in.exo",
+            "out.exo",
+            "--translate",
+            "1,0,0",
+            "--scale-field",
+            "stress,1.23",
+            "--rotate",
+            "Z,90",
+            "--scale-field",
+            "temperature,1.8",
+        ]
+        .into_iter()
+        .map(String::from)
+        .collect();
+
+        let mut cli = make_test_cli(
+            vec!["1,0,0".to_string()],
+            vec!["Z,90".to_string()],
+            vec![],
+            vec![],
+        );
+        cli.scale_field = vec!["stress,1.23".to_string(), "temperature,1.8".to_string()];
+
+        let ops = extract_ordered_operations_from_args(&args, &cli, false).unwrap();
+
+        assert_eq!(ops.len(), 4);
+        assert!(matches!(ops[0], Operation::Translate(_)));
+        assert!(matches!(
+            ops[1],
+            Operation::ScaleField(ref name, factor) if name == "stress" && (factor - 1.23).abs() < 1e-10
+        ));
+        assert!(matches!(ops[2], Operation::Rotate(_, _)));
+        assert!(matches!(
+            ops[3],
+            Operation::ScaleField(ref name, factor) if name == "temperature" && (factor - 1.8).abs() < 1e-10
+        ));
+    }
+
+    #[test]
+    fn test_scale_field_equals_syntax() {
+        // Test --scale-field=value syntax
+        let args: Vec<String> = vec![
+            "exo-cfd-transform",
+            "in.exo",
+            "out.exo",
+            "--scale-field=temperature,1.5",
+            "--scale-field=pressure,0.5",
+        ]
+        .into_iter()
+        .map(String::from)
+        .collect();
+
+        let mut cli = make_test_cli(vec![], vec![], vec![], vec![]);
+        cli.scale_field = vec!["temperature,1.5".to_string(), "pressure,0.5".to_string()];
+
+        let ops = extract_ordered_operations_from_args(&args, &cli, false).unwrap();
+
+        assert_eq!(ops.len(), 2);
+        assert!(matches!(
+            ops[0],
+            Operation::ScaleField(ref name, factor) if name == "temperature" && (factor - 1.5).abs() < 1e-10
+        ));
+        assert!(matches!(
+            ops[1],
+            Operation::ScaleField(ref name, factor) if name == "pressure" && (factor - 0.5).abs() < 1e-10
+        ));
+    }
+
+    #[test]
+    fn test_scale_field_with_underscores_and_numbers() {
+        // Test field names with underscores and numbers
+        let result = parse_scale_field("velocity_x,2.5").unwrap();
+        assert_eq!(result.0, "velocity_x");
+        assert!((result.1 - 2.5).abs() < 1e-10);
+
+        let result = parse_scale_field("stress_11,1.0").unwrap();
+        assert_eq!(result.0, "stress_11");
+        assert!((result.1 - 1.0).abs() < 1e-10);
+
+        let result = parse_scale_field("field_var_123,0.75").unwrap();
+        assert_eq!(result.0, "field_var_123");
+        assert!((result.1 - 0.75).abs() < 1e-10);
+    }
+
+    #[test]
+    fn test_scale_field_scientific_notation() {
+        // Test scale factors in scientific notation
+        let result = parse_scale_field("temperature,1.5e-3").unwrap();
+        assert_eq!(result.0, "temperature");
+        assert!((result.1 - 1.5e-3).abs() < 1e-10);
+
+        let result = parse_scale_field("pressure,2.5E+2").unwrap();
+        assert_eq!(result.0, "pressure");
+        assert!((result.1 - 2.5e2).abs() < 1e-10);
     }
 }
