@@ -1,11 +1,11 @@
-.TH EXO-CFD-TRANSFORM 1 "November 2025" "exo-cfd-transform 0.1.0" "User Commands"
+.TH REXONATOR 1 "November 2025" "rexonator 0.1.0" "User Commands"
 .SH NAME
-exo-cfd-transform \- transform Exodus II mesh files with geometric operations
+rexonator \- transform Exodus II mesh files with geometric operations
 .SH SYNOPSIS
-.B exo-cfd-transform
+.B rexonator
 [\fIOPTIONS\fR] \fIINPUT\fR \fIOUTPUT\fR
 .SH DESCRIPTION
-.B exo-cfd-transform
+.B rexonator
 applies geometric transformations to Exodus II finite element mesh files.
 It reads an input mesh, applies a sequence of transformations, and writes
 the result to a new output file. The original input file is never modified.
@@ -216,10 +216,10 @@ For example, the following two commands produce different results:
 .IP
 .nf
 # Translate first, then rotate
-exo-cfd-transform mesh.exo out1.exo \-\-translate "10,0,0" \-\-rotate "Z,90"
+rexonator mesh.exo out1.exo \-\-translate "10,0,0" \-\-rotate "Z,90"
 
 # Rotate first, then translate
-exo-cfd-transform mesh.exo out2.exo \-\-rotate "Z,90" \-\-translate "10,0,0"
+rexonator mesh.exo out2.exo \-\-rotate "Z,90" \-\-translate "10,0,0"
 .fi
 .PP
 In the first case, the mesh is moved 10 units in X, then rotated 90 degrees.
@@ -230,7 +230,7 @@ relative to its original orientation.
 Multiple instances of the same transformation type can be specified:
 .IP
 .nf
-exo-cfd-transform mesh.exo out.exo \-\-rotate "X,45" \-\-rotate "Y,30" \-\-rotate "Z,15"
+rexonator mesh.exo out.exo \-\-rotate "X,45" \-\-rotate "Y,30" \-\-rotate "Z,15"
 .fi
 .PP
 This applies three separate rotations in sequence.
@@ -275,22 +275,22 @@ Classical Euler angles, used in physics
 .TP
 \fBBasic translation:\fR
 .nf
-exo-cfd-transform input.exo output.exo \-\-translate "100,50,0"
+rexonator input.exo output.exo \-\-translate "100,50,0"
 .fi
 .TP
 \fBScale from inches to meters:\fR
 .nf
-exo-cfd-transform input.exo output.exo \-\-scale\-len 0.0254
+rexonator input.exo output.exo \-\-scale\-len 0.0254
 .fi
 .TP
 \fBRotate 90 degrees about Z axis:\fR
 .nf
-exo-cfd-transform input.exo output.exo \-\-rotate "Z,90"
+rexonator input.exo output.exo \-\-rotate "Z,90"
 .fi
 .TP
 \fBComplex transformation chain:\fR
 .nf
-exo-cfd-transform input.exo output.exo \\
+rexonator input.exo output.exo \\
     \-\-translate "0,0,\-5" \\
     \-\-rotate "XYZ,0,0,45" \\
     \-\-scale\-len 1000 \\
@@ -303,12 +303,12 @@ then moves to position (100, 100, 0), with verbose output.
 .TP
 \fBMirror and normalize time:\fR
 .nf
-exo-cfd-transform simulation.exo mirrored.exo \-\-mirror x \-\-zero\-time
+rexonator simulation.exo mirrored.exo \-\-mirror x \-\-zero\-time
 .fi
 .TP
 \fBCreate full model from half-symmetry model:\fR
 .nf
-exo-cfd-transform half_model.exo full_model.exo \-\-copy\-mirror\-merge x \-v
+rexonator half_model.exo full_model.exo \-\-copy\-mirror\-merge x \-v
 .fi
 .IP
 This mirrors the mesh about the YZ plane (x=0), merging nodes on the
@@ -316,7 +316,7 @@ symmetry plane and creating a full symmetric model.
 .TP
 \fBCopy-mirror-merge with custom tolerance:\fR
 .nf
-exo-cfd-transform half.exo full.exo \\
+rexonator half.exo full.exo \\
     \-\-copy\-mirror\-merge y \\
     \-\-merge\-tolerance 0.01
 .fi
@@ -327,15 +327,15 @@ the symmetry plane due to mesh generation tolerances.
 \fBIntrinsic vs extrinsic rotation comparison:\fR
 .nf
 # Extrinsic: rotations about fixed global axes
-exo-cfd-transform mesh.exo ext.exo \-\-rotate "XYZ,30,45,60"
+rexonator mesh.exo ext.exo \-\-rotate "XYZ,30,45,60"
 
 # Intrinsic: rotations about moving body axes
-exo-cfd-transform mesh.exo int.exo \-\-rotate "xyz,30,45,60"
+rexonator mesh.exo int.exo \-\-rotate "xyz,30,45,60"
 .fi
 .TP
 \fBHigh-performance transformation for large files:\fR
 .nf
-exo-cfd-transform large_mesh.exo output.exo \\
+rexonator large_mesh.exo output.exo \\
     \-\-cache\-size 256 \\
     \-\-preemption 0.5 \\
     \-\-node\-chunk 20000 \\
@@ -348,7 +348,7 @@ processing large mesh files.
 .TP
 \fBCheck performance configuration:\fR
 .nf
-exo-cfd-transform dummy.exo dummy.exo \-\-show\-perf\-config
+rexonator dummy.exo dummy.exo \-\-show\-perf\-config
 .fi
 .SH EXIT STATUS
 .TP

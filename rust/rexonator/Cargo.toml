@@ -1,5 +1,5 @@
 [package]
-name = "exo-cfd-transform"
+name = "rexonator"
 version = "0.1.0"
 edition = "2021"
 description = "CLI tool for transforming Exodus mesh files (translate, rotate, scale, mirror)"
@@ -9,7 +9,7 @@ keywords = ["exodus", "mesh", "cfd", "transform", "finite-element"]
 categories = ["command-line-utilities", "science"]
 
 [[bin]]
-name = "exo-cfd-transform"
+name = "rexonator"
 path = "src/main.rs"
 
 [dependencies]
