@@ -6,6 +6,7 @@
 use crate::error::{EntityId, ExodusError, Result};
 use crate::types::{EntityType, TruthTable, VarStorageMode};
 use crate::{mode, ExodusFile, FileMode};
+use netcdf::types::NcVariableType;
 
 // ====================
 // Common Operations
@@ -438,10 +439,14 @@ impl ExodusFile<mode::Write> {
         }
 
         // Create the variable name storage variable
+        // Use NC_CHAR type for compatibility with Exodus readers like VisIt
         let var_name_exists = self.nc_file.variable(var_name_var).is_some();
         if !var_name_exists {
-            self.nc_file
-                .add_variable::<u8>(var_name_var, &[num_var_dim, "len_string"])?;
+            self.nc_file.add_variable_with_type(
+                var_name_var,
+                &[num_var_dim, "len_string"],
+                &NcVariableType::Char,
+            )?;
         }
 
         // Get chunking configuration (raw requested values)
@@ -1456,9 +1461,13 @@ impl ExodusFile<mode::Write> {
         }
 
         // Create the variable name storage variable
+        // Use NC_CHAR type for compatibility with Exodus readers like VisIt
         if self.nc_file.variable(var_name_var).is_none() {
-            self.nc_file
-                .add_variable::<u8>(var_name_var, &[num_var_dim, "len_string"])?;
+            self.nc_file.add_variable_with_type(
+                var_name_var,
+                &[num_var_dim, "len_string"],
+                &NcVariableType::Char,
+            )?;
         }
 
         // For global reduction variables, create the storage variable now
