@@ -73,7 +73,11 @@ struct Cli {
     copy_mirror_merge: Vec<String>,
 
     /// Tolerance for merging nodes on the symmetry plane (default: 0.001)
-    #[arg(long = "merge-tolerance", value_name = "VALUE", default_value = "0.001")]
+    #[arg(
+        long = "merge-tolerance",
+        value_name = "VALUE",
+        default_value = "0.001"
+    )]
     merge_tolerance: f64,
 
     /// Normalize time values so the first time step is zero
@@ -473,10 +477,7 @@ fn extract_ordered_operations_from_args(
                 );
             }
             let axis: Axis = cli.copy_mirror_merge[copy_mirror_merge_idx].parse()?;
-            operations.push((
-                pos,
-                Operation::CopyMirrorMerge(axis, cli.merge_tolerance),
-            ));
+            operations.push((pos, Operation::CopyMirrorMerge(axis, cli.merge_tolerance)));
             copy_mirror_merge_idx += 1;
         }
     }
@@ -597,6 +598,9 @@ fn show_man_page() -> Result<()> {
 // Copy-Mirror-Merge Implementation
 // ============================================================================
 
+/// Type alias for side set data: (id, elements, sides, dist_factors)
+type SideSetData = (i64, Vec<i64>, Vec<i64>, Vec<f64>);
+
 /// Data structure to hold all mesh data for copy-mirror-merge operation
 #[derive(Debug)]
 struct MeshData {
@@ -612,7 +616,7 @@ struct MeshData {
     // Node sets (id, nodes, dist_factors)
     node_sets: Vec<(i64, Vec<i64>, Vec<f64>)>,
     // Side sets (id, elements, sides, dist_factors)
-    side_sets: Vec<(i64, Vec<i64>, Vec<i64>, Vec<f64>)>,
+    side_sets: Vec<SideSetData>,
     // Nodal variables (name, values for each time step)
     nodal_var_names: Vec<String>,
     nodal_var_values: Vec<Vec<Vec<f64>>>, // [var_idx][time_step][node_idx]
@@ -627,11 +631,7 @@ struct MeshData {
 }
 
 /// Find nodes on the symmetry plane
-fn find_symmetry_plane_nodes(
-    coords: &[f64],
-    _axis: Axis,
-    tolerance: f64,
-) -> Vec<usize> {
+fn find_symmetry_plane_nodes(coords: &[f64], _axis: Axis, tolerance: f64) -> Vec<usize> {
     coords
         .iter()
         .enumerate()
@@ -712,10 +712,9 @@ fn is_vector_component(name: &str, axis: Axis) -> bool {
         Axis::Z => ["_z", "z", "_w", "w"],
     };
 
-    suffix.iter().any(|s| {
-        name_lower.ends_with(s) ||
-        (name_lower.len() == 1 && name_lower == *s)
-    })
+    suffix
+        .iter()
+        .any(|s| name_lower.ends_with(s) || (name_lower.len() == 1 && name_lower == *s))
 }
 
 /// Read all mesh data from a file
@@ -723,7 +722,10 @@ fn read_mesh_data(file: &ExodusFile<mode::Read>, verbose: bool) -> Result<MeshDa
     let params = file.init_params()?;
 
     if verbose {
-        println!("  Reading mesh: {} nodes, {} elements", params.num_nodes, params.num_elems);
+        println!(
+            "  Reading mesh: {} nodes, {} elements",
+            params.num_nodes, params.num_elems
+        );
     }
 
     // Read coordinates
@@ -761,7 +763,10 @@ fn read_mesh_data(file: &ExodusFile<mode::Read>, verbose: bool) -> Result<MeshDa
     }
 
     if verbose {
-        println!("  Element block: {} elements, topology: {}", block.num_entries, block.topology);
+        println!(
+            "  Element block: {} elements, topology: {}",
+            block.num_entries, block.topology
+        );
     }
 
     // Read node sets
@@ -820,7 +825,9 @@ fn read_mesh_data(file: &ExodusFile<mode::Read>, verbose: bool) -> Result<MeshDa
 
     if verbose && !global_var_names.is_empty() {
         println!("  Global variables: {:?}", global_var_names);
-        eprintln!("WARNING: Global variables found. These may need manual adjustment after mirroring:");
+        eprintln!(
+            "WARNING: Global variables found. These may need manual adjustment after mirroring:"
+        );
         for name in &global_var_names {
             eprintln!("  - {}", name);
         }
@@ -863,13 +870,18 @@ fn copy_mirror_merge(
         .collect();
 
     if verbose {
-        println!("  Found {} nodes on symmetry plane (tolerance: {})",
-                 symmetry_nodes.len(), tolerance);
+        println!(
+            "  Found {} nodes on symmetry plane (tolerance: {})",
+            symmetry_nodes.len(),
+            tolerance
+        );
     }
 
     if symmetry_nodes.is_empty() {
-        eprintln!("WARNING: No nodes found on the symmetry plane (axis={:?}, tolerance={}).",
-                  axis, tolerance);
+        eprintln!(
+            "WARNING: No nodes found on the symmetry plane (axis={:?}, tolerance={}).",
+            axis, tolerance
+        );
         eprintln!("         Node merging will be skipped. Consider using a larger tolerance.");
     }
 
@@ -894,8 +906,10 @@ fn copy_mirror_merge(
     let num_mirror_nodes = num_new_nodes - orig_num_nodes;
 
     if verbose {
-        println!("  New mesh: {} nodes ({} original + {} mirrored)",
-                 num_new_nodes, orig_num_nodes, num_mirror_nodes);
+        println!(
+            "  New mesh: {} nodes ({} original + {} mirrored)",
+            num_new_nodes, orig_num_nodes, num_mirror_nodes
+        );
     }
 
     // Create new coordinates
@@ -906,9 +920,21 @@ fn copy_mirror_merge(
     // Add mirrored coordinates (for non-symmetry nodes)
     for i in 0..orig_num_nodes {
         if !symmetry_nodes.contains(&i) {
-            let mx = if matches!(axis, Axis::X) { -data.x[i] } else { data.x[i] };
-            let my = if matches!(axis, Axis::Y) { -data.y[i] } else { data.y[i] };
-            let mz = if matches!(axis, Axis::Z) { -data.z[i] } else { data.z[i] };
+            let mx = if matches!(axis, Axis::X) {
+                -data.x[i]
+            } else {
+                data.x[i]
+            };
+            let my = if matches!(axis, Axis::Y) {
+                -data.y[i]
+            } else {
+                data.y[i]
+            };
+            let mz = if matches!(axis, Axis::Z) {
+                -data.z[i]
+            } else {
+                data.z[i]
+            };
             new_x.push(mx);
             new_y.push(my);
             new_z.push(mz);
@@ -917,10 +943,9 @@ fn copy_mirror_merge(
 
     // Create mirrored connectivity with winding order fix
     let nodes_per_elem = data.block.num_nodes_per_entry;
-    let permutation = get_mirror_permutation(&data.block.topology, axis)
-        .ok_or_else(|| TransformError::InvalidFormat(
-            format!("Unsupported topology: {}", data.block.topology)
-        ))?;
+    let permutation = get_mirror_permutation(&data.block.topology, axis).ok_or_else(|| {
+        TransformError::InvalidFormat(format!("Unsupported topology: {}", data.block.topology))
+    })?;
 
     let mut new_connectivity = data.connectivity.clone();
 
@@ -928,7 +953,8 @@ fn copy_mirror_merge(
         let elem_start = elem_idx * nodes_per_elem;
 
         // Get original element nodes
-        let orig_elem: Vec<i64> = data.connectivity[elem_start..elem_start + nodes_per_elem].to_vec();
+        let orig_elem: Vec<i64> =
+            data.connectivity[elem_start..elem_start + nodes_per_elem].to_vec();
 
         // Create mirrored element with permuted node order
         let mut mirror_elem = vec![0i64; nodes_per_elem];
@@ -941,8 +967,12 @@ fn copy_mirror_merge(
     }
 
     if verbose {
-        println!("  New mesh: {} elements ({} original + {} mirrored)",
-                 orig_num_elems * 2, orig_num_elems, orig_num_elems);
+        println!(
+            "  New mesh: {} elements ({} original + {} mirrored)",
+            orig_num_elems * 2,
+            orig_num_elems,
+            orig_num_elems
+        );
     }
 
     // Create mirrored node sets with _mirror suffix
@@ -950,15 +980,23 @@ fn copy_mirror_merge(
     let mut new_node_set_names = data.node_set_names.clone();
 
     // Find next available set ID
-    let max_ns_id = data.node_sets.iter().map(|(id, _, _)| *id).max().unwrap_or(0);
+    let max_ns_id = data
+        .node_sets
+        .iter()
+        .map(|(id, _, _)| *id)
+        .max()
+        .unwrap_or(0);
     let mut next_ns_id = max_ns_id + 1;
 
     for (idx, (orig_id, nodes, dist_factors)) in data.node_sets.iter().enumerate() {
         // Create mirrored node set
-        let mirror_nodes: Vec<i64> = nodes.iter().map(|&n| {
-            let orig_idx = (n - 1) as usize;
-            mirror_node_map[&orig_idx]
-        }).collect();
+        let mirror_nodes: Vec<i64> = nodes
+            .iter()
+            .map(|&n| {
+                let orig_idx = (n - 1) as usize;
+                mirror_node_map[&orig_idx]
+            })
+            .collect();
 
         // Distribution factors are copied as-is
         let mirror_df = dist_factors.clone();
@@ -967,7 +1005,9 @@ fn copy_mirror_merge(
 
         // Create name with _mirror suffix
         let default_name = format!("nodeset_{}", orig_id);
-        let orig_name = data.node_set_names.get(idx)
+        let orig_name = data
+            .node_set_names
+            .get(idx)
             .map(|s| s.as_str())
             .unwrap_or(&default_name);
         new_node_set_names.push(format!("{}_mirror", orig_name));
@@ -979,12 +1019,18 @@ fn copy_mirror_merge(
     let mut new_side_sets = data.side_sets.clone();
     let mut new_side_set_names = data.side_set_names.clone();
 
-    let max_ss_id = data.side_sets.iter().map(|(id, _, _, _)| *id).max().unwrap_or(0);
+    let max_ss_id = data
+        .side_sets
+        .iter()
+        .map(|(id, _, _, _)| *id)
+        .max()
+        .unwrap_or(0);
     let mut next_ss_id = max_ss_id + 1;
 
     for (idx, (orig_id, elements, sides, dist_factors)) in data.side_sets.iter().enumerate() {
         // Mirrored elements have IDs offset by orig_num_elems
-        let mirror_elements: Vec<i64> = elements.iter()
+        let mirror_elements: Vec<i64> = elements
+            .iter()
             .map(|&e| e + orig_num_elems as i64)
             .collect();
 
@@ -998,7 +1044,9 @@ fn copy_mirror_merge(
         new_side_sets.push((next_ss_id, mirror_elements, mirror_sides, mirror_df));
 
         let default_name = format!("sideset_{}", orig_id);
-        let orig_name = data.side_set_names.get(idx)
+        let orig_name = data
+            .side_set_names
+            .get(idx)
             .map(|s| s.as_str())
             .unwrap_or(&default_name);
         new_side_set_names.push(format!("{}_mirror", orig_name));
@@ -1018,12 +1066,12 @@ fn copy_mirror_merge(
             let mut new_values = orig_values.clone();
 
             // Add mirrored values
-            for i in 0..orig_num_nodes {
+            for (i, &val) in orig_values.iter().enumerate().take(orig_num_nodes) {
                 if !symmetry_nodes.contains(&i) {
                     let mirror_val = if is_mirror_component {
-                        -orig_values[i] // Negate vector component
+                        -val // Negate vector component
                     } else {
-                        orig_values[i]
+                        val
                     };
                     new_values.push(mirror_val);
                 }
@@ -1069,16 +1117,14 @@ fn copy_mirror_merge(
 }
 
 /// Write mesh data to a new file
-fn write_mesh_data(
-    path: &PathBuf,
-    data: &MeshData,
-    verbose: bool,
-) -> Result<()> {
+fn write_mesh_data(path: &PathBuf, data: &MeshData, verbose: bool) -> Result<()> {
     use exodus_rs::types::CreateOptions;
 
     if verbose {
-        println!("  Writing output: {} nodes, {} elements",
-                 data.params.num_nodes, data.params.num_elems);
+        println!(
+            "  Writing output: {} nodes, {} elements",
+            data.params.num_nodes, data.params.num_elems
+        );
     }
 
     // Create new file with clobber mode
@@ -1092,8 +1138,16 @@ fn write_mesh_data(
     file.init(&data.params)?;
 
     // Write coordinates
-    let y_opt = if data.params.num_dim >= 2 { Some(&data.y[..]) } else { None };
-    let z_opt = if data.params.num_dim >= 3 { Some(&data.z[..]) } else { None };
+    let y_opt = if data.params.num_dim >= 2 {
+        Some(&data.y[..])
+    } else {
+        None
+    };
+    let z_opt = if data.params.num_dim >= 3 {
+        Some(&data.z[..])
+    } else {
+        None
+    };
     file.put_coords(&data.x, y_opt, z_opt)?;
 
     // Write element block
@@ -1102,7 +1156,11 @@ fn write_mesh_data(
 
     // Write node sets
     for (idx, (set_id, nodes, dist_factors)) in data.node_sets.iter().enumerate() {
-        let df_opt = if dist_factors.is_empty() { None } else { Some(&dist_factors[..]) };
+        let df_opt = if dist_factors.is_empty() {
+            None
+        } else {
+            Some(&dist_factors[..])
+        };
         file.put_node_set(*set_id, nodes, df_opt)?;
 
         // Write name if available
@@ -1115,7 +1173,11 @@ fn write_mesh_data(
 
     // Write side sets
     for (idx, (set_id, elements, sides, dist_factors)) in data.side_sets.iter().enumerate() {
-        let df_opt = if dist_factors.is_empty() { None } else { Some(&dist_factors[..]) };
+        let df_opt = if dist_factors.is_empty() {
+            None
+        } else {
+            Some(&dist_factors[..])
+        };
         file.put_side_set(*set_id, elements, sides, df_opt)?;
 
         if let Some(name) = data.side_set_names.get(idx) {
@@ -1176,7 +1238,10 @@ fn apply_copy_mirror_merge(
     verbose: bool,
 ) -> Result<()> {
     if verbose {
-        println!("  Copy-mirror-merge about {:?} axis (tolerance: {})", axis, tolerance);
+        println!(
+            "  Copy-mirror-merge about {:?} axis (tolerance: {})",
+            axis, tolerance
+        );
     }
 
     // Read input mesh
@@ -1264,7 +1329,9 @@ fn main() -> Result<()> {
     }
 
     // Check if any CopyMirrorMerge operations are present
-    let has_cmm = operations.iter().any(|op| matches!(op, Operation::CopyMirrorMerge(_, _)));
+    let has_cmm = operations
+        .iter()
+        .any(|op| matches!(op, Operation::CopyMirrorMerge(_, _)));
 
     if has_cmm {
         // Complex path: handle CopyMirrorMerge with pre/post operations
@@ -1278,7 +1345,8 @@ fn main() -> Result<()> {
             if let Operation::CopyMirrorMerge(axis, tolerance) = op {
                 if found_cmm {
                     return Err(TransformError::InvalidFormat(
-                        "Only one --copy-mirror-merge operation is supported per invocation".to_string(),
+                        "Only one --copy-mirror-merge operation is supported per invocation"
+                            .to_string(),
                     ));
                 }
                 cmm_op = Some((*axis, *tolerance));
@@ -1921,19 +1989,15 @@ mod tests {
         .map(String::from)
         .collect();
 
-        let cli = make_test_cli_with_cmm(
-            vec![],
-            vec![],
-            vec![],
-            vec![],
-            vec!["x".to_string()],
-            0.001,
-        );
+        let cli =
+            make_test_cli_with_cmm(vec![], vec![], vec![], vec![], vec!["x".to_string()], 0.001);
 
         let ops = extract_ordered_operations_from_args(&args, &cli, false).unwrap();
 
         assert_eq!(ops.len(), 1);
-        assert!(matches!(ops[0], Operation::CopyMirrorMerge(Axis::X, tol) if (tol - 0.001).abs() < 0.0001));
+        assert!(
+            matches!(ops[0], Operation::CopyMirrorMerge(Axis::X, tol) if (tol - 0.001).abs() < 0.0001)
+        );
     }
 
     #[test]
@@ -1967,7 +2031,9 @@ mod tests {
 
         assert_eq!(ops.len(), 3);
         assert!(matches!(ops[0], Operation::Translate(_)));
-        assert!(matches!(ops[1], Operation::CopyMirrorMerge(Axis::X, tol) if (tol - 0.005).abs() < 0.0001));
+        assert!(
+            matches!(ops[1], Operation::CopyMirrorMerge(Axis::X, tol) if (tol - 0.005).abs() < 0.0001)
+        );
         assert!(matches!(ops[2], Operation::Rotate(_, _)));
     }
 
@@ -1984,14 +2050,8 @@ mod tests {
         .map(String::from)
         .collect();
 
-        let cli = make_test_cli_with_cmm(
-            vec![],
-            vec![],
-            vec![],
-            vec![],
-            vec!["y".to_string()],
-            0.001,
-        );
+        let cli =
+            make_test_cli_with_cmm(vec![], vec![], vec![], vec![], vec!["y".to_string()], 0.001);
 
         let ops = extract_ordered_operations_from_args(&args, &cli, false).unwrap();
 
