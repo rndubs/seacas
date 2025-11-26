@@ -847,32 +847,62 @@ fn read_mesh_data(file: &ExodusFile<mode::Read>, verbose: bool) -> Result<MeshDa
     let times = file.times()?;
     let num_time_steps = times.len();
 
-    // Read nodal variables
-    let nodal_var_names = file.variable_names(EntityType::Nodal)?;
+    // Read nodal variables (use unwrap_or_default to handle read errors gracefully)
+    let nodal_var_names = file
+        .variable_names(EntityType::Nodal)
+        .unwrap_or_default();
     let mut nodal_var_values: Vec<Vec<Vec<f64>>> = Vec::new();
+    let mut nodal_read_errors = false;
 
     for var_idx in 0..nodal_var_names.len() {
         let mut var_time_series = Vec::new();
+        let mut var_ok = true;
         for step in 0..num_time_steps {
-            let values = file.var(step, EntityType::Nodal, 0, var_idx)?;
-            var_time_series.push(values);
+            match file.var(step, EntityType::Nodal, 0, var_idx) {
+                Ok(values) => var_time_series.push(values),
+                Err(_) => {
+                    var_ok = false;
+                    nodal_read_errors = true;
+                    break;
+                }
+            }
         }
-        nodal_var_values.push(var_time_series);
+        if var_ok {
+            nodal_var_values.push(var_time_series);
+        }
     }
+
+    // If we had read errors, truncate the names to match what we actually read
+    let nodal_var_names: Vec<String> = nodal_var_names
+        .into_iter()
+        .take(nodal_var_values.len())
+        .collect();
 
     if verbose && !nodal_var_names.is_empty() {
         println!("  Nodal variables: {:?}", nodal_var_names);
     }
+    if verbose && nodal_read_errors {
+        eprintln!(
+            "WARNING: Some nodal variable data couldn't be read (non-fatal, proceeding without them)"
+        );
+    }
 
-    // Read global variables
-    let global_var_names = file.variable_names(EntityType::Global)?;
+    // Read global variables (use unwrap_or_default to handle read errors gracefully)
+    let global_var_names = file
+        .variable_names(EntityType::Global)
+        .unwrap_or_default();
     let mut global_var_values: Vec<Vec<f64>> = Vec::new();
+    let mut global_read_errors = false;
 
     for step in 0..num_time_steps {
         let mut step_values = Vec::new();
         for var_idx in 0..global_var_names.len() {
-            let values = file.var(step, EntityType::Global, 0, var_idx)?;
-            step_values.extend(values);
+            match file.var(step, EntityType::Global, 0, var_idx) {
+                Ok(values) => step_values.extend(values),
+                Err(_) => {
+                    global_read_errors = true;
+                }
+            }
         }
         global_var_values.push(step_values);
     }
@@ -886,6 +916,11 @@ fn read_mesh_data(file: &ExodusFile<mode::Read>, verbose: bool) -> Result<MeshDa
             eprintln!("  - {}", name);
         }
         eprintln!("         (e.g., total mass may need doubling, time step size is unchanged)");
+    }
+    if verbose && global_read_errors {
+        eprintln!(
+            "WARNING: Some global variable data couldn't be read (non-fatal, proceeding without them)"
+        );
     }
 
     Ok(MeshData {
