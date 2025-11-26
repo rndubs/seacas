@@ -1478,6 +1478,8 @@ mod tests {
             mirror: vec![],
             translate: vec![],
             rotate: vec![],
+            copy_mirror_merge: vec![],
+            merge_tolerance: 0.001,
             zero_time: false,
             verbose: false,
             cache_size: None,
@@ -1514,6 +1516,8 @@ mod tests {
             mirror: vec![],
             translate: vec![],
             rotate: vec![],
+            copy_mirror_merge: vec![],
+            merge_tolerance: 0.001,
             zero_time: false,
             verbose: false,
             cache_size: Some(256),      // 256 MB
@@ -1543,6 +1547,8 @@ mod tests {
             mirror: vec![],
             translate: vec![],
             rotate: vec![],
+            copy_mirror_merge: vec![],
+            merge_tolerance: 0.001,
             zero_time: false,
             verbose: false,
             cache_size: None,
@@ -1597,6 +1603,38 @@ mod tests {
             mirror,
             translate,
             rotate,
+            copy_mirror_merge: vec![],
+            merge_tolerance: 0.001,
+            zero_time: false,
+            verbose: false,
+            cache_size: None,
+            preemption: None,
+            node_chunk: None,
+            element_chunk: None,
+            time_chunk: None,
+            show_perf_config: false,
+            man: false,
+        }
+    }
+
+    /// Helper to create a test CLI with copy-mirror-merge
+    fn make_test_cli_with_cmm(
+        translate: Vec<String>,
+        rotate: Vec<String>,
+        scale_len: Vec<f64>,
+        mirror: Vec<String>,
+        copy_mirror_merge: Vec<String>,
+        merge_tolerance: f64,
+    ) -> Cli {
+        Cli {
+            input: Some(PathBuf::from("input.exo")),
+            output: Some(PathBuf::from("output.exo")),
+            scale_len,
+            mirror,
+            translate,
+            rotate,
+            copy_mirror_merge,
+            merge_tolerance,
             zero_time: false,
             verbose: false,
             cache_size: None,
@@ -1792,5 +1830,190 @@ mod tests {
         assert_eq!(ops.len(), 2);
         assert!(matches!(ops[0], Operation::Rotate(_, _)));
         assert!(matches!(ops[1], Operation::Translate(_)));
+    }
+
+    // =========================================================================
+    // Copy-Mirror-Merge Tests
+    // =========================================================================
+
+    #[test]
+    fn test_get_mirror_permutation_hex8() {
+        // Test HEX8 permutations for all axes
+        let perm_x = get_mirror_permutation("HEX8", Axis::X).unwrap();
+        assert_eq!(perm_x, vec![1, 0, 3, 2, 5, 4, 7, 6]);
+
+        let perm_y = get_mirror_permutation("HEX8", Axis::Y).unwrap();
+        assert_eq!(perm_y, vec![3, 2, 1, 0, 7, 6, 5, 4]);
+
+        let perm_z = get_mirror_permutation("HEX8", Axis::Z).unwrap();
+        assert_eq!(perm_z, vec![4, 5, 6, 7, 0, 1, 2, 3]);
+
+        // Also test lowercase variant
+        let perm_hex = get_mirror_permutation("hex", Axis::X).unwrap();
+        assert_eq!(perm_hex, vec![1, 0, 3, 2, 5, 4, 7, 6]);
+    }
+
+    #[test]
+    fn test_get_mirror_permutation_tet4() {
+        let perm = get_mirror_permutation("TET4", Axis::X).unwrap();
+        assert_eq!(perm, vec![0, 2, 1, 3]);
+
+        // Same permutation for all axes (swapping 2 nodes reverses orientation)
+        assert_eq!(
+            get_mirror_permutation("TET4", Axis::Y).unwrap(),
+            get_mirror_permutation("TET4", Axis::Z).unwrap()
+        );
+    }
+
+    #[test]
+    fn test_get_mirror_permutation_unsupported() {
+        assert!(get_mirror_permutation("HEX27", Axis::X).is_none());
+        assert!(get_mirror_permutation("UNKNOWN", Axis::X).is_none());
+    }
+
+    #[test]
+    fn test_is_vector_component() {
+        // Test X-axis vector components
+        assert!(is_vector_component("velocity_x", Axis::X));
+        assert!(is_vector_component("u", Axis::X));
+        assert!(is_vector_component("displacement_x", Axis::X));
+        assert!(!is_vector_component("velocity_y", Axis::X));
+        assert!(!is_vector_component("temperature", Axis::X));
+
+        // Test Y-axis vector components
+        assert!(is_vector_component("velocity_y", Axis::Y));
+        assert!(is_vector_component("v", Axis::Y));
+        assert!(!is_vector_component("velocity_x", Axis::Y));
+
+        // Test Z-axis vector components
+        assert!(is_vector_component("velocity_z", Axis::Z));
+        assert!(is_vector_component("w", Axis::Z));
+        assert!(!is_vector_component("velocity_x", Axis::Z));
+    }
+
+    #[test]
+    fn test_find_symmetry_plane_nodes() {
+        let coords = vec![0.0, 0.5, 1.0, 0.0, 0.5, 1.0, 0.001, -0.0005];
+        let tolerance = 0.01;
+
+        let sym_nodes = find_symmetry_plane_nodes(&coords, Axis::X, tolerance);
+
+        // Nodes at indices 0, 3, 6, 7 should be on symmetry plane
+        assert!(sym_nodes.contains(&0)); // 0.0
+        assert!(sym_nodes.contains(&3)); // 0.0
+        assert!(sym_nodes.contains(&6)); // 0.001 (within tolerance)
+        assert!(sym_nodes.contains(&7)); // -0.0005 (within tolerance)
+        assert!(!sym_nodes.contains(&1)); // 0.5
+        assert!(!sym_nodes.contains(&2)); // 1.0
+    }
+
+    #[test]
+    fn test_copy_mirror_merge_operation_parsing() {
+        // Simulate: exo-cfd-transform in.exo out.exo --copy-mirror-merge x
+        let args: Vec<String> = vec![
+            "exo-cfd-transform",
+            "in.exo",
+            "out.exo",
+            "--copy-mirror-merge",
+            "x",
+        ]
+        .into_iter()
+        .map(String::from)
+        .collect();
+
+        let cli = make_test_cli_with_cmm(
+            vec![],
+            vec![],
+            vec![],
+            vec![],
+            vec!["x".to_string()],
+            0.001,
+        );
+
+        let ops = extract_ordered_operations_from_args(&args, &cli, false).unwrap();
+
+        assert_eq!(ops.len(), 1);
+        assert!(matches!(ops[0], Operation::CopyMirrorMerge(Axis::X, tol) if (tol - 0.001).abs() < 0.0001));
+    }
+
+    #[test]
+    fn test_copy_mirror_merge_with_other_ops() {
+        // Simulate: exo-cfd-transform in.exo out.exo --translate 1,0,0 --copy-mirror-merge x --rotate Z,90
+        let args: Vec<String> = vec![
+            "exo-cfd-transform",
+            "in.exo",
+            "out.exo",
+            "--translate",
+            "1,0,0",
+            "--copy-mirror-merge",
+            "x",
+            "--rotate",
+            "Z,90",
+        ]
+        .into_iter()
+        .map(String::from)
+        .collect();
+
+        let cli = make_test_cli_with_cmm(
+            vec!["1,0,0".to_string()],
+            vec!["Z,90".to_string()],
+            vec![],
+            vec![],
+            vec!["x".to_string()],
+            0.005,
+        );
+
+        let ops = extract_ordered_operations_from_args(&args, &cli, false).unwrap();
+
+        assert_eq!(ops.len(), 3);
+        assert!(matches!(ops[0], Operation::Translate(_)));
+        assert!(matches!(ops[1], Operation::CopyMirrorMerge(Axis::X, tol) if (tol - 0.005).abs() < 0.0001));
+        assert!(matches!(ops[2], Operation::Rotate(_, _)));
+    }
+
+    #[test]
+    fn test_copy_mirror_merge_equals_syntax() {
+        // Simulate: exo-cfd-transform in.exo out.exo --copy-mirror-merge=y
+        let args: Vec<String> = vec![
+            "exo-cfd-transform",
+            "in.exo",
+            "out.exo",
+            "--copy-mirror-merge=y",
+        ]
+        .into_iter()
+        .map(String::from)
+        .collect();
+
+        let cli = make_test_cli_with_cmm(
+            vec![],
+            vec![],
+            vec![],
+            vec![],
+            vec!["y".to_string()],
+            0.001,
+        );
+
+        let ops = extract_ordered_operations_from_args(&args, &cli, false).unwrap();
+
+        assert_eq!(ops.len(), 1);
+        assert!(matches!(ops[0], Operation::CopyMirrorMerge(Axis::Y, _)));
+    }
+
+    #[test]
+    fn test_hex8_winding_order_consistency() {
+        // Verify that the HEX8 permutation maintains valid element structure
+        // by checking that swapped pairs are consistent
+        let perm_x = get_mirror_permutation("HEX8", Axis::X).unwrap();
+
+        // For X-axis mirror, we expect pairs to be swapped:
+        // (0,1), (2,3), (4,5), (6,7)
+        assert_eq!(perm_x[0], 1);
+        assert_eq!(perm_x[1], 0);
+        assert_eq!(perm_x[2], 3);
+        assert_eq!(perm_x[3], 2);
+        assert_eq!(perm_x[4], 5);
+        assert_eq!(perm_x[5], 4);
+        assert_eq!(perm_x[6], 7);
+        assert_eq!(perm_x[7], 6);
     }
 }
