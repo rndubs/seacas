@@ -550,10 +550,13 @@ impl ExodusFile<mode::Write> {
         for (i, name) in names.iter().enumerate() {
             let name_str = name.as_ref();
             // Use actual dimension size for buffer
-            let mut buf = vec![0u8; actual_len_string];
+            // NC_CHAR maps to i8 in NetCDF, so we need to cast u8 bytes to i8
             let bytes = name_str.as_bytes();
+            let mut buf = vec![0i8; actual_len_string];
             let copy_len = bytes.len().min(actual_len_string);
-            buf[..copy_len].copy_from_slice(&bytes[..copy_len]);
+            for (j, &b) in bytes[..copy_len].iter().enumerate() {
+                buf[j] = b as i8;
+            }
             var.put_values(&buf, (i..i + 1, ..))?;
         }
 
@@ -1495,10 +1498,13 @@ impl ExodusFile<mode::Write> {
 
         for (i, name) in names.iter().enumerate() {
             let name_str = name.as_ref();
-            let mut buf = vec![0u8; actual_len_string];
+            // NC_CHAR maps to i8 in NetCDF, so we need to cast u8 bytes to i8
             let bytes = name_str.as_bytes();
+            let mut buf = vec![0i8; actual_len_string];
             let copy_len = bytes.len().min(actual_len_string);
-            buf[..copy_len].copy_from_slice(&bytes[..copy_len]);
+            for (j, &b) in bytes[..copy_len].iter().enumerate() {
+                buf[j] = b as i8;
+            }
             var.put_values(&buf, (i..i + 1, ..))?;
         }
 
