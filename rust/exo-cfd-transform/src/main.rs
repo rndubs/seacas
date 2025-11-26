@@ -1442,6 +1442,22 @@ fn write_mesh_data(path: &PathBuf, data: &MeshData, verbose: bool) -> Result<()>
         if !data.elem_var_names.is_empty() {
             let names: Vec<&str> = data.elem_var_names.iter().map(|s| s.as_str()).collect();
             file.define_variables(EntityType::ElemBlock, &names)?;
+
+            // Write truth table (all blocks have all variables)
+            let truth_table = TruthTable::new(
+                EntityType::ElemBlock,
+                data.blocks.len(),
+                data.elem_var_names.len(),
+            );
+            file.put_truth_table(EntityType::ElemBlock, &truth_table)?;
+
+            if verbose {
+                println!(
+                    "  Wrote elem_var_tab: {} blocks x {} vars",
+                    data.blocks.len(),
+                    data.elem_var_names.len()
+                );
+            }
         }
 
         // Write time values and variable data
