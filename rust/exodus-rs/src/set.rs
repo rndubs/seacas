@@ -555,9 +555,11 @@ impl ExodusFile<mode::Read> {
         };
 
         // Read distribution factors if present
+        // Use type-aware reading to handle f32->f64 conversion
+        use crate::utils::netcdf_ext::get_float_values_as_f64;
         let df_var_name = format!("dist_fact_ns{}", index + 1);
         let dist_factors = match self.nc_file.variable(&df_var_name) {
-            Some(var) => var.get_values(..)?,
+            Some(var) => get_float_values_as_f64(&var, ..)?,
             None => Vec::new(),
         };
 
@@ -612,9 +614,11 @@ impl ExodusFile<mode::Read> {
         };
 
         // Read distribution factors if present
+        // Use type-aware reading to handle f32->f64 conversion
+        use crate::utils::netcdf_ext::get_float_values_as_f64;
         let df_var_name = format!("dist_fact_ss{}", index + 1);
         let dist_factors = match self.nc_file.variable(&df_var_name) {
-            Some(var) => var.get_values(..)?,
+            Some(var) => get_float_values_as_f64(&var, ..)?,
             None => Vec::new(),
         };
 

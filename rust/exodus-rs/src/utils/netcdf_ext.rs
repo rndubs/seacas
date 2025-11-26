@@ -333,6 +333,112 @@ pub fn try_get_attr_f64(var: &Variable<'_>, attr_name: &str) -> Option<f64> {
     attr_value_to_f64(&value)
 }
 
+/// Read floating-point values from a NetCDF variable, handling f32/f64 type conversion
+///
+/// Some Exodus files store floating-point data as NC_FLOAT (f32) instead of NC_DOUBLE (f64).
+/// The netcdf crate's `get_values::<f64>()` doesn't automatically convert from f32,
+/// resulting in a "Conversion not supported" error.
+///
+/// This function checks the variable's actual type and reads accordingly, converting
+/// to f64 if the data is stored as f32.
+///
+/// # Arguments
+///
+/// * `var` - The NetCDF variable to read from
+/// * `extents` - The range/extents to read (can be `..` for full range)
+///
+/// # Returns
+///
+/// Vec<f64> containing the values, or an error if reading fails.
+///
+/// # Example
+///
+/// ```rust,ignore
+/// use exodus_rs::utils::netcdf_ext::get_float_values_as_f64;
+///
+/// let var = nc_file.variable("coordx").unwrap();
+/// let values = get_float_values_as_f64(&var, ..)?;
+/// ```
+#[cfg(feature = "netcdf4")]
+pub fn get_float_values_as_f64<E>(var: &Variable<'_>, extents: E) -> Result<Vec<f64>>
+where
+    E: netcdf::Extents + Clone,
+{
+    use netcdf::types::{FloatType, NcVariableType};
+
+    let vartype = var.vartype();
+
+    match vartype {
+        NcVariableType::Float(FloatType::F32) => {
+            // Read as f32 and convert to f64
+            let values_f32: Vec<f32> = var.get_values(extents).map_err(ExodusError::NetCdf)?;
+            Ok(values_f32.into_iter().map(|v| v as f64).collect())
+        }
+        NcVariableType::Float(FloatType::F64) => {
+            // Read directly as f64
+            let values_f64: Vec<f64> = var.get_values(extents).map_err(ExodusError::NetCdf)?;
+            Ok(values_f64)
+        }
+        _ => {
+            // Try f64 first (most common for exodus), fall back to f32 if that fails
+            match var.get_values::<f64, E>(extents.clone()) {
+                Ok(values) => Ok(values),
+                Err(_) => {
+                    // Try f32 as fallback
+                    let values_f32: Vec<f32> =
+                        var.get_values(extents).map_err(ExodusError::NetCdf)?;
+                    Ok(values_f32.into_iter().map(|v| v as f64).collect())
+                }
+            }
+        }
+    }
+}
+
+/// Read a single floating-point value from a NetCDF variable, handling f32/f64 type conversion
+///
+/// Like `get_float_values_as_f64`, but for reading a single value.
+///
+/// # Arguments
+///
+/// * `var` - The NetCDF variable to read from
+/// * `indices` - The indices to read (e.g., `(step, var_index)`)
+///
+/// # Returns
+///
+/// f64 value, or an error if reading fails.
+#[cfg(feature = "netcdf4")]
+pub fn get_float_value_as_f64<I>(var: &Variable<'_>, indices: I) -> Result<f64>
+where
+    I: netcdf::Extents + Clone,
+{
+    use netcdf::types::{FloatType, NcVariableType};
+
+    let vartype = var.vartype();
+
+    match vartype {
+        NcVariableType::Float(FloatType::F32) => {
+            // Read as f32 and convert to f64
+            let value_f32: f32 = var.get_value(indices).map_err(ExodusError::NetCdf)?;
+            Ok(value_f32 as f64)
+        }
+        NcVariableType::Float(FloatType::F64) => {
+            // Read directly as f64
+            let value_f64: f64 = var.get_value(indices).map_err(ExodusError::NetCdf)?;
+            Ok(value_f64)
+        }
+        _ => {
+            // Try f64 first, fall back to f32 if that fails
+            match var.get_value::<f64, I>(indices.clone()) {
+                Ok(value) => Ok(value),
+                Err(_) => {
+                    let value_f32: f32 = var.get_value(indices).map_err(ExodusError::NetCdf)?;
+                    Ok(value_f32 as f64)
+                }
+            }
+        }
+    }
+}
+
 #[cfg(all(test, feature = "netcdf4"))]
 mod tests {
     use super::*;

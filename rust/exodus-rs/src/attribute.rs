@@ -294,7 +294,9 @@ impl ExodusFile<mode::Read> {
                     Ok(AttributeData::Integer(values))
                 }
                 "double" => {
-                    let values: Vec<f64> = var.get_values(..).map_err(ExodusError::NetCdf)?;
+                    // Use type-aware reading to handle f32->f64 conversion
+                    use crate::utils::netcdf_ext::get_float_values_as_f64;
+                    let values = get_float_values_as_f64(&var, ..)?;
                     Ok(AttributeData::Double(values))
                 }
                 "char" => {

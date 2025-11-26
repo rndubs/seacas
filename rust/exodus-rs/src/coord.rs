@@ -793,6 +793,8 @@ impl ExodusFile<mode::Read> {
 
     /// Read coordinates for a specific dimension
     fn get_coord_dim<T: CoordValue>(&self, dim: usize) -> Result<Vec<T>> {
+        use crate::utils::netcdf_ext::get_float_values_as_f64;
+
         let var_name = match dim {
             0 => "coordx",
             1 => "coordy",
@@ -810,8 +812,8 @@ impl ExodusFile<mode::Read> {
             .variable(var_name)
             .ok_or_else(|| ExodusError::VariableNotDefined(var_name.to_string()))?;
 
-        // Read as f64 from NetCDF (use .. for full range)
-        let data: Vec<f64> = var.get_values(..)?;
+        // Read as f64 from NetCDF, with automatic f32->f64 conversion if needed
+        let data = get_float_values_as_f64(&var, ..)?;
 
         // Convert to target type
         Ok(data.iter().map(|&v| T::from_f64(v)).collect())
@@ -879,6 +881,8 @@ impl ExodusFile<mode::Read> {
         start: usize,
         count: usize,
     ) -> Result<Vec<T>> {
+        use crate::utils::netcdf_ext::get_float_values_as_f64;
+
         let var_name = match dim {
             0 => "coordx",
             1 => "coordy",
@@ -896,8 +900,8 @@ impl ExodusFile<mode::Read> {
             .variable(var_name)
             .ok_or_else(|| ExodusError::VariableNotDefined(var_name.to_string()))?;
 
-        // Read as f64 from NetCDF (use range)
-        let data: Vec<f64> = var.get_values(start..(start + count))?;
+        // Read as f64 from NetCDF, with automatic f32->f64 conversion if needed
+        let data = get_float_values_as_f64(&var, start..(start + count))?;
 
         // Convert to target type
         Ok(data.iter().map(|&v| T::from_f64(v)).collect())
@@ -1141,6 +1145,8 @@ impl ExodusFile<mode::Append> {
 
     /// Read coordinates for a specific dimension
     fn get_coord_dim<T: CoordValue>(&self, dim: usize) -> Result<Vec<T>> {
+        use crate::utils::netcdf_ext::get_float_values_as_f64;
+
         let var_name = match dim {
             0 => "coordx",
             1 => "coordy",
@@ -1158,7 +1164,8 @@ impl ExodusFile<mode::Append> {
             .variable(var_name)
             .ok_or_else(|| ExodusError::VariableNotDefined(var_name.to_string()))?;
 
-        let data: Vec<f64> = var.get_values(..)?;
+        // Read as f64 from NetCDF, with automatic f32->f64 conversion if needed
+        let data = get_float_values_as_f64(&var, ..)?;
         Ok(data.iter().map(|&v| T::from_f64(v)).collect())
     }
 }

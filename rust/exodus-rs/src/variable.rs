@@ -341,6 +341,8 @@ impl<M: FileMode> ExodusFile<M> {
         };
 
         if let Some(var) = self.nc_file.variable(&var_name) {
+            use crate::utils::netcdf_ext::get_float_values_as_f64;
+
             // Get the number of reduction variables
             let num_vars = if let Some(dim) = var.dimensions().get(1) {
                 dim.len()
@@ -348,7 +350,8 @@ impl<M: FileMode> ExodusFile<M> {
                 return Ok(Vec::new());
             };
 
-            let values: Vec<f64> = var.get_values((step..step + 1, 0..num_vars))?;
+            // Use type-aware reading to handle f32->f64 conversion
+            let values = get_float_values_as_f64(&var, (step..step + 1, 0..num_vars))?;
             Ok(values)
         } else {
             Ok(Vec::new())
@@ -1710,8 +1713,11 @@ impl ExodusFile<mode::Read> {
     ///
     /// Returns an error if NetCDF read fails
     pub fn times(&self) -> Result<Vec<f64>> {
+        use crate::utils::netcdf_ext::get_float_values_as_f64;
+
         match self.nc_file.variable("time_whole") {
-            Some(var) => Ok(var.get_values(..)?),
+            // Use type-aware reading to handle f32->f64 conversion
+            Some(var) => get_float_values_as_f64(&var, ..),
             None => Ok(Vec::new()),
         }
     }
@@ -1764,6 +1770,8 @@ impl ExodusFile<mode::Read> {
         entity_id: EntityId,
         var_index: usize,
     ) -> Result<Vec<f64>> {
+        use crate::utils::netcdf_ext::{get_float_value_as_f64, get_float_values_as_f64};
+
         let var_name = self.get_var_name_read(var_type, entity_id, var_index)?;
 
         let var = self
@@ -1774,16 +1782,18 @@ impl ExodusFile<mode::Read> {
         match var_type {
             EntityType::Global => {
                 // Global vars: (time_step, num_glo_var)
-                let value: f64 = var.get_value((step, var_index))?;
+                // Use type-aware reading to handle f32->f64 conversion
+                let value = get_float_value_as_f64(&var, (step, var_index))?;
                 Ok(vec![value])
             }
             EntityType::Nodal => {
                 // Nodal vars: (time_step, num_nodes)
-                Ok(var.get_values((step..step + 1, ..))?)
+                // Use type-aware reading to handle f32->f64 conversion
+                get_float_values_as_f64(&var, (step..step + 1, ..))
             }
             EntityType::ElemBlock | EntityType::EdgeBlock | EntityType::FaceBlock => {
                 // Block vars: (time_step, num_entries_in_block)
-                Ok(var.get_values((step..step + 1, ..))?)
+                get_float_values_as_f64(&var, (step..step + 1, ..))
             }
             EntityType::NodeSet
             | EntityType::EdgeSet
@@ -1791,7 +1801,7 @@ impl ExodusFile<mode::Read> {
             | EntityType::SideSet
             | EntityType::ElemSet => {
                 // Set vars: (time_step, num_entries_in_set)
-                Ok(var.get_values((step..step + 1, ..))?)
+                get_float_values_as_f64(&var, (step..step + 1, ..))
             }
             _ => Err(ExodusError::InvalidEntityType(format!(
                 "Unsupported variable type: {}",
@@ -2010,6 +2020,8 @@ impl ExodusFile<mode::Read> {
         entity_id: EntityId,
         var_index: usize,
     ) -> Result<Vec<f64>> {
+        use crate::utils::netcdf_ext::{get_float_value_as_f64, get_float_values_as_f64};
+
         let var_name = self.get_var_name_read(var_type, entity_id, var_index)?;
 
         let var = self
@@ -2023,18 +2035,19 @@ impl ExodusFile<mode::Read> {
                 // Read time series at [start_step:end_step, var_index]
                 let mut values = Vec::new();
                 for step in start_step..end_step {
-                    let value: f64 = var.get_value((step, var_index))?;
+                    // Use type-aware reading to handle f32->f64 conversion
+                    let value = get_float_value_as_f64(&var, (step, var_index))?;
                     values.push(value);
                 }
                 Ok(values)
             }
             EntityType::Nodal => {
                 // Nodal vars: (time_step, num_nodes)
-                Ok(var.get_values((start_step..end_step, ..))?)
+                get_float_values_as_f64(&var, (start_step..end_step, ..))
             }
             EntityType::ElemBlock | EntityType::EdgeBlock | EntityType::FaceBlock => {
                 // Block vars: (time_step, num_entries_in_block)
-                Ok(var.get_values((start_step..end_step, ..))?)
+                get_float_values_as_f64(&var, (start_step..end_step, ..))
             }
             EntityType::NodeSet
             | EntityType::EdgeSet
@@ -2042,7 +2055,7 @@ impl ExodusFile<mode::Read> {
             | EntityType::SideSet
             | EntityType::ElemSet => {
                 // Set vars: (time_step, num_entries_in_set)
-                Ok(var.get_values((start_step..end_step, ..))?)
+                get_float_values_as_f64(&var, (start_step..end_step, ..))
             }
             _ => Err(ExodusError::InvalidEntityType(format!(
                 "Unsupported variable type: {}",
@@ -2270,8 +2283,11 @@ impl ExodusFile<mode::Append> {
     ///
     /// Returns an error if NetCDF read fails
     pub fn times(&self) -> Result<Vec<f64>> {
+        use crate::utils::netcdf_ext::get_float_values_as_f64;
+
         match self.nc_file.variable("time_whole") {
-            Some(var) => Ok(var.get_values(..)?),
+            // Use type-aware reading to handle f32->f64 conversion
+            Some(var) => get_float_values_as_f64(&var, ..),
             None => Ok(Vec::new()),
         }
     }
@@ -2335,6 +2351,8 @@ impl ExodusFile<mode::Append> {
         entity_id: EntityId,
         var_index: usize,
     ) -> Result<Vec<f64>> {
+        use crate::utils::netcdf_ext::{get_float_value_as_f64, get_float_values_as_f64};
+
         // Simplified variable name construction (same logic as Read mode)
         let var_name = match var_type {
             EntityType::Global => "vals_glo_var".to_string(),
@@ -2365,10 +2383,14 @@ impl ExodusFile<mode::Append> {
 
         match var_type {
             EntityType::Global => {
-                let value: f64 = var.get_value((step, var_index))?;
+                // Use type-aware reading to handle f32->f64 conversion
+                let value = get_float_value_as_f64(&var, (step, var_index))?;
                 Ok(vec![value])
             }
-            EntityType::Nodal | EntityType::ElemBlock => Ok(var.get_values((step..step + 1, ..))?),
+            EntityType::Nodal | EntityType::ElemBlock => {
+                // Use type-aware reading to handle f32->f64 conversion
+                get_float_values_as_f64(&var, (step..step + 1, ..))
+            }
             _ => Err(ExodusError::Other(format!(
                 "Unsupported variable type: {:?}",
                 var_type

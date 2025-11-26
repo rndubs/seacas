@@ -508,11 +508,14 @@ impl ExodusFile<mode::Read> {
     ///
     /// Flat array of attribute values
     pub fn block_attributes(&self, block_id: EntityId) -> Result<Vec<f64>> {
+        use crate::utils::netcdf_ext::get_float_values_as_f64;
+
         let block_index = self.find_block_index_read(EntityType::ElemBlock, block_id)?;
         let attr_var_name = format!("attrib{}", block_index + 1);
 
         if let Some(var) = self.nc_file.variable(&attr_var_name) {
-            let attrs: Vec<f64> = var.get_values(..)?;
+            // Use type-aware reading to handle f32->f64 conversion
+            let attrs = get_float_values_as_f64(&var, ..)?;
             Ok(attrs)
         } else {
             Ok(Vec::new())
