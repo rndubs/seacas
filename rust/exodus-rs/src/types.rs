@@ -689,6 +689,52 @@ pub struct CreateOptions {
     pub performance: Option<crate::performance::PerformanceConfig>,
 }
 
+/// How variable data is stored in the NetCDF file.
+///
+/// Exodus II supports two storage formats for variable data, and a single
+/// file can mix formats for different entity types.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum VarStorageMode {
+    /// Separate variables per index: `vals_nod_var1`, `vals_nod_var2`, etc.
+    /// Shape: `(time_step, num_entities)`
+    #[default]
+    Separate,
+    /// Combined 3D array: `vals_nod_var`
+    /// Shape: `(time_step, num_vars, num_entities)`
+    Combined,
+    /// No variables of this type present in the file
+    None,
+}
+
+/// Storage format for each entity type, detected on file open.
+///
+/// This struct captures the storage format used by the file for each
+/// entity type. The format is detected automatically when opening a file
+/// by examining which NetCDF variables are present.
+#[derive(Debug, Clone, Default)]
+pub struct FileStorageFormat {
+    /// Storage mode for nodal variables
+    pub nodal: VarStorageMode,
+    /// Storage mode for element block variables
+    pub elem_block: VarStorageMode,
+    /// Storage mode for edge block variables
+    pub edge_block: VarStorageMode,
+    /// Storage mode for face block variables
+    pub face_block: VarStorageMode,
+    /// Storage mode for node set variables
+    pub node_set: VarStorageMode,
+    /// Storage mode for edge set variables
+    pub edge_set: VarStorageMode,
+    /// Storage mode for face set variables
+    pub face_set: VarStorageMode,
+    /// Storage mode for side set variables
+    pub side_set: VarStorageMode,
+    /// Storage mode for element set variables
+    pub elem_set: VarStorageMode,
+    /// Storage mode for global variables (always Combined via vals_glo_var)
+    pub global: VarStorageMode,
+}
+
 impl Default for CreateOptions {
     fn default() -> Self {
         Self {

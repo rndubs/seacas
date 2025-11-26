@@ -501,13 +501,14 @@ impl ExodusFile<mode::Write> {
 
         let mut names = Vec::with_capacity(num_names);
 
+        // Read raw bytes directly (more reliable for 2D char arrays)
+        let raw_bytes: Vec<u8> = var.get_raw_values(..).map_err(ExodusError::NetCdf)?;
+
         // Read each name (NC_CHAR stored as i8 in older files)
         for i in 0..num_names {
-            let name_chars_i8: Vec<i8> = var
-                .get_values((i..i + 1, 0..len_name))
-                .map_err(ExodusError::NetCdf)?;
-            // Convert i8 bytes to u8 slice for UTF-8 decoding
-            let name_bytes: Vec<u8> = name_chars_i8.iter().map(|&b| b as u8).collect();
+            let start = i * len_name;
+            let end_idx = start + len_name;
+            let name_bytes = &raw_bytes[start..end_idx];
 
             // Find the null terminator or end of string
             let end = name_bytes
@@ -604,13 +605,14 @@ impl ExodusFile<mode::Read> {
 
         let mut names = Vec::with_capacity(num_names);
 
+        // Read raw bytes directly (more reliable for 2D char arrays)
+        let raw_bytes: Vec<u8> = var.get_raw_values(..).map_err(ExodusError::NetCdf)?;
+
         // Read each name (NC_CHAR stored as i8 in older files)
         for i in 0..num_names {
-            let name_chars_i8: Vec<i8> = var
-                .get_values((i..i + 1, 0..len_name))
-                .map_err(ExodusError::NetCdf)?;
-            // Convert i8 bytes to u8 slice for UTF-8 decoding
-            let name_bytes: Vec<u8> = name_chars_i8.iter().map(|&b| b as u8).collect();
+            let start = i * len_name;
+            let end_idx = start + len_name;
+            let name_bytes = &raw_bytes[start..end_idx];
 
             // Find the null terminator or end of string
             let end = name_bytes

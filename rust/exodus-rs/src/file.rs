@@ -4,7 +4,9 @@
 //! and closing Exodus files.
 
 use crate::error::Result;
-use crate::types::{CreateMode, CreateOptions, FileFormat, FloatSize, Int64Mode};
+use crate::types::{
+    CreateMode, CreateOptions, FileFormat, FileStorageFormat, FloatSize, Int64Mode, VarStorageMode,
+};
 use crate::{mode, FileMode};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -34,6 +36,8 @@ pub(crate) struct FileMetadata {
     pub define_mode: DefineMode,
     /// Performance configuration for HDF5/NetCDF optimization
     pub performance: Option<crate::performance::PerformanceConfig>,
+    /// Detected storage format for variable data
+    pub storage_format: FileStorageFormat,
 }
 
 impl FileMetadata {
@@ -46,6 +50,7 @@ impl FileMetadata {
             dim_cache: HashMap::new(),
             define_mode: DefineMode::Define,
             performance: None,
+            storage_format: FileStorageFormat::default(),
         }
     }
 }
@@ -472,10 +477,16 @@ impl ExodusFile<mode::Read> {
         // Open the NetCDF file (use append to get FileMut for variable reads)
         let nc_file = netcdf::append(path)?;
 
+        // Detect storage format for this file
+        let storage_format = detect_storage_format(&nc_file);
+
+        let mut metadata = FileMetadata::new();
+        metadata.storage_format = storage_format;
+
         Ok(Self {
             nc_file,
             path: path.to_path_buf(),
-            metadata: FileMetadata::new(),
+            metadata,
             _mode: std::marker::PhantomData,
         })
     }
@@ -516,8 +527,12 @@ impl ExodusFile<mode::Append> {
         // Open the NetCDF file in append mode (read-write)
         let nc_file = netcdf::append(path)?;
 
+        // Detect storage format for this file
+        let storage_format = detect_storage_format(&nc_file);
+
         // Load metadata from the existing file
         let mut metadata = FileMetadata::new();
+        metadata.storage_format = storage_format;
 
         // Check if file is initialized by checking for num_dim dimension
         if let Some(dim) = nc_file.dimension("num_dim") {
@@ -886,6 +901,125 @@ impl<M: FileMode> ExodusFile<M> {
         // The netcdf crate handles closing automatically via Drop
         // So we just need to consume self
         Ok(())
+    }
+
+    /// Get the detected storage format for this file.
+    ///
+    /// The storage format indicates how variable data is stored in the NetCDF file.
+    /// Exodus II supports two formats:
+    /// - **Separate**: Individual variables per index (e.g., `vals_nod_var1`, `vals_nod_var2`)
+    /// - **Combined**: A single 3D array (e.g., `vals_nod_var(time_step, num_vars, num_nodes)`)
+    ///
+    /// The format is detected automatically when opening a file and can vary
+    /// per entity type (nodal, element, etc.).
+    ///
+    /// # Example
+    ///
+    /// ```rust,ignore
+    /// use exodus_rs::{ExodusFile, mode, VarStorageMode};
+    ///
+    /// let file = ExodusFile::<mode::Read>::open("mesh.exo")?;
+    /// let format = file.storage_format();
+    ///
+    /// match format.nodal {
+    ///     VarStorageMode::Combined => println!("File uses combined nodal variable storage"),
+    ///     VarStorageMode::Separate => println!("File uses separate nodal variable storage"),
+    ///     VarStorageMode::None => println!("No nodal variables in file"),
+    /// }
+    /// # Ok::<(), exodus_rs::ExodusError>(())
+    /// ```
+    pub fn storage_format(&self) -> &FileStorageFormat {
+        &self.metadata.storage_format
+    }
+}
+
+/// Detect the storage format for a single variable type.
+///
+/// Checks if the combined variable exists first (e.g., `vals_nod_var`),
+/// then checks for the separate format (e.g., `vals_nod_var1`).
+#[cfg(feature = "netcdf4")]
+fn detect_var_storage(
+    nc_file: &netcdf::FileMut,
+    combined_name: &str,
+    separate_prefix: &str,
+) -> VarStorageMode {
+    // Check for combined 3D format first
+    if nc_file.variable(combined_name).is_some() {
+        return VarStorageMode::Combined;
+    }
+    // Check for separate format by looking for the first variable
+    let separate_name = format!("{}1", separate_prefix);
+    if nc_file.variable(&separate_name).is_some() {
+        return VarStorageMode::Separate;
+    }
+    VarStorageMode::None
+}
+
+/// Detect the storage format for element block variables.
+///
+/// Element variables have a more complex naming pattern: `vals_elem_var{var}eb{block}`
+/// for separate format, or `vals_elem_var` for combined format.
+#[cfg(feature = "netcdf4")]
+fn detect_elem_var_storage(nc_file: &netcdf::FileMut) -> VarStorageMode {
+    // Check for combined format
+    if nc_file.variable("vals_elem_var").is_some() {
+        return VarStorageMode::Combined;
+    }
+    // Check for separate format (vals_elem_var1eb1)
+    if nc_file.variable("vals_elem_var1eb1").is_some() {
+        return VarStorageMode::Separate;
+    }
+    VarStorageMode::None
+}
+
+/// Detect the storage format for set variables.
+///
+/// Set variables have patterns like `vals_nset_var{var}ns{set}` for separate format.
+#[cfg(feature = "netcdf4")]
+fn detect_set_var_storage(
+    nc_file: &netcdf::FileMut,
+    combined_name: &str,
+    separate_pattern: &str,
+) -> VarStorageMode {
+    // Check for combined format
+    if nc_file.variable(combined_name).is_some() {
+        return VarStorageMode::Combined;
+    }
+    // Check for separate format
+    if nc_file.variable(separate_pattern).is_some() {
+        return VarStorageMode::Separate;
+    }
+    VarStorageMode::None
+}
+
+/// Detect the storage format for all entity types in a file.
+#[cfg(feature = "netcdf4")]
+fn detect_storage_format(nc_file: &netcdf::FileMut) -> FileStorageFormat {
+    FileStorageFormat {
+        // Nodal: vals_nod_var (combined) vs vals_nod_var1 (separate)
+        nodal: detect_var_storage(nc_file, "vals_nod_var", "vals_nod_var"),
+        // Element block: vals_elem_var (combined) vs vals_elem_var1eb1 (separate)
+        elem_block: detect_elem_var_storage(nc_file),
+        // Edge block: vals_edge_var (combined) vs vals_edge_var1edb1 (separate)
+        edge_block: detect_set_var_storage(nc_file, "vals_edge_var", "vals_edge_var1edb1"),
+        // Face block: vals_face_var (combined) vs vals_face_var1fab1 (separate)
+        face_block: detect_set_var_storage(nc_file, "vals_face_var", "vals_face_var1fab1"),
+        // Node set: vals_nset_var (combined) vs vals_nset_var1ns1 (separate)
+        node_set: detect_set_var_storage(nc_file, "vals_nset_var", "vals_nset_var1ns1"),
+        // Edge set: vals_eset_var (combined) vs vals_eset_var1es1 (separate)
+        edge_set: detect_set_var_storage(nc_file, "vals_eset_var", "vals_eset_var1es1"),
+        // Face set: vals_fset_var (combined) vs vals_fset_var1fs1 (separate)
+        face_set: detect_set_var_storage(nc_file, "vals_fset_var", "vals_fset_var1fs1"),
+        // Side set: vals_sset_var (combined) vs vals_sset_var1ss1 (separate)
+        side_set: detect_set_var_storage(nc_file, "vals_sset_var", "vals_sset_var1ss1"),
+        // Element set: vals_elset_var (combined) vs vals_elset_var1els1 (separate)
+        elem_set: detect_set_var_storage(nc_file, "vals_elset_var", "vals_elset_var1els1"),
+        // Global: always uses vals_glo_var (combined format with shape time_step x num_glo_var)
+        global: if nc_file.variable("vals_glo_var").is_some() {
+            VarStorageMode::Combined
+        } else {
+            VarStorageMode::None
+        },
     }
 }
 

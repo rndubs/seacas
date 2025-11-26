@@ -117,8 +117,9 @@ pub use search::SpatialSearchResult;
 pub use set::SetIterator;
 pub use types::{
     Assembly, Attribute, AttributeType, Blob, Block, Compression, Connectivity,
-    ConnectivityIterator, CreateMode, CreateOptions, EntitySet, EntityType, FileFormat, FloatSize,
-    InfoRecord, InitParams, Int64Mode, NodeSet, QaRecord, Set, SideSet, Topology, TruthTable,
+    ConnectivityIterator, CreateMode, CreateOptions, EntitySet, EntityType, FileFormat,
+    FileStorageFormat, FloatSize, InfoRecord, InitParams, Int64Mode, NodeSet, QaRecord, Set,
+    SideSet, Topology, TruthTable, VarStorageMode,
 };
 
 // File mode types

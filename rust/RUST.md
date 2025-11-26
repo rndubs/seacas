@@ -468,6 +468,17 @@ The **exodus-rs library is production-ready** for all use cases with:
   - Available in both Rust API and Python bindings
   - Comprehensive test coverage in Rust
 
+*2025-11-26:*
+- ✅ **Combined Variable Storage Format Support** - Automatic detection and reading of legacy NetCDF storage formats:
+  - **Schema detection on open**: Automatically detects whether file uses separate (vals_nod_var1, etc.) or combined (vals_nod_var) variable storage
+  - **New types**: `VarStorageMode` enum (Separate, Combined, None) and `FileStorageFormat` struct
+  - **Transparent reading**: `var()` method automatically handles both formats - no code changes needed by users
+  - **Per-entity-type detection**: Storage format tracked independently for nodal, element, edge, face, and set variables
+  - **Public accessor**: `storage_format()` method to inspect detected format
+  - **Supported entity types**: Nodal, ElemBlock, EdgeBlock, FaceBlock, NodeSet, EdgeSet, FaceSet, SideSet, ElemSet, Global
+  - Tests: 8 comprehensive storage format tests
+  - See `NETCDF.md` for technical background on the variable storage formats
+
 *2025-11-20:*
 - ✅ **Mesh Transformations** - Comprehensive spatial transformations for meshes and field data:
   - **Coordinate transformations**: translate, rotate (axis-aligned), scale (uniform/non-uniform)
