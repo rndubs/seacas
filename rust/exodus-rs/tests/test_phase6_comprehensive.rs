@@ -585,8 +585,10 @@ fn test_variable_name_length_limits() {
     })
     .unwrap();
 
-    // Long variable name - with NC_STRING format, names are not truncated
+    // Long variable name - with NC_CHAR format, names are truncated to 32 characters
+    // (Exodus II standard variable name length)
     let long_name = "ThisIsAVeryLongVariableNameThatExceedsThirtyTwoCharacters";
+    let expected_truncated = "ThisIsAVeryLongVariableNameThatE"; // First 32 characters
 
     file.define_variables(EntityType::Nodal, &[long_name])
         .unwrap();
@@ -597,8 +599,9 @@ fn test_variable_name_length_limits() {
     let file = ExodusFile::<mode::Read>::open(tmp.path()).unwrap();
     let vars = file.variable_names(EntityType::Nodal).unwrap();
 
-    // With NC_STRING format, names are preserved in full (not truncated)
-    assert_eq!(vars[0], long_name);
+    // With NC_CHAR format, names are truncated to len_string (32 characters)
+    // This is standard Exodus II behavior for variable names
+    assert_eq!(vars[0], expected_truncated);
 }
 
 #[test]

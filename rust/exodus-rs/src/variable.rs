@@ -6,7 +6,22 @@
 use crate::error::{EntityId, ExodusError, Result};
 use crate::types::{EntityType, TruthTable, VarStorageMode};
 use crate::{mode, ExodusFile, FileMode};
-use netcdf::types::NcVariableType;
+use netcdf::types::{NcTypeDescriptor, NcVariableType};
+
+/// Custom type for writing NC_CHAR data
+///
+/// netcdf-rs doesn't have a built-in type for NC_CHAR, so we define our own
+/// wrapper around i8 that implements NcTypeDescriptor to return NcVariableType::Char.
+/// This allows us to write character arrays in the format that VisIt expects.
+#[repr(transparent)]
+#[derive(Copy, Clone)]
+pub struct NcChar(pub i8);
+
+unsafe impl NcTypeDescriptor for NcChar {
+    fn type_descriptor() -> NcVariableType {
+        NcVariableType::Char
+    }
+}
 
 // ====================
 // Common Operations
@@ -439,14 +454,14 @@ impl ExodusFile<mode::Write> {
         }
 
         // Create the variable name storage variable
-        // Use NC_STRING type (1D array) which netcdf-rs can write natively
-        // The exodus-rs reader supports both NC_CHAR 2D and NC_STRING 1D formats
+        // Use NC_CHAR type (2D array) for compatibility with VisIt and other Exodus readers
+        // The 2D format is: char name_elem_var(num_elem_var, len_string)
         let var_name_exists = self.nc_file.variable(var_name_var).is_some();
         if !var_name_exists {
             self.nc_file.add_variable_with_type(
                 var_name_var,
-                &[num_var_dim],
-                &NcVariableType::String,
+                &[num_var_dim, "len_string"],
+                &NcVariableType::Char,
             )?;
         }
 
@@ -528,12 +543,21 @@ impl ExodusFile<mode::Write> {
             }
         }
 
-        // Write the variable names using NC_STRING (netcdf-rs native support)
+        // Write the variable names using NC_CHAR (2D character array)
         // CRITICAL: Must write the variable names or reading will fail!
+        // Each name is written as a row in the 2D array, padded with null bytes
         if let Some(mut var) = self.nc_file.variable_mut(var_name_var) {
             for (i, name) in names.iter().enumerate() {
                 let name_str = name.as_ref();
-                var.put_string(name_str, i..i + 1)?;
+                // Create a buffer of the correct size, filled with null bytes
+                let mut buf: Vec<NcChar> = vec![NcChar(0); len_string];
+                // Copy the name bytes into the buffer (truncating if necessary)
+                let copy_len = name_str.len().min(len_string);
+                for (j, &b) in name_str.as_bytes()[..copy_len].iter().enumerate() {
+                    buf[j] = NcChar(b as i8);
+                }
+                // Write the row using put_values with 2D indexing
+                var.put_values(&buf, (i..i + 1, ..))?;
             }
         }
 
@@ -1441,13 +1465,13 @@ impl ExodusFile<mode::Write> {
         }
 
         // Create the variable name storage variable
-        // Use NC_STRING type (1D array) which netcdf-rs can write natively
-        // The exodus-rs reader supports both NC_CHAR 2D and NC_STRING 1D formats
+        // Use NC_CHAR type (2D array) for compatibility with VisIt and other Exodus readers
+        // The 2D format is: char name_var(num_var, len_string)
         if self.nc_file.variable(var_name_var).is_none() {
             self.nc_file.add_variable_with_type(
                 var_name_var,
-                &[num_var_dim],
-                &NcVariableType::String,
+                &[num_var_dim, "len_string"],
+                &NcVariableType::Char,
             )?;
         }
 
@@ -1458,11 +1482,20 @@ impl ExodusFile<mode::Write> {
                 .add_variable::<f64>("vals_glo_var", &["time_step", num_var_dim])?;
         }
 
-        // Write the variable names using NC_STRING (netcdf-rs native support)
+        // Write the variable names using NC_CHAR (2D character array)
+        // Each name is written as a row in the 2D array, padded with null bytes
         if let Some(mut var) = self.nc_file.variable_mut(var_name_var) {
             for (i, name) in names.iter().enumerate() {
                 let name_str = name.as_ref();
-                var.put_string(name_str, i..i + 1)?;
+                // Create a buffer of the correct size, filled with null bytes
+                let mut buf: Vec<NcChar> = vec![NcChar(0); len_string];
+                // Copy the name bytes into the buffer (truncating if necessary)
+                let copy_len = name_str.len().min(len_string);
+                for (j, &b) in name_str.as_bytes()[..copy_len].iter().enumerate() {
+                    buf[j] = NcChar(b as i8);
+                }
+                // Write the row using put_values with 2D indexing
+                var.put_values(&buf, (i..i + 1, ..))?;
             }
         }
 
