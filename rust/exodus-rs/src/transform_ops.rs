@@ -377,7 +377,9 @@ impl ExodusFile<mode::Append> {
                 // Scale the variable for each entity
                 for &entity_id in &entity_ids {
                     // Check if this variable exists for this entity (truth table)
-                    let exists = self.is_var_in_truth_table(entity_type, entity_id, var_idx).unwrap_or(true);
+                    let exists = self
+                        .is_var_in_truth_table(entity_type, entity_id, var_idx)
+                        .unwrap_or(true);
 
                     if !exists {
                         continue;
