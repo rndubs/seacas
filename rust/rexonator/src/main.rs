@@ -2503,16 +2503,10 @@ mod tests {
     #[test]
     fn test_copy_mirror_merge_operation_parsing() {
         // Simulate: rexonator in.exo out.exo --copy-mirror-merge x
-        let args: Vec<String> = vec![
-            "rexonator",
-            "in.exo",
-            "out.exo",
-            "--copy-mirror-merge",
-            "x",
-        ]
-        .into_iter()
-        .map(String::from)
-        .collect();
+        let args: Vec<String> = vec!["rexonator", "in.exo", "out.exo", "--copy-mirror-merge", "x"]
+            .into_iter()
+            .map(String::from)
+            .collect();
 
         let cli =
             make_test_cli_with_cmm(vec![], vec![], vec![], vec![], vec!["x".to_string()], 0.001);
@@ -2565,15 +2559,10 @@ mod tests {
     #[test]
     fn test_copy_mirror_merge_equals_syntax() {
         // Simulate: rexonator in.exo out.exo --copy-mirror-merge=y
-        let args: Vec<String> = vec![
-            "rexonator",
-            "in.exo",
-            "out.exo",
-            "--copy-mirror-merge=y",
-        ]
-        .into_iter()
-        .map(String::from)
-        .collect();
+        let args: Vec<String> = vec!["rexonator", "in.exo", "out.exo", "--copy-mirror-merge=y"]
+            .into_iter()
+            .map(String::from)
+            .collect();
 
         let cli =
             make_test_cli_with_cmm(vec![], vec![], vec![], vec![], vec!["y".to_string()], 0.001);
