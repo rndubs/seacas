@@ -1845,6 +1845,10 @@ impl ExodusFile<mode::Read> {
     }
 
     /// Read variable from combined 3D format (vals_nod_var, vals_elem_var, etc.)
+    ///
+    /// Combined format stores all variables in a single 3D array:
+    /// - `vals_nod_var(time_step, num_nod_var, num_nodes)` for nodal vars
+    /// - `vals_elem_var(time_step, num_elem_var, num_elem)` for element vars
     fn read_var_combined(
         &self,
         step: usize,
@@ -1882,27 +1886,37 @@ impl ExodusFile<mode::Read> {
                 let value: f64 = var.get_value((step, var_index))?;
                 Ok(vec![value])
             }
-            EntityType::Nodal => {
-                // Nodal vars in combined format: (time_step, num_nod_var, num_nodes)
-                // Read slice [step, var_index, :]
-                Ok(var.get_values((step..step + 1, var_index..var_index + 1, ..))?)
+            _ => {
+                // Other vars in combined format: (time_step, num_vars, num_entities)
+                // Get the number of entities from the last dimension
+                let dims = var.dimensions();
+                if dims.len() != 3 {
+                    return Err(ExodusError::Other(format!(
+                        "Expected 3D array for combined variable {}, got {} dimensions",
+                        var_name,
+                        dims.len()
+                    )));
+                }
+                let num_entities = dims[2].len();
+
+                // Read the slice [step, var_index, 0:num_entities]
+                // Try reading as f64 first, fall back to f32 if that fails
+                let result: std::result::Result<Vec<f64>, _> =
+                    var.get_values((step..step + 1, var_index..var_index + 1, 0..num_entities));
+
+                match result {
+                    Ok(values) => Ok(values),
+                    Err(_) => {
+                        // Try reading as f32 and converting to f64
+                        let values_f32: Vec<f32> = var.get_values((
+                            step..step + 1,
+                            var_index..var_index + 1,
+                            0..num_entities,
+                        ))?;
+                        Ok(values_f32.into_iter().map(|v| v as f64).collect())
+                    }
+                }
             }
-            EntityType::ElemBlock
-            | EntityType::EdgeBlock
-            | EntityType::FaceBlock
-            | EntityType::NodeSet
-            | EntityType::EdgeSet
-            | EntityType::FaceSet
-            | EntityType::SideSet
-            | EntityType::ElemSet => {
-                // Combined format: (time_step, num_vars, num_entities)
-                // Read slice [step, var_index, :]
-                Ok(var.get_values((step..step + 1, var_index..var_index + 1, ..))?)
-            }
-            _ => Err(ExodusError::InvalidEntityType(format!(
-                "Unsupported variable type: {}",
-                var_type
-            ))),
         }
     }
 
@@ -2565,7 +2579,7 @@ impl ExodusFile<mode::Append> {
         }
     }
 
-    /// Read variable from combined 3D format (vals_nod_var, vals_elem_var, etc.)
+    /// Read variable from combined 3D format (append mode)
     fn read_var_combined_append(
         &self,
         step: usize,
@@ -2603,9 +2617,35 @@ impl ExodusFile<mode::Append> {
                 Ok(vec![value])
             }
             _ => {
-                // Combined format: (time_step, num_vars, num_entities)
-                // Read slice [step, var_index, :]
-                Ok(var.get_values((step..step + 1, var_index..var_index + 1, ..))?)
+                // Other vars in combined format: (time_step, num_vars, num_entities)
+                // Get the number of entities from the last dimension
+                let dims = var.dimensions();
+                if dims.len() != 3 {
+                    return Err(ExodusError::Other(format!(
+                        "Expected 3D array for combined variable {}, got {} dimensions",
+                        var_name,
+                        dims.len()
+                    )));
+                }
+                let num_entities = dims[2].len();
+
+                // Read the slice [step, var_index, 0:num_entities]
+                // Try reading as f64 first, fall back to f32 if that fails
+                let result: std::result::Result<Vec<f64>, _> =
+                    var.get_values((step..step + 1, var_index..var_index + 1, 0..num_entities));
+
+                match result {
+                    Ok(values) => Ok(values),
+                    Err(_) => {
+                        // Try reading as f32 and converting to f64
+                        let values_f32: Vec<f32> = var.get_values((
+                            step..step + 1,
+                            var_index..var_index + 1,
+                            0..num_entities,
+                        ))?;
+                        Ok(values_f32.into_iter().map(|v| v as f64).collect())
+                    }
+                }
             }
         }
     }
