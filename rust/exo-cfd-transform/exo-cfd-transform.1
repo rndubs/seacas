@@ -11,9 +11,9 @@ It reads an input mesh, applies a sequence of transformations, and writes
 the result to a new output file. The original input file is never modified.
 .PP
 Transformations include translation, rotation (using Euler angles), uniform
-scaling, and mirroring about coordinate axes. Multiple transformations can
-be chained together and are applied in the exact order they appear on the
-command line.
+scaling, mirroring about coordinate axes, and copy-mirror-merge for creating
+full models from half-symmetry models. Multiple transformations can be chained
+together and are applied in the exact order they appear on the command line.
 .SH ARGUMENTS
 .TP
 .I INPUT
@@ -85,6 +85,47 @@ specifies which coordinate is negated:
 .RE
 .IP
 The axis can be specified in upper or lower case.
+.TP
+.BI \-\-copy\-mirror\-merge " AXIS"
+Copy, mirror, and merge the mesh about a symmetry plane to create a full
+model from a half-symmetry model. This operation:
+.RS
+.IP \(bu 2
+Copies the entire mesh and mirrors it about the specified axis
+.IP \(bu 2
+Merges nodes on the symmetry plane (nodes where the axis coordinate is
+approximately zero)
+.IP \(bu 2
+Preserves element winding order in the mirrored copy
+.IP \(bu 2
+Creates \fB_mirror\fR variants of all node sets and side sets
+.IP \(bu 2
+Negates vector field components (detected by naming convention like
+\fBvelocity_x\fR, \fBu\fR, etc.) on the mirrored mesh
+.RE
+.IP
+The axis can be \fBx\fR, \fBy\fR, or \fBz\fR (case-insensitive).
+.IP
+Example: \fB\-\-copy\-mirror\-merge x\fR creates a full model symmetric
+about the YZ plane from a half-model where x >= 0.
+.IP
+\fBLimitations:\fR
+.RS
+.IP \(bu 2
+Only one element block is currently supported
+.IP \(bu 2
+Supported topologies: HEX8, TET4, WEDGE6, PYRAMID5, QUAD4, TRI3
+.RE
+.TP
+.BI \-\-merge\-tolerance " VALUE"
+Set the tolerance for merging nodes on the symmetry plane during
+\fB\-\-copy\-mirror\-merge\fR. Nodes with |coordinate| <= tolerance are
+considered to be on the symmetry plane.
+.IP
+Default: 0.001
+.IP
+If no nodes are found within the tolerance, a warning is printed and
+no node merging occurs.
 .SS Time Options
 .TP
 .BR \-z ", " \-\-zero\-time
@@ -264,6 +305,24 @@ then moves to position (100, 100, 0), with verbose output.
 .nf
 exo-cfd-transform simulation.exo mirrored.exo \-\-mirror x \-\-zero\-time
 .fi
+.TP
+\fBCreate full model from half-symmetry model:\fR
+.nf
+exo-cfd-transform half_model.exo full_model.exo \-\-copy\-mirror\-merge x \-v
+.fi
+.IP
+This mirrors the mesh about the YZ plane (x=0), merging nodes on the
+symmetry plane and creating a full symmetric model.
+.TP
+\fBCopy-mirror-merge with custom tolerance:\fR
+.nf
+exo-cfd-transform half.exo full.exo \\
+    \-\-copy\-mirror\-merge y \\
+    \-\-merge\-tolerance 0.01
+.fi
+.IP
+Use a larger tolerance (0.01) to merge nodes that may not be exactly on
+the symmetry plane due to mesh generation tolerances.
 .TP
 \fBIntrinsic vs extrinsic rotation comparison:\fR
 .nf
