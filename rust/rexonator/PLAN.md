@@ -7,17 +7,98 @@
 - [x] Add memory usage warnings for large mesh operations
 
 ### Medium Priority
-- [ ] Fix vector component detection false positives
+- [ ] Fix vector component detection false positives [XFAIL TEST: TODO]
 - [x] Reduce excessive cloning in copy_mirror_merge
-- [ ] Complete side set side number mapping (TODO in code)
+- [ ] Complete side set side number mapping (TODO in code) [XFAIL TEST: TODO]
 - [ ] Consolidate test helpers with builder pattern
 
 ### Low Priority
-- [ ] Replace `exit()` with proper error returns in man.rs
+- [ ] Replace `exit()` with proper error returns in man.rs [XFAIL TEST: `test_man_page_missing_returns_error`]
 - [ ] Remove or implement unused performance config fields
-- [ ] Add parallel processing with rayon for large meshes
+- [ ] Add parallel processing with rayon for large meshes [XFAIL TEST: `test_cmm_parallel_processing`]
 - [ ] Add benchmarks for performance-critical operations
-- [ ] Add progress indicators for verbose mode on large operations
+- [ ] Add progress indicators for verbose mode on large operations [XFAIL TEST: `test_verbose_progress_indicators`]
+- [ ] Preserve 2D mesh dimensionality in CMM [XFAIL TEST: `test_cmm_preserves_2d_dimensionality`]
+
+---
+
+## Integration Test Coverage
+
+Integration tests have been added in `tests/` covering:
+
+### Basic Transformations (`tests/integration_basic.rs`)
+- Translation: positive, negative, 3D combined, 2D mesh
+- Scaling: up, down, unit conversion
+- Mirroring: X, Y, Z axes (upper and lowercase)
+- Rotation: single axis, multi-axis, extrinsic/intrinsic
+- Field scaling: single, multiple, scientific notation
+- Time normalization: zero-time flag
+- Operation ordering: translate-then-scale vs scale-then-translate
+- Error handling: invalid inputs
+- Data preservation: nodes, elements, time steps, variable names
+
+### Copy-Mirror-Merge (`tests/integration_cmm.rs`)
+- Basic CMM for all supported element types: HEX8, TET4, WEDGE6, PYRAMID5, QUAD4, TRI3
+- Coordinate bounds verification (symmetric after CMM)
+- CMM about all three axes (X, Y, Z)
+- Node set and side set duplication with `_mirror` suffix
+- Element block duplication
+- Vector field component negation
+- Scalar field preservation
+- Custom merge tolerance
+- CMM with pre-operations (translate, scale)
+- CMM with post-operations
+- Time step preservation
+- Variable names preservation
+
+### XFail Tests (`tests/xfail_planned.rs`)
+These tests document expected behavior for features not yet implemented.
+When implementing a feature, remove the `#[ignore]` attribute and verify the test passes.
+
+| Test Name | Planned Feature | Priority |
+|-----------|-----------------|----------|
+| `test_vector_detection_should_not_match_max_x` | Vector component false positives | Medium |
+| `test_vector_detection_should_not_match_index_x` | Vector component false positives | Medium |
+| `test_vector_detection_should_not_match_suffix_only` | Vector component false positives | Medium |
+| `test_cmm_side_numbers_properly_mapped` | Side set side number mapping | Medium |
+| `test_cmm_warns_on_large_mesh` | Memory usage warnings | High |
+| `test_man_page_missing_returns_error` | Proper error handling in man.rs | Low |
+| `test_cmm_parallel_processing` | Parallel processing with rayon | Low |
+| `test_verbose_progress_indicators` | Progress indicators | Low |
+| `test_cmm_preserves_2d_dimensionality` | 2D mesh handling | Low |
+
+### Running Tests
+
+```bash
+# Run all integration tests
+cargo test --features netcdf4
+
+# Run basic transformation tests only
+cargo test --features netcdf4 integration_basic
+
+# Run CMM tests only
+cargo test --features netcdf4 integration_cmm
+
+# Run xfail tests (these are ignored by default)
+cargo test --features netcdf4 xfail -- --ignored
+
+# Run all tests including ignored
+cargo test --features netcdf4 -- --include-ignored
+```
+
+### Test Fixtures
+
+Test meshes are created programmatically in `tests/fixtures.rs`:
+- `create_quad4_mesh` - 2D 4-element grid
+- `create_tri3_mesh` - 2D 2-triangle mesh
+- `create_hex8_mesh` - 3D half-symmetry hex mesh with nodal variables
+- `create_tet4_mesh` - 3D tetrahedral mesh
+- `create_wedge6_mesh` - 3D wedge element
+- `create_pyramid5_mesh` - 3D pyramid element
+- `create_hex8_with_elem_vars` - HEX8 with element variables
+- `create_mesh_with_time_steps` - Multi-timestep mesh for zero-time testing
+- `create_simple_cube` - Single HEX8 unit cube
+- `create_mesh_with_global_vars` - Mesh with global variables
 
 ---
 
