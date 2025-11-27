@@ -21,6 +21,79 @@
 
 ---
 
+## Integration Test Coverage
+
+Integration tests are located in `tests/integration_tests.rs` with test fixtures in `tests/fixtures/mod.rs`.
+
+### Test Categories
+
+| Category | Status | Description |
+|----------|--------|-------------|
+| **Translation** | :white_check_mark: Passing | Tests for positive, negative, and multi-axis translations |
+| **Scaling** | :white_check_mark: Passing | Uniform scaling (enlarge and shrink) on different mesh types |
+| **Rotation** | :white_check_mark: Passing | Single-axis rotations, Euler angles, extrinsic vs intrinsic |
+| **Mirror** | :white_check_mark: Passing | X, Y, Z axis mirroring |
+| **Copy-Mirror-Merge** | :white_check_mark: Passing | All supported element types (HEX8, TET4, WEDGE6, PYRAMID5, QUAD4, TRI3) |
+| **Field Scaling** | :white_check_mark: Passing | Scalar field scaling, multiple fields, scientific notation |
+| **Time Normalization** | :white_check_mark: Passing | Zero-time with and without other transforms |
+| **Transformation Ordering** | :white_check_mark: Passing | Verifies operation order matters, multiple chained operations |
+| **Verbose Output** | :white_check_mark: Passing | Basic verbose flag testing |
+| **Error Handling** | :white_check_mark: Passing | Invalid inputs, missing files, bad formats |
+
+### Element Types Tested
+
+| Element Type | Dimensions | Integration Tests |
+|--------------|------------|-------------------|
+| HEX8 | 3D | Translation, scaling, rotation, mirror, CMM |
+| TET4 | 3D | CMM |
+| WEDGE6 | 3D | CMM |
+| PYRAMID5 | 3D | CMM |
+| QUAD4 | 2D | Translation, scaling, CMM |
+| TRI3 | 2D | CMM |
+
+### Known Issues with XFAIL Tests
+
+The following tests are marked as `#[ignore]` (xfail) to document known limitations:
+
+| Test | Issue | Reference |
+|------|-------|-----------|
+| `test_cmm_scalar_field_ending_with_x_not_negated` | Vector component detection false positives | PLAN.md "Vector Component Detection" |
+| `test_cmm_side_set_side_numbers_mapped` | Side set numbers not mapped for mirrored elements | PLAN.md "Complete side set side number mapping" |
+| `test_cmm_2d_mesh_stays_2d` | 2D mesh may be converted to 3D during CMM | PLAN.md "2D Mesh Z-Coordinate Handling" |
+
+**Note:** When these issues are fixed, the corresponding xfail tests should be un-ignored and should pass.
+
+### Running the Tests
+
+```bash
+# Run all integration tests
+cd rust/rexonator
+cargo test --test integration_tests
+
+# Run with output to see test file paths (useful for visual inspection)
+cargo test --test integration_tests -- --nocapture
+
+# Run a specific test category
+cargo test --test integration_tests translation_tests
+
+# Run ignored (xfail) tests to see current status
+cargo test --test integration_tests -- --ignored
+
+# Run all tests including xfails
+cargo test --test integration_tests -- --include-ignored
+```
+
+### Test Fixture Files
+
+Test fixtures create simple meshes that can be visually inspected. Running tests with `--nocapture` will print the temporary directory paths where test files are preserved:
+
+- Input files: `input.exo`, `half.exo`
+- Output files: `output.exo`, `full.exo`
+
+Use tools like `ncdump` or visualization software (ParaView, VisIt) to examine the files.
+
+---
+
 ## Detailed Analysis
 
 ### Overall Assessment

@@ -4,6 +4,9 @@
 //! transformation operations, including translate, rotate, scale-field, and
 //! operation ordering.
 
+// Allow approximate constant values in tests (e.g., 3.14 instead of PI)
+#![allow(clippy::approx_constant)]
+
 use crate::cli::{Axis, Cli, Operation, Result, TransformError};
 
 /// Parse a translate argument "x,y,z" into an array of 3 floats

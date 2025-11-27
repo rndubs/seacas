@@ -16,3 +16,6 @@ path = "src/main.rs"
 exodus-rs = { path = "../exodus-rs", features = ["netcdf4"] }
 clap = { workspace = true }
 thiserror = { workspace = true }
+
+[dev-dependencies]
+tempfile = "3"
