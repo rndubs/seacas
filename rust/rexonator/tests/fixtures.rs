@@ -110,7 +110,10 @@ pub fn create_quad4_mesh(path: &PathBuf) -> Result<(), Box<dyn std::error::Error
     file.put_name(EntityType::SideSet, 0, "bottom_edge")?;
 
     // Add scalar and vector nodal variables
-    file.define_variables(EntityType::Nodal, &["temperature", "velocity_x", "velocity_y"])?;
+    file.define_variables(
+        EntityType::Nodal,
+        &["temperature", "velocity_x", "velocity_y"],
+    )?;
 
     file.put_time(0, 0.0)?;
 
@@ -788,7 +791,9 @@ pub fn read_coord_bounds(
 }
 
 /// Read all coordinates from a file
-pub fn read_coords(path: &PathBuf) -> Result<(Vec<f64>, Vec<f64>, Vec<f64>), Box<dyn std::error::Error>> {
+pub fn read_coords(
+    path: &PathBuf,
+) -> Result<(Vec<f64>, Vec<f64>, Vec<f64>), Box<dyn std::error::Error>> {
     let file = ExodusFile::<exodus_rs::mode::Read>::open(path)?;
     let coords = file.coords::<f64>()?;
     Ok((coords.x, coords.y, coords.z))

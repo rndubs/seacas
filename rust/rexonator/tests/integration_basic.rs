@@ -44,8 +44,7 @@ fn test_translate_positive_x() {
 
     assert!(status.success(), "rexonator failed");
 
-    let (x_bounds, y_bounds, z_bounds) =
-        read_coord_bounds(&output).expect("Failed to read output");
+    let (x_bounds, y_bounds, z_bounds) = read_coord_bounds(&output).expect("Failed to read output");
 
     // Original: [0,1] x [0,1] x [0,1]
     // After translate by (10,0,0): [10,11] x [0,1] x [0,1]
@@ -626,7 +625,10 @@ fn test_zero_time_normalization() {
     let new_times = read_times(&output).expect("Failed to read new times");
 
     // Times should now start at 0
-    assert!((new_times[0] - 0.0).abs() < TOLERANCE, "First time should be 0");
+    assert!(
+        (new_times[0] - 0.0).abs() < TOLERANCE,
+        "First time should be 0"
+    );
     // Subsequent times should be shifted
     for (i, time) in new_times.iter().enumerate() {
         let expected = i as f64 * 0.1; // 0.0, 0.1, 0.2, ...

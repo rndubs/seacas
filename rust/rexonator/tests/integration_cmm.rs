@@ -141,10 +141,7 @@ fn test_cmm_y_axis() {
     assert!((new_x[0] - 0.0).abs() < TOLERANCE);
     assert!((new_x[1] - 1.0).abs() < TOLERANCE);
     // Y should span [-1, 1] (assuming original [0, 1])
-    assert!(
-        (new_y[0] - (-1.0)).abs() < TOLERANCE,
-        "y_min should be -1"
-    );
+    assert!((new_y[0] - (-1.0)).abs() < TOLERANCE, "y_min should be -1");
     assert!((new_y[1] - 1.0).abs() < TOLERANCE, "y_max should be 1");
 }
 
@@ -171,10 +168,7 @@ fn test_cmm_z_axis() {
     let (_, _, new_z) = read_coord_bounds(&output).unwrap();
 
     // Z should span [-1, 1] (original [0, 1] mirrored)
-    assert!(
-        (new_z[0] - (-1.0)).abs() < TOLERANCE,
-        "z_min should be -1"
-    );
+    assert!((new_z[0] - (-1.0)).abs() < TOLERANCE, "z_min should be -1");
     assert!((new_z[1] - 1.0).abs() < TOLERANCE, "z_max should be 1");
 }
 
@@ -813,7 +807,10 @@ fn test_cmm_with_zero_time() {
     assert!(status.success());
 
     let new_times = read_times(&output).unwrap();
-    assert!((new_times[0] - 0.0).abs() < TOLERANCE, "First time should be 0");
+    assert!(
+        (new_times[0] - 0.0).abs() < TOLERANCE,
+        "First time should be 0"
+    );
 }
 
 // ========================================================================
