@@ -7,7 +7,7 @@
 - [x] Add memory usage warnings for large mesh operations
 
 ### Medium Priority
-- [ ] Fix vector component detection false positives [XFAIL TEST: TODO]
+- [x] Fix vector component detection false positives
 - [x] Reduce excessive cloning in copy_mirror_merge
 - [ ] Complete side set side number mapping (TODO in code) [XFAIL TEST: TODO]
 - [ ] Consolidate test helpers with builder pattern
@@ -55,17 +55,18 @@ Integration tests have been added in `tests/` covering:
 These tests document expected behavior for features not yet implemented.
 When implementing a feature, remove the `#[ignore]` attribute and verify the test passes.
 
-| Test Name | Planned Feature | Priority |
-|-----------|-----------------|----------|
-| `test_vector_detection_should_not_match_max_x` | Vector component false positives | Medium |
-| `test_vector_detection_should_not_match_index_x` | Vector component false positives | Medium |
-| `test_vector_detection_should_not_match_suffix_only` | Vector component false positives | Medium |
-| `test_cmm_side_numbers_properly_mapped` | Side set side number mapping | Medium |
-| `test_cmm_warns_on_large_mesh` | Memory usage warnings | High |
-| `test_man_page_missing_returns_error` | Proper error handling in man.rs | Low |
-| `test_cmm_parallel_processing` | Parallel processing with rayon | Low |
-| `test_verbose_progress_indicators` | Progress indicators | Low |
-| `test_cmm_preserves_2d_dimensionality` | 2D mesh handling | Low |
+| Test Name | Planned Feature | Priority | Status |
+|-----------|-----------------|----------|--------|
+| `test_vector_detection_should_not_match_max_x` | Vector component false positives | Medium | **FIXED** |
+| `test_vector_detection_should_not_match_index_x` | Vector component false positives | Medium | **FIXED** |
+| `test_vector_detection_should_not_match_suffix_only` | Vector component false positives | Medium | **FIXED** |
+| `test_vector_detection_real_vector_is_negated` | Vector component detection | Medium | **FIXED** |
+| `test_cmm_side_numbers_properly_mapped` | Side set side number mapping | Medium | Pending |
+| `test_cmm_warns_on_large_mesh` | Memory usage warnings | High | Pending |
+| `test_man_page_missing_returns_error` | Proper error handling in man.rs | Low | Pending |
+| `test_cmm_parallel_processing` | Parallel processing with rayon | Low | Pending |
+| `test_verbose_progress_indicators` | Progress indicators | Low | Pending |
+| `test_cmm_preserves_2d_dimensionality` | 2D mesh handling | Low | Pending |
 
 ### Running Tests
 
@@ -467,9 +468,9 @@ TransformError::InvalidFormat(format!(
 |----------|-------|-----------|--------|--------|
 | **High** | Refactor 343-line function | copy_mirror_merge.rs:861-965 | Medium | Complete |
 | **High** | Add memory usage warnings | copy_mirror_merge.rs:17-108 | Low | Complete |
-| **Medium** | Vector component false positives | copy_mirror_merge.rs:127-138 | Low | Pending |
+| **Medium** | Vector component false positives | copy_mirror_merge.rs:230-293 | Low | Complete |
 | **Medium** | Excessive cloning | copy_mirror_merge.rs (refactored) | Medium | Complete |
-| **Medium** | Complete side set mapping TODO | copy_mirror_merge.rs:575-577 | High | Pending |
+| **Medium** | Complete side set mapping TODO | copy_mirror_merge.rs:519-522 | High | Pending |
 | **Medium** | Test helper consolidation | parsers.rs:353-410 | Low | Pending |
 | **Low** | Hard exit in man.rs | man.rs:27,35 | Low | Pending |
 | **Low** | Unused performance config fields | performance.rs:98-102 | Low | Pending |

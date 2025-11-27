@@ -227,18 +227,69 @@ fn get_mirror_permutation(topology: &str, axis: Axis) -> Option<Vec<usize>> {
     }
 }
 
+/// Known vector field prefixes that indicate a field is a vector component
+/// when combined with axis suffixes like _x, _y, _z
+const VECTOR_PREFIXES: &[&str] = &[
+    "velocity",
+    "displacement",
+    "force",
+    "momentum",
+    "acceleration",
+    "stress",
+    "strain",
+    "flux",
+    "gradient",
+    "normal",
+    "tangent",
+    "coord",
+    "position",
+    "translation",
+    "rotation",
+    "angular",
+    "linear",
+    "disp",
+    "vel",
+    "accel",
+    "acc",
+];
+
+/// Check if a variable name matches an axis suffix
+fn matches_axis_suffix(name: &str, axis: Axis) -> bool {
+    let suffixes = match axis {
+        Axis::X => &["_x", "_1", "_u"][..],
+        Axis::Y => &["_y", "_2", "_v"][..],
+        Axis::Z => &["_z", "_3", "_w"][..],
+    };
+    suffixes.iter().any(|s| name.ends_with(s))
+}
+
 /// Check if a variable name suggests it's a vector component
+///
+/// A field is considered a vector component if:
+/// 1. It's a known single-letter velocity component (u, v, w)
+/// 2. It starts with a known vector field prefix AND ends with an axis suffix
+///
+/// This avoids false positives like "max_x", "index_x", or "matrix".
 fn is_vector_component(name: &str, axis: Axis) -> bool {
     let name_lower = name.to_lowercase();
-    let suffix = match axis {
-        Axis::X => ["_x", "x", "_u", "u"],
-        Axis::Y => ["_y", "y", "_v", "v"],
-        Axis::Z => ["_z", "z", "_w", "w"],
-    };
 
-    suffix
+    // Check for standard single-letter velocity components (u, v, w)
+    let is_single_letter = name_lower.len() == 1
+        && matches!(
+            (name_lower.as_str(), axis),
+            ("u", Axis::X) | ("v", Axis::Y) | ("w", Axis::Z)
+        );
+
+    if is_single_letter {
+        return true;
+    }
+
+    // Check if it's a known vector field prefix with an axis suffix
+    let is_known_vector = VECTOR_PREFIXES
         .iter()
-        .any(|s| name_lower.ends_with(s) || (name_lower.len() == 1 && name_lower == *s))
+        .any(|prefix| name_lower.starts_with(prefix));
+
+    is_known_vector && matches_axis_suffix(&name_lower, axis)
 }
 
 // ============================================================================
@@ -1242,18 +1293,64 @@ mod tests {
         assert!(is_vector_component("velocity_x", Axis::X));
         assert!(is_vector_component("u", Axis::X));
         assert!(is_vector_component("displacement_x", Axis::X));
+        assert!(is_vector_component("force_x", Axis::X));
+        assert!(is_vector_component("acceleration_x", Axis::X));
+        assert!(is_vector_component("disp_x", Axis::X));
+        assert!(is_vector_component("vel_x", Axis::X));
         assert!(!is_vector_component("velocity_y", Axis::X));
         assert!(!is_vector_component("temperature", Axis::X));
 
         // Test Y-axis vector components
         assert!(is_vector_component("velocity_y", Axis::Y));
         assert!(is_vector_component("v", Axis::Y));
+        assert!(is_vector_component("displacement_y", Axis::Y));
         assert!(!is_vector_component("velocity_x", Axis::Y));
 
         // Test Z-axis vector components
         assert!(is_vector_component("velocity_z", Axis::Z));
         assert!(is_vector_component("w", Axis::Z));
+        assert!(is_vector_component("displacement_z", Axis::Z));
         assert!(!is_vector_component("velocity_x", Axis::Z));
+
+        // Test numbered suffixes
+        assert!(is_vector_component("velocity_1", Axis::X));
+        assert!(is_vector_component("velocity_2", Axis::Y));
+        assert!(is_vector_component("velocity_3", Axis::Z));
+
+        // Test underscore-letter suffixes
+        assert!(is_vector_component("displacement_u", Axis::X));
+        assert!(is_vector_component("displacement_v", Axis::Y));
+        assert!(is_vector_component("displacement_w", Axis::Z));
+    }
+
+    #[test]
+    fn test_is_vector_component_false_positives() {
+        // These should NOT be detected as vector components
+        // (the original bug where anything ending in _x, x, etc. was matched)
+
+        // "max_x" is not a vector component - it's a maximum value
+        assert!(!is_vector_component("max_x", Axis::X));
+        assert!(!is_vector_component("min_x", Axis::X));
+
+        // "index_x" is not a vector component - it's an index
+        assert!(!is_vector_component("index_x", Axis::X));
+        assert!(!is_vector_component("index_y", Axis::Y));
+
+        // "matrix" ends in 'x' but is not a vector component
+        assert!(!is_vector_component("matrix", Axis::X));
+
+        // Other false positives that should not match
+        assert!(!is_vector_component("apex", Axis::X));
+        assert!(!is_vector_component("complex", Axis::X));
+        assert!(!is_vector_component("suffix_x", Axis::X));
+        assert!(!is_vector_component("my_data_x", Axis::X));
+        assert!(!is_vector_component("cell_x", Axis::X));
+        assert!(!is_vector_component("vertex_x", Axis::X));
+
+        // Scalars should not be vector components
+        assert!(!is_vector_component("temperature", Axis::X));
+        assert!(!is_vector_component("pressure", Axis::X));
+        assert!(!is_vector_component("density", Axis::X));
     }
 
     #[test]

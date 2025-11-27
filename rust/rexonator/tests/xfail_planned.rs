@@ -22,27 +22,21 @@ fn rexonator_cmd() -> Command {
 // Vector Component Detection False Positives (Medium Priority)
 // PLAN.md: copy_mirror_merge.rs:127-138
 //
-// The current logic matches any field ending with _x, _y, _z, etc.,
-// which can cause false positives like "max_x", "index_x", or "matrix".
+// Fixed: The logic now requires a known vector prefix (like "velocity",
+// "displacement", etc.) combined with an axis suffix. This avoids false
+// positives like "max_x", "index_x", or "matrix".
 // ========================================================================
 
 #[test]
-#[ignore = "XFAIL: Vector component detection false positives not yet fixed - see PLAN.md"]
 fn test_vector_detection_should_not_match_max_x() {
-    // When fixed, a field named "max_x" should NOT be negated during CMM
+    // A field named "max_x" should NOT be negated during CMM
     // because it's not a vector component (it's a maximum X value).
-    //
-    // This test would create a mesh with a "max_x" field and verify
-    // that CMM does not negate its values.
     let ctx = TestContext::new();
     let input = ctx.path("input.exo");
     let output = ctx.path("output.exo");
 
-    // TODO: Create mesh with "max_x" field (not a vector component)
-    // TODO: Verify that "max_x" is NOT negated after CMM
-
-    // For now, just verify the test infrastructure works
-    create_hex8_mesh(&input).expect("Failed to create mesh");
+    // Create mesh with both vector and false positive field names
+    create_hex8_with_vector_false_positives(&input).expect("Failed to create mesh");
 
     let status = rexonator_cmd()
         .args([
@@ -56,24 +50,42 @@ fn test_vector_detection_should_not_match_max_x() {
 
     assert!(status.success());
 
-    // When implemented:
-    // 1. Create mesh with field named "max_x"
-    // 2. Run CMM about x-axis
-    // 3. Verify "max_x" values are NOT negated
-    // 4. Verify actual vector components like "velocity_x" ARE negated
+    // Read the variable names to find the index of "max_x"
+    let var_names = read_nodal_var_names(&output).expect("Failed to read var names");
+    let max_x_idx = var_names
+        .iter()
+        .position(|n| n == "max_x")
+        .expect("max_x variable not found");
+
+    // Read the "max_x" values from the output
+    let max_x_values = read_nodal_var(&output, max_x_idx, 0).expect("Failed to read max_x");
+
+    // All "max_x" values should still be positive (5.0) - NOT negated
+    // The original mesh had all 5.0 values for max_x
+    for &val in &max_x_values {
+        assert!(
+            val > 0.0,
+            "max_x value should NOT be negated, but got {}",
+            val
+        );
+        assert!(
+            (val - 5.0).abs() < 0.001,
+            "max_x value should be 5.0, but got {}",
+            val
+        );
+    }
 }
 
 #[test]
-#[ignore = "XFAIL: Vector component detection false positives not yet fixed - see PLAN.md"]
 fn test_vector_detection_should_not_match_index_x() {
     // A field named "index_x" should NOT be treated as a vector component
     let ctx = TestContext::new();
     let input = ctx.path("input.exo");
     let output = ctx.path("output.exo");
 
-    create_hex8_mesh(&input).expect("Failed to create mesh");
+    // Create mesh with both vector and false positive field names
+    create_hex8_with_vector_false_positives(&input).expect("Failed to create mesh");
 
-    // This test documents the expected behavior when the fix is implemented
     let status = rexonator_cmd()
         .args([
             input.to_str().unwrap(),
@@ -85,18 +97,38 @@ fn test_vector_detection_should_not_match_index_x() {
         .expect("Failed to run rexonator");
 
     assert!(status.success());
+
+    // Read the variable names to find the index of "index_x"
+    let var_names = read_nodal_var_names(&output).expect("Failed to read var names");
+    let index_x_idx = var_names
+        .iter()
+        .position(|n| n == "index_x")
+        .expect("index_x variable not found");
+
+    // Read the "index_x" values from the output
+    let index_x_values = read_nodal_var(&output, index_x_idx, 0).expect("Failed to read index_x");
+
+    // All "index_x" values should still be non-negative (0, 1, 2, ...) - NOT negated
+    // The original mesh had values 0.0, 1.0, 2.0, ... for index_x
+    for &val in &index_x_values {
+        assert!(
+            val >= 0.0,
+            "index_x value should NOT be negated, but got {}",
+            val
+        );
+    }
 }
 
 #[test]
-#[ignore = "XFAIL: Vector component detection false positives not yet fixed - see PLAN.md"]
 fn test_vector_detection_should_not_match_suffix_only() {
-    // A field ending in just "x" (not a known vector prefix) should be
-    // treated carefully - e.g., "matrix" ends in 'x' but isn't a vector
+    // A field ending in just "x" (not a known vector prefix) should NOT be
+    // treated as a vector - e.g., "matrix" ends in 'x' but isn't a vector
     let ctx = TestContext::new();
     let input = ctx.path("input.exo");
     let output = ctx.path("output.exo");
 
-    create_hex8_mesh(&input).expect("Failed to create mesh");
+    // Create mesh with both vector and false positive field names
+    create_hex8_with_vector_false_positives(&input).expect("Failed to create mesh");
 
     let status = rexonator_cmd()
         .args([
@@ -109,6 +141,111 @@ fn test_vector_detection_should_not_match_suffix_only() {
         .expect("Failed to run rexonator");
 
     assert!(status.success());
+
+    // Read the variable names to find the index of "matrix"
+    let var_names = read_nodal_var_names(&output).expect("Failed to read var names");
+    let matrix_idx = var_names
+        .iter()
+        .position(|n| n == "matrix")
+        .expect("matrix variable not found");
+
+    // Read the "matrix" values from the output
+    let matrix_values = read_nodal_var(&output, matrix_idx, 0).expect("Failed to read matrix");
+
+    // All "matrix" values should still be positive (1.0) - NOT negated
+    for &val in &matrix_values {
+        assert!(
+            val > 0.0,
+            "matrix value should NOT be negated, but got {}",
+            val
+        );
+        assert!(
+            (val - 1.0).abs() < 0.001,
+            "matrix value should be 1.0, but got {}",
+            val
+        );
+    }
+}
+
+#[test]
+fn test_vector_detection_real_vector_is_negated() {
+    // Verify that real vector components (like "velocity_x") ARE still negated
+    let ctx = TestContext::new();
+    let input = ctx.path("input.exo");
+    let output = ctx.path("output.exo");
+
+    // Create mesh with both vector and false positive field names
+    create_hex8_with_vector_false_positives(&input).expect("Failed to create mesh");
+
+    // Read input velocity_x values for comparison
+    let var_names = read_nodal_var_names(&input).expect("Failed to read var names");
+    let velocity_x_idx = var_names
+        .iter()
+        .position(|n| n == "velocity_x")
+        .expect("velocity_x variable not found");
+    let input_velocity_x =
+        read_nodal_var(&input, velocity_x_idx, 0).expect("Failed to read input velocity_x");
+
+    let status = rexonator_cmd()
+        .args([
+            input.to_str().unwrap(),
+            output.to_str().unwrap(),
+            "--copy-mirror-merge",
+            "x",
+        ])
+        .status()
+        .expect("Failed to run rexonator");
+
+    assert!(status.success());
+
+    // Read the output mesh parameters to get node counts
+    let params = read_params(&output).expect("Failed to read params");
+    let input_params = read_params(&input).expect("Failed to read input params");
+
+    // Read the output velocity_x values
+    let output_var_names = read_nodal_var_names(&output).expect("Failed to read var names");
+    let output_velocity_x_idx = output_var_names
+        .iter()
+        .position(|n| n == "velocity_x")
+        .expect("velocity_x variable not found");
+    let output_velocity_x = read_nodal_var(&output, output_velocity_x_idx, 0)
+        .expect("Failed to read output velocity_x");
+
+    // CMM doubles the mesh, so there should be more nodes
+    assert!(
+        params.num_nodes > input_params.num_nodes,
+        "CMM should increase node count"
+    );
+
+    // Check that mirrored nodes (after the original nodes) have negated velocity_x
+    // For mirrored nodes that are NOT on the symmetry plane, the velocity_x should be negated
+    let orig_num_nodes = input_params.num_nodes;
+
+    // The mirrored velocity values should be negated versions of non-symmetry-plane originals
+    // Original non-symmetry nodes had positive x-coords (0.5, 1.0)
+    // Their mirrored values should be negative
+    for i in orig_num_nodes..params.num_nodes {
+        let val = output_velocity_x[i];
+        // Mirrored nodes should have negative velocity_x (since the original was positive)
+        assert!(
+            val <= 0.0,
+            "Mirrored node {} velocity_x should be negated, got {}",
+            i,
+            val
+        );
+    }
+
+    // Original nodes should remain unchanged
+    for (i, &orig_val) in input_velocity_x.iter().enumerate() {
+        let out_val = output_velocity_x[i];
+        assert!(
+            (out_val - orig_val).abs() < 0.001,
+            "Original node {} velocity_x should be unchanged: expected {}, got {}",
+            i,
+            orig_val,
+            out_val
+        );
+    }
 }
 
 // ========================================================================

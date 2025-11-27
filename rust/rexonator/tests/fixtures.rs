@@ -854,3 +854,121 @@ pub fn read_block_ids(path: &PathBuf) -> Result<Vec<i64>, Box<dyn std::error::Er
     let ids = file.block_ids(EntityType::ElemBlock)?;
     Ok(ids)
 }
+
+/// Create a HEX8 mesh with both real vector components and false positive field names
+///
+/// This is used to test that CMM correctly identifies vector components and avoids
+/// false positives like "max_x", "index_x", or "matrix".
+///
+/// Fields included:
+/// - velocity_x: Real vector component (should be negated on X-axis mirror)
+/// - max_x: NOT a vector component (should NOT be negated)
+/// - index_x: NOT a vector component (should NOT be negated)
+/// - matrix: Ends in 'x' but NOT a vector component (should NOT be negated)
+/// - temperature: Scalar field (should NOT be negated)
+pub fn create_hex8_with_vector_false_positives(
+    path: &PathBuf,
+) -> Result<(), Box<dyn std::error::Error>> {
+    // Simple 2-element mesh with x from 0 to 1
+    let x_coords: Vec<f64> = vec![
+        0.0, 0.5, 1.0, // y=0, z=0
+        0.0, 0.5, 1.0, // y=1, z=0
+        0.0, 0.5, 1.0, // y=0, z=1
+        0.0, 0.5, 1.0, // y=1, z=1
+    ];
+
+    let y_coords: Vec<f64> = vec![
+        0.0, 0.0, 0.0, // row 1
+        1.0, 1.0, 1.0, // row 2
+        0.0, 0.0, 0.0, // row 3
+        1.0, 1.0, 1.0, // row 4
+    ];
+
+    let z_coords: Vec<f64> = vec![
+        0.0, 0.0, 0.0, // z=0
+        0.0, 0.0, 0.0, // z=0
+        1.0, 1.0, 1.0, // z=1
+        1.0, 1.0, 1.0, // z=1
+    ];
+
+    // Two HEX8 elements
+    let connectivity: Vec<i64> = vec![
+        1, 2, 5, 4, 7, 8, 11, 10, // Element 1
+        2, 3, 6, 5, 8, 9, 12, 11, // Element 2
+    ];
+
+    let options = CreateOptions {
+        mode: CreateMode::Clobber,
+        ..Default::default()
+    };
+    let mut file = ExodusFile::create(path, options)?;
+
+    let params = InitParams {
+        title: "HEX8 with vector false positives".to_string(),
+        num_dim: 3,
+        num_nodes: 12,
+        num_elems: 2,
+        num_elem_blocks: 1,
+        num_node_sets: 1,
+        num_side_sets: 0,
+        ..Default::default()
+    };
+    file.init(&params)?;
+
+    file.put_coords(&x_coords, Some(&y_coords), Some(&z_coords))?;
+
+    let block = Block {
+        id: 1,
+        entity_type: EntityType::ElemBlock,
+        topology: "HEX8".to_string(),
+        num_entries: 2,
+        num_nodes_per_entry: 8,
+        num_edges_per_entry: 0,
+        num_faces_per_entry: 0,
+        num_attributes: 0,
+    };
+    file.put_block(&block)?;
+    file.put_connectivity(1, &connectivity)?;
+    file.put_name(EntityType::ElemBlock, 0, "hex_block")?;
+
+    // Node set: symmetry plane (x=0)
+    let sym_nodes: Vec<i64> = vec![1, 4, 7, 10];
+    file.put_node_set(1, &sym_nodes, None)?;
+    file.put_name(EntityType::NodeSet, 0, "symmetry")?;
+
+    // Define nodal variables with both vector and false positive names
+    file.define_variables(
+        EntityType::Nodal,
+        &["velocity_x", "max_x", "index_x", "matrix", "temperature"],
+    )?;
+
+    file.put_time(0, 0.0)?;
+
+    // velocity_x: Real vector X-component (positive values that should be negated)
+    // Values = x coordinate (so symmetry plane nodes have 0, others positive)
+    let velocity_x: Vec<f64> = x_coords.clone();
+    file.put_var(0, EntityType::Nodal, 0, 0, &velocity_x)?;
+
+    // max_x: NOT a vector - these are all positive values representing maxima
+    // Should NOT be negated
+    let max_x: Vec<f64> = vec![5.0; 12]; // All 5.0
+    file.put_var(0, EntityType::Nodal, 0, 1, &max_x)?;
+
+    // index_x: NOT a vector - these are indices
+    // Should NOT be negated
+    let index_x: Vec<f64> = (0..12).map(|i| i as f64).collect();
+    file.put_var(0, EntityType::Nodal, 0, 2, &index_x)?;
+
+    // matrix: Ends in 'x' but NOT a vector - could be any matrix value
+    // Should NOT be negated
+    let matrix: Vec<f64> = vec![1.0; 12]; // All 1.0
+    file.put_var(0, EntityType::Nodal, 0, 3, &matrix)?;
+
+    // temperature: Scalar field
+    // Should NOT be negated
+    let temperature: Vec<f64> = y_coords.iter().map(|&y| y * 100.0).collect();
+    file.put_var(0, EntityType::Nodal, 0, 4, &temperature)?;
+
+    file.sync()?;
+    Ok(())
+}
