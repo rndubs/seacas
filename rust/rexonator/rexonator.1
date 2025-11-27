@@ -81,6 +81,26 @@ greater than 1.0 enlarges the mesh, while a factor less than 1.0 shrinks it.
 Example: \fB\-\-scale\-len 0.001\fR converts mesh units from millimeters
 to meters.
 .TP
+.BI \-\-scale\-field " NAME,FACTOR"
+Scale a specific field variable by the given factor. The argument is
+specified as the field name and scale factor separated by a comma.
+This operation multiplies all values of the named field variable by
+the scale factor.
+.IP
+Can be specified multiple times to scale different fields. Field names
+can contain underscores and numbers (e.g., \fBvelocity_x\fR, \fBstress_11\fR).
+Scale factors can use scientific notation (e.g., \fB1.5e-3\fR).
+.IP
+Examples:
+.RS
+.IP \(bu 2
+\fB\-\-scale\-field "temperature,1.8"\fR \- Scale temperature values by 1.8
+.IP \(bu 2
+\fB\-\-scale\-field "stress,1e6"\fR \- Convert stress from MPa to Pa
+.IP \(bu 2
+\fB\-\-scale\-field "pressure,0.5" \-\-scale\-field "velocity_x,2.0"\fR \- Scale multiple fields
+.RE
+.TP
 .BI \-\-mirror " AXIS"
 Mirror (reflect) the mesh about the specified coordinate plane. The axis
 specifies which coordinate is negated:
@@ -291,6 +311,16 @@ rexonator input.exo output.exo \-\-translate "100,50,0"
 .nf
 rexonator input.exo output.exo \-\-scale\-len 0.0254
 .fi
+.TP
+\fBScale field variables:\fR
+.nf
+rexonator input.exo output.exo \\
+    \-\-scale\-field "temperature,1.8" \\
+    \-\-scale\-field "pressure,1e6"
+.fi
+.IP
+This scales the temperature field by 1.8 (e.g., Celsius to approximate
+Fahrenheit conversion) and pressure by 1e6 (e.g., MPa to Pa).
 .TP
 \fBRotate 90 degrees about Z axis:\fR
 .nf
