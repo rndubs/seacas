@@ -11,8 +11,112 @@ use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 
 // ============================================================================
+// Memory Estimation and Warnings
+// ============================================================================
+
+/// Size of a f64 value in bytes
+const SIZE_F64: usize = std::mem::size_of::<f64>();
+/// Size of an i64 value in bytes
+const SIZE_I64: usize = std::mem::size_of::<i64>();
+/// Memory warning threshold: 1 GB
+const MEMORY_WARNING_THRESHOLD_GB: usize = 1;
+
+/// Estimate memory usage for the copy-mirror-merge operation
+///
+/// Returns the estimated memory usage in bytes for both the source and mirrored data
+fn estimate_memory_usage(data: &MeshData) -> usize {
+    let num_nodes = data.params.num_nodes;
+    let num_elems = data.params.num_elems;
+    let num_time_steps = data.times.len().max(1);
+    let num_nodal_vars = data.nodal_var_names.len();
+    let num_elem_vars = data.elem_var_names.len();
+    let num_blocks = data.blocks.len();
+
+    // Coordinates: 3 arrays x num_nodes x f64 x 2 (original + mirrored)
+    let coord_memory = 3 * num_nodes * SIZE_F64 * 2;
+
+    // Connectivities: approximate based on average nodes per element
+    let avg_nodes_per_elem = if num_blocks > 0 && num_elems > 0 {
+        data.blocks
+            .iter()
+            .map(|b| b.num_nodes_per_entry)
+            .sum::<usize>()
+            / num_blocks
+    } else {
+        8 // default to HEX8
+    };
+    let connectivity_memory = num_elems * avg_nodes_per_elem * SIZE_I64 * 2;
+
+    // Nodal variables: num_vars x num_time_steps x num_nodes x f64 x 2
+    let nodal_var_memory = num_nodal_vars * num_time_steps * num_nodes * SIZE_F64 * 2;
+
+    // Element variables: num_blocks x num_vars x num_time_steps x (num_elems/num_blocks) x f64 x 2
+    let elem_var_memory = if num_blocks > 0 {
+        num_blocks * num_elem_vars * num_time_steps * (num_elems / num_blocks) * SIZE_F64 * 2
+    } else {
+        0
+    };
+
+    // Node sets and side sets (rough estimate)
+    let set_memory = (data.node_sets.len() + data.side_sets.len()) * 1000 * SIZE_I64 * 2;
+
+    coord_memory + connectivity_memory + nodal_var_memory + elem_var_memory + set_memory
+}
+
+/// Format bytes as a human-readable string
+fn format_bytes(bytes: usize) -> String {
+    const GB: usize = 1_000_000_000;
+    const MB: usize = 1_000_000;
+    const KB: usize = 1_000;
+
+    if bytes >= GB {
+        format!("{:.2} GB", bytes as f64 / GB as f64)
+    } else if bytes >= MB {
+        format!("{:.2} MB", bytes as f64 / MB as f64)
+    } else if bytes >= KB {
+        format!("{:.2} KB", bytes as f64 / KB as f64)
+    } else {
+        format!("{} bytes", bytes)
+    }
+}
+
+/// Print memory usage warnings if estimated usage exceeds threshold
+fn warn_memory_usage(data: &MeshData, verbose: bool) {
+    let estimated_bytes = estimate_memory_usage(data);
+    let threshold_bytes = MEMORY_WARNING_THRESHOLD_GB * 1_000_000_000;
+
+    if estimated_bytes > threshold_bytes {
+        eprintln!(
+            "WARNING: Estimated memory usage: {} (exceeds {} GB threshold)",
+            format_bytes(estimated_bytes),
+            MEMORY_WARNING_THRESHOLD_GB
+        );
+        eprintln!(
+            "         Mesh: {} nodes, {} elements, {} time steps",
+            data.params.num_nodes,
+            data.params.num_elems,
+            data.times.len()
+        );
+        eprintln!(
+            "         Variables: {} nodal, {} element",
+            data.nodal_var_names.len(),
+            data.elem_var_names.len()
+        );
+        eprintln!("         Consider processing on a machine with sufficient memory.");
+    } else if verbose {
+        println!(
+            "  Estimated memory usage: {}",
+            format_bytes(estimated_bytes)
+        );
+    }
+}
+
+// ============================================================================
 // Copy-Mirror-Merge Implementation
 // ============================================================================
+
+/// Type alias for node set data: (id, nodes, dist_factors)
+type NodeSetData = (i64, Vec<i64>, Vec<f64>);
 
 /// Type alias for side set data: (id, elements, sides, dist_factors)
 type SideSetData = (i64, Vec<i64>, Vec<i64>, Vec<f64>);
@@ -30,9 +134,9 @@ struct MeshData {
     blocks: Vec<Block>,
     connectivities: Vec<Vec<i64>>,
     block_names: Vec<String>,
-    // Node sets (id, nodes, dist_factors)
-    node_sets: Vec<(i64, Vec<i64>, Vec<f64>)>,
-    // Side sets (id, elements, sides, dist_factors)
+    // Node sets
+    node_sets: Vec<NodeSetData>,
+    // Side sets
     side_sets: Vec<SideSetData>,
     // Nodal variables (name, values for each time step)
     nodal_var_names: Vec<String>,
@@ -136,6 +240,414 @@ fn is_vector_component(name: &str, axis: Axis) -> bool {
         .iter()
         .any(|s| name_lower.ends_with(s) || (name_lower.len() == 1 && name_lower == *s))
 }
+
+// ============================================================================
+// Mirrored Data Creation Functions
+// ============================================================================
+
+/// Result of building the node mapping for mirroring
+struct NodeMappingResult {
+    /// Maps original node index (0-based) to new node ID (1-based)
+    mirror_node_map: HashMap<usize, i64>,
+    /// Total number of nodes in the new mesh
+    num_new_nodes: usize,
+    /// Number of new mirrored nodes (not on symmetry plane)
+    num_mirror_nodes: usize,
+}
+
+/// Build the node mapping for the mirror operation
+///
+/// Nodes on the symmetry plane map to themselves, while other nodes
+/// get new IDs starting after the original nodes.
+fn build_node_mapping(orig_num_nodes: usize, symmetry_nodes: &HashSet<usize>) -> NodeMappingResult {
+    let mut mirror_node_map: HashMap<usize, i64> = HashMap::new();
+    let mut next_mirror_id = (orig_num_nodes + 1) as i64;
+
+    for i in 0..orig_num_nodes {
+        if symmetry_nodes.contains(&i) {
+            // Symmetry plane node: maps to itself (1-based)
+            mirror_node_map.insert(i, (i + 1) as i64);
+        } else {
+            // Non-symmetry node: gets a new ID
+            mirror_node_map.insert(i, next_mirror_id);
+            next_mirror_id += 1;
+        }
+    }
+
+    let num_new_nodes = (next_mirror_id - 1) as usize;
+    let num_mirror_nodes = num_new_nodes - orig_num_nodes;
+
+    NodeMappingResult {
+        mirror_node_map,
+        num_new_nodes,
+        num_mirror_nodes,
+    }
+}
+
+/// Create mirrored coordinates by reflecting across the specified axis
+///
+/// Returns (new_x, new_y, new_z) with original and mirrored coordinates combined
+fn create_mirrored_coordinates(
+    data: &MeshData,
+    axis: Axis,
+    symmetry_nodes: &HashSet<usize>,
+) -> (Vec<f64>, Vec<f64>, Vec<f64>) {
+    let orig_num_nodes = data.params.num_nodes;
+
+    // Start with copies of original coordinates
+    let mut new_x = Vec::with_capacity(orig_num_nodes * 2);
+    let mut new_y = Vec::with_capacity(orig_num_nodes * 2);
+    let mut new_z = Vec::with_capacity(orig_num_nodes * 2);
+
+    new_x.extend_from_slice(&data.x);
+    new_y.extend_from_slice(&data.y);
+    new_z.extend_from_slice(&data.z);
+
+    // Add mirrored coordinates (for non-symmetry nodes)
+    for i in 0..orig_num_nodes {
+        if !symmetry_nodes.contains(&i) {
+            let mx = if matches!(axis, Axis::X) {
+                -data.x[i]
+            } else {
+                data.x[i]
+            };
+            let my = if matches!(axis, Axis::Y) {
+                -data.y[i]
+            } else {
+                data.y[i]
+            };
+            let mz = if matches!(axis, Axis::Z) {
+                -data.z[i]
+            } else {
+                data.z[i]
+            };
+            new_x.push(mx);
+            new_y.push(my);
+            new_z.push(mz);
+        }
+    }
+
+    (new_x, new_y, new_z)
+}
+
+/// Result of creating mirrored element blocks
+struct MirroredBlocksResult {
+    blocks: Vec<Block>,
+    connectivities: Vec<Vec<i64>>,
+    block_names: Vec<String>,
+}
+
+/// Create mirrored element blocks with adjusted connectivity
+fn create_mirrored_blocks(
+    data: &MeshData,
+    axis: Axis,
+    mirror_node_map: &HashMap<usize, i64>,
+    verbose: bool,
+) -> Result<MirroredBlocksResult> {
+    // Pre-allocate with capacity for original + mirrored blocks
+    let num_blocks = data.blocks.len();
+    let mut new_blocks = Vec::with_capacity(num_blocks * 2);
+    let mut new_connectivities = Vec::with_capacity(num_blocks * 2);
+    let mut new_block_names = Vec::with_capacity(num_blocks * 2);
+
+    // Add original blocks first
+    new_blocks.extend(data.blocks.iter().cloned());
+    new_connectivities.extend(data.connectivities.iter().cloned());
+    new_block_names.extend(data.block_names.iter().cloned());
+
+    // Find max block ID to assign new IDs for mirrored blocks
+    let max_block_id = data.blocks.iter().map(|b| b.id).max().unwrap_or(0);
+    let mut next_block_id = max_block_id + 1;
+
+    for (block_idx, (block, connectivity)) in data
+        .blocks
+        .iter()
+        .zip(data.connectivities.iter())
+        .enumerate()
+    {
+        let nodes_per_elem = block.num_nodes_per_entry;
+        let permutation = get_mirror_permutation(&block.topology, axis).ok_or_else(|| {
+            TransformError::InvalidFormat(format!("Unsupported topology: {}", block.topology))
+        })?;
+
+        // Create mirrored connectivity for this block with pre-allocated capacity
+        let mut mirror_connectivity = Vec::with_capacity(block.num_entries * nodes_per_elem);
+
+        for elem_idx in 0..block.num_entries {
+            let elem_start = elem_idx * nodes_per_elem;
+
+            // Get original element nodes
+            let orig_elem: Vec<i64> =
+                connectivity[elem_start..elem_start + nodes_per_elem].to_vec();
+
+            // Create mirrored element with permuted node order
+            let mut mirror_elem = vec![0i64; nodes_per_elem];
+            for (new_pos, &old_pos) in permutation.iter().enumerate() {
+                let orig_node_id = orig_elem[old_pos] as usize - 1; // 0-based
+                mirror_elem[new_pos] = mirror_node_map[&orig_node_id];
+            }
+
+            mirror_connectivity.extend(mirror_elem);
+        }
+
+        // Create mirrored block
+        let mut mirror_block = block.clone();
+        mirror_block.id = next_block_id;
+
+        new_blocks.push(mirror_block);
+        new_connectivities.push(mirror_connectivity);
+
+        // Create name with _mirror suffix
+        let default_name = format!("block_{}", block.id);
+        let orig_name = data
+            .block_names
+            .get(block_idx)
+            .filter(|s| !s.is_empty())
+            .map(|s| s.as_str())
+            .unwrap_or(&default_name);
+        new_block_names.push(format!("{}_mirror", orig_name));
+
+        if verbose {
+            println!(
+                "  Created mirrored block {} from block {} ({} elements)",
+                next_block_id, block.id, block.num_entries
+            );
+        }
+
+        next_block_id += 1;
+    }
+
+    Ok(MirroredBlocksResult {
+        blocks: new_blocks,
+        connectivities: new_connectivities,
+        block_names: new_block_names,
+    })
+}
+
+/// Result of creating mirrored node sets
+struct MirroredNodeSetsResult {
+    node_sets: Vec<NodeSetData>,
+    node_set_names: Vec<String>,
+}
+
+/// Create mirrored node sets with _mirror suffix
+fn create_mirrored_node_sets(
+    data: &MeshData,
+    mirror_node_map: &HashMap<usize, i64>,
+) -> MirroredNodeSetsResult {
+    let num_sets = data.node_sets.len();
+    let mut new_node_sets = Vec::with_capacity(num_sets * 2);
+    let mut new_node_set_names = Vec::with_capacity(num_sets * 2);
+
+    // Add original node sets
+    new_node_sets.extend(data.node_sets.iter().cloned());
+    new_node_set_names.extend(data.node_set_names.iter().cloned());
+
+    // Find next available set ID
+    let max_ns_id = data
+        .node_sets
+        .iter()
+        .map(|(id, _, _)| *id)
+        .max()
+        .unwrap_or(0);
+    let mut next_ns_id = max_ns_id + 1;
+
+    for (idx, (orig_id, nodes, dist_factors)) in data.node_sets.iter().enumerate() {
+        // Create mirrored node set
+        let mirror_nodes: Vec<i64> = nodes
+            .iter()
+            .map(|&n| {
+                let orig_idx = (n - 1) as usize;
+                mirror_node_map[&orig_idx]
+            })
+            .collect();
+
+        // Distribution factors are copied as-is
+        let mirror_df = dist_factors.clone();
+
+        new_node_sets.push((next_ns_id, mirror_nodes, mirror_df));
+
+        // Create name with _mirror suffix
+        let default_name = format!("nodeset_{}", orig_id);
+        let orig_name = data
+            .node_set_names
+            .get(idx)
+            .map(|s| s.as_str())
+            .unwrap_or(&default_name);
+        new_node_set_names.push(format!("{}_mirror", orig_name));
+
+        next_ns_id += 1;
+    }
+
+    MirroredNodeSetsResult {
+        node_sets: new_node_sets,
+        node_set_names: new_node_set_names,
+    }
+}
+
+/// Result of creating mirrored side sets
+struct MirroredSideSetsResult {
+    side_sets: Vec<SideSetData>,
+    side_set_names: Vec<String>,
+}
+
+/// Create mirrored side sets with _mirror suffix
+fn create_mirrored_side_sets(data: &MeshData, orig_num_elems: usize) -> MirroredSideSetsResult {
+    let num_sets = data.side_sets.len();
+    let mut new_side_sets = Vec::with_capacity(num_sets * 2);
+    let mut new_side_set_names = Vec::with_capacity(num_sets * 2);
+
+    // Add original side sets
+    new_side_sets.extend(data.side_sets.iter().cloned());
+    new_side_set_names.extend(data.side_set_names.iter().cloned());
+
+    let max_ss_id = data
+        .side_sets
+        .iter()
+        .map(|(id, _, _, _)| *id)
+        .max()
+        .unwrap_or(0);
+    let mut next_ss_id = max_ss_id + 1;
+
+    for (idx, (orig_id, elements, sides, dist_factors)) in data.side_sets.iter().enumerate() {
+        // Mirrored elements have IDs offset by orig_num_elems
+        let mirror_elements: Vec<i64> = elements
+            .iter()
+            .map(|&e| e + orig_num_elems as i64)
+            .collect();
+
+        // Side numbers need adjustment based on topology and axis
+        // For now, keep same side numbers (this is a simplification)
+        // TODO: Implement proper side number mapping for different topologies
+        let mirror_sides = sides.clone();
+
+        let mirror_df = dist_factors.clone();
+
+        new_side_sets.push((next_ss_id, mirror_elements, mirror_sides, mirror_df));
+
+        let default_name = format!("sideset_{}", orig_id);
+        let orig_name = data
+            .side_set_names
+            .get(idx)
+            .map(|s| s.as_str())
+            .unwrap_or(&default_name);
+        new_side_set_names.push(format!("{}_mirror", orig_name));
+
+        next_ss_id += 1;
+    }
+
+    MirroredSideSetsResult {
+        side_sets: new_side_sets,
+        side_set_names: new_side_set_names,
+    }
+}
+
+/// Create mirrored nodal variable values
+///
+/// Vector components matching the mirror axis are negated.
+fn create_mirrored_nodal_vars(
+    data: &MeshData,
+    axis: Axis,
+    symmetry_nodes: &HashSet<usize>,
+    verbose: bool,
+) -> Vec<Vec<Vec<f64>>> {
+    let orig_num_nodes = data.params.num_nodes;
+    let num_vars = data.nodal_var_names.len();
+    let num_time_steps = data.times.len();
+
+    let mut new_nodal_var_values: Vec<Vec<Vec<f64>>> = Vec::with_capacity(num_vars);
+
+    for (var_idx, var_name) in data.nodal_var_names.iter().enumerate() {
+        let is_mirror_component = is_vector_component(var_name, axis);
+
+        let mut var_time_series = Vec::with_capacity(num_time_steps);
+        for step in 0..num_time_steps {
+            let orig_values = &data.nodal_var_values[var_idx][step];
+
+            // Pre-allocate with capacity for original + mirrored nodes
+            let mirror_count = orig_num_nodes - symmetry_nodes.len();
+            let mut new_values = Vec::with_capacity(orig_num_nodes + mirror_count);
+            new_values.extend_from_slice(orig_values);
+
+            // Add mirrored values
+            for (i, &val) in orig_values.iter().enumerate().take(orig_num_nodes) {
+                if !symmetry_nodes.contains(&i) {
+                    let mirror_val = if is_mirror_component {
+                        -val // Negate vector component
+                    } else {
+                        val
+                    };
+                    new_values.push(mirror_val);
+                }
+            }
+
+            var_time_series.push(new_values);
+        }
+        new_nodal_var_values.push(var_time_series);
+
+        if verbose && is_mirror_component {
+            println!("  Negating vector component: {}", var_name);
+        }
+    }
+
+    new_nodal_var_values
+}
+
+/// Create mirrored element variable values
+///
+/// Vector components matching the mirror axis are negated.
+fn create_mirrored_elem_vars(
+    data: &MeshData,
+    axis: Axis,
+    verbose: bool,
+) -> Vec<Vec<Vec<Vec<f64>>>> {
+    let num_blocks = data.blocks.len();
+
+    // Pre-allocate for original + mirrored blocks
+    let mut new_elem_var_values: Vec<Vec<Vec<Vec<f64>>>> = Vec::with_capacity(num_blocks * 2);
+
+    // First, keep original block values unchanged
+    for block_vars in &data.elem_var_values {
+        new_elem_var_values.push(block_vars.clone());
+    }
+
+    // Then, add mirrored block values (duplicating original values with vector negation)
+    for (block_idx, block_vars) in data.elem_var_values.iter().enumerate() {
+        let mut mirror_block_vars: Vec<Vec<Vec<f64>>> = Vec::with_capacity(block_vars.len());
+
+        for (var_idx, var_time_series) in block_vars.iter().enumerate() {
+            let var_name = data
+                .elem_var_names
+                .get(var_idx)
+                .map(|s| s.as_str())
+                .unwrap_or("");
+            let is_mirror_component = is_vector_component(var_name, axis);
+
+            let mut mirror_var_time_series: Vec<Vec<f64>> =
+                Vec::with_capacity(var_time_series.len());
+            for step_values in var_time_series {
+                let mirror_values: Vec<f64> = if is_mirror_component {
+                    step_values.iter().map(|&v| -v).collect()
+                } else {
+                    step_values.clone()
+                };
+                mirror_var_time_series.push(mirror_values);
+            }
+            mirror_block_vars.push(mirror_var_time_series);
+
+            if verbose && is_mirror_component && block_idx == 0 {
+                println!("  Negating element vector component: {}", var_name);
+            }
+        }
+        new_elem_var_values.push(mirror_block_vars);
+    }
+
+    new_elem_var_values
+}
+
+// ============================================================================
+// Mesh Data Reading
+// ============================================================================
 
 /// Read all mesh data from a file
 fn read_mesh_data(file: &ExodusFile<mode::Read>, verbose: bool) -> Result<MeshData> {
@@ -348,6 +860,13 @@ fn read_mesh_data(file: &ExodusFile<mode::Read>, verbose: bool) -> Result<MeshDa
 }
 
 /// Perform the copy-mirror-merge operation
+///
+/// This function creates a full model from a half-symmetry model by:
+/// 1. Identifying nodes on the symmetry plane (for merging)
+/// 2. Creating mirrored coordinates for non-symmetry nodes
+/// 3. Creating mirrored element blocks with adjusted connectivity
+/// 4. Creating mirrored node sets and side sets
+/// 5. Creating mirrored variable values (with vector component negation)
 fn copy_mirror_merge(
     data: &MeshData,
     axis: Axis,
@@ -357,7 +876,7 @@ fn copy_mirror_merge(
     let orig_num_nodes = data.params.num_nodes;
     let orig_num_elems = data.params.num_elems;
 
-    // Find nodes on the symmetry plane
+    // Step 1: Find nodes on the symmetry plane
     let axis_coords = get_axis_coords(&data.x, &data.y, &data.z, axis);
     let symmetry_nodes: HashSet<usize> = find_symmetry_plane_nodes(axis_coords, axis, tolerance)
         .into_iter()
@@ -379,128 +898,21 @@ fn copy_mirror_merge(
         eprintln!("         Node merging will be skipped. Consider using a larger tolerance.");
     }
 
-    // Build node mapping: original node i -> new node id
-    // Original nodes: 1..N (1-based in Exodus)
-    // Mirrored nodes: start at N+1, but skip symmetry plane nodes
-    let mut mirror_node_map: HashMap<usize, i64> = HashMap::new();
-    let mut next_mirror_id = (orig_num_nodes + 1) as i64;
-
-    for i in 0..orig_num_nodes {
-        if symmetry_nodes.contains(&i) {
-            // Symmetry plane node: maps to itself (1-based)
-            mirror_node_map.insert(i, (i + 1) as i64);
-        } else {
-            // Non-symmetry node: gets a new ID
-            mirror_node_map.insert(i, next_mirror_id);
-            next_mirror_id += 1;
-        }
-    }
-
-    let num_new_nodes = (next_mirror_id - 1) as usize;
-    let num_mirror_nodes = num_new_nodes - orig_num_nodes;
+    // Step 2: Build node mapping
+    let node_mapping = build_node_mapping(orig_num_nodes, &symmetry_nodes);
 
     if verbose {
         println!(
             "  New mesh: {} nodes ({} original + {} mirrored)",
-            num_new_nodes, orig_num_nodes, num_mirror_nodes
+            node_mapping.num_new_nodes, orig_num_nodes, node_mapping.num_mirror_nodes
         );
     }
 
-    // Create new coordinates
-    let mut new_x = data.x.clone();
-    let mut new_y = data.y.clone();
-    let mut new_z = data.z.clone();
+    // Step 3: Create mirrored coordinates
+    let (new_x, new_y, new_z) = create_mirrored_coordinates(data, axis, &symmetry_nodes);
 
-    // Add mirrored coordinates (for non-symmetry nodes)
-    for i in 0..orig_num_nodes {
-        if !symmetry_nodes.contains(&i) {
-            let mx = if matches!(axis, Axis::X) {
-                -data.x[i]
-            } else {
-                data.x[i]
-            };
-            let my = if matches!(axis, Axis::Y) {
-                -data.y[i]
-            } else {
-                data.y[i]
-            };
-            let mz = if matches!(axis, Axis::Z) {
-                -data.z[i]
-            } else {
-                data.z[i]
-            };
-            new_x.push(mx);
-            new_y.push(my);
-            new_z.push(mz);
-        }
-    }
-
-    // Create mirrored element blocks with connectivity
-    let mut new_blocks = data.blocks.clone();
-    let mut new_connectivities = data.connectivities.clone();
-    let mut new_block_names = data.block_names.clone();
-
-    // Find max block ID to assign new IDs for mirrored blocks
-    let max_block_id = data.blocks.iter().map(|b| b.id).max().unwrap_or(0);
-    let mut next_block_id = max_block_id + 1;
-
-    for (block_idx, (block, connectivity)) in data
-        .blocks
-        .iter()
-        .zip(data.connectivities.iter())
-        .enumerate()
-    {
-        let nodes_per_elem = block.num_nodes_per_entry;
-        let permutation = get_mirror_permutation(&block.topology, axis).ok_or_else(|| {
-            TransformError::InvalidFormat(format!("Unsupported topology: {}", block.topology))
-        })?;
-
-        // Create mirrored connectivity for this block
-        let mut mirror_connectivity = Vec::new();
-
-        for elem_idx in 0..block.num_entries {
-            let elem_start = elem_idx * nodes_per_elem;
-
-            // Get original element nodes
-            let orig_elem: Vec<i64> =
-                connectivity[elem_start..elem_start + nodes_per_elem].to_vec();
-
-            // Create mirrored element with permuted node order
-            let mut mirror_elem = vec![0i64; nodes_per_elem];
-            for (new_pos, &old_pos) in permutation.iter().enumerate() {
-                let orig_node_id = orig_elem[old_pos] as usize - 1; // 0-based
-                mirror_elem[new_pos] = mirror_node_map[&orig_node_id];
-            }
-
-            mirror_connectivity.extend(mirror_elem);
-        }
-
-        // Create mirrored block
-        let mut mirror_block = block.clone();
-        mirror_block.id = next_block_id;
-
-        new_blocks.push(mirror_block);
-        new_connectivities.push(mirror_connectivity);
-
-        // Create name with _mirror suffix
-        let default_name = format!("block_{}", block.id);
-        let orig_name = data
-            .block_names
-            .get(block_idx)
-            .filter(|s| !s.is_empty())
-            .map(|s| s.as_str())
-            .unwrap_or(&default_name);
-        new_block_names.push(format!("{}_mirror", orig_name));
-
-        if verbose {
-            println!(
-                "  Created mirrored block {} from block {} ({} elements)",
-                next_block_id, block.id, block.num_entries
-            );
-        }
-
-        next_block_id += 1;
-    }
+    // Step 4: Create mirrored element blocks
+    let blocks_result = create_mirrored_blocks(data, axis, &node_mapping.mirror_node_map, verbose)?;
 
     if verbose {
         println!(
@@ -508,179 +920,40 @@ fn copy_mirror_merge(
             orig_num_elems * 2,
             orig_num_elems,
             orig_num_elems,
-            new_blocks.len()
+            blocks_result.blocks.len()
         );
     }
 
-    // Create mirrored node sets with _mirror suffix
-    let mut new_node_sets = data.node_sets.clone();
-    let mut new_node_set_names = data.node_set_names.clone();
+    // Step 5: Create mirrored node sets
+    let node_sets_result = create_mirrored_node_sets(data, &node_mapping.mirror_node_map);
 
-    // Find next available set ID
-    let max_ns_id = data
-        .node_sets
-        .iter()
-        .map(|(id, _, _)| *id)
-        .max()
-        .unwrap_or(0);
-    let mut next_ns_id = max_ns_id + 1;
+    // Step 6: Create mirrored side sets
+    let side_sets_result = create_mirrored_side_sets(data, orig_num_elems);
 
-    for (idx, (orig_id, nodes, dist_factors)) in data.node_sets.iter().enumerate() {
-        // Create mirrored node set
-        let mirror_nodes: Vec<i64> = nodes
-            .iter()
-            .map(|&n| {
-                let orig_idx = (n - 1) as usize;
-                mirror_node_map[&orig_idx]
-            })
-            .collect();
+    // Step 7: Create mirrored nodal variables
+    let new_nodal_var_values = create_mirrored_nodal_vars(data, axis, &symmetry_nodes, verbose);
 
-        // Distribution factors are copied as-is
-        let mirror_df = dist_factors.clone();
+    // Step 8: Create mirrored element variables
+    let new_elem_var_values = create_mirrored_elem_vars(data, axis, verbose);
 
-        new_node_sets.push((next_ns_id, mirror_nodes, mirror_df));
-
-        // Create name with _mirror suffix
-        let default_name = format!("nodeset_{}", orig_id);
-        let orig_name = data
-            .node_set_names
-            .get(idx)
-            .map(|s| s.as_str())
-            .unwrap_or(&default_name);
-        new_node_set_names.push(format!("{}_mirror", orig_name));
-
-        next_ns_id += 1;
-    }
-
-    // Create mirrored side sets with _mirror suffix
-    let mut new_side_sets = data.side_sets.clone();
-    let mut new_side_set_names = data.side_set_names.clone();
-
-    let max_ss_id = data
-        .side_sets
-        .iter()
-        .map(|(id, _, _, _)| *id)
-        .max()
-        .unwrap_or(0);
-    let mut next_ss_id = max_ss_id + 1;
-
-    for (idx, (orig_id, elements, sides, dist_factors)) in data.side_sets.iter().enumerate() {
-        // Mirrored elements have IDs offset by orig_num_elems
-        let mirror_elements: Vec<i64> = elements
-            .iter()
-            .map(|&e| e + orig_num_elems as i64)
-            .collect();
-
-        // Side numbers need adjustment based on topology and axis
-        // For now, keep same side numbers (this is a simplification)
-        // TODO: Implement proper side number mapping for different topologies
-        let mirror_sides = sides.clone();
-
-        let mirror_df = dist_factors.clone();
-
-        new_side_sets.push((next_ss_id, mirror_elements, mirror_sides, mirror_df));
-
-        let default_name = format!("sideset_{}", orig_id);
-        let orig_name = data
-            .side_set_names
-            .get(idx)
-            .map(|s| s.as_str())
-            .unwrap_or(&default_name);
-        new_side_set_names.push(format!("{}_mirror", orig_name));
-
-        next_ss_id += 1;
-    }
-
-    // Create mirrored nodal variable values
-    let mut new_nodal_var_values: Vec<Vec<Vec<f64>>> = Vec::new();
-
-    for (var_idx, var_name) in data.nodal_var_names.iter().enumerate() {
-        let is_mirror_component = is_vector_component(var_name, axis);
-
-        let mut var_time_series = Vec::new();
-        for step in 0..data.times.len() {
-            let orig_values = &data.nodal_var_values[var_idx][step];
-            let mut new_values = orig_values.clone();
-
-            // Add mirrored values
-            for (i, &val) in orig_values.iter().enumerate().take(orig_num_nodes) {
-                if !symmetry_nodes.contains(&i) {
-                    let mirror_val = if is_mirror_component {
-                        -val // Negate vector component
-                    } else {
-                        val
-                    };
-                    new_values.push(mirror_val);
-                }
-            }
-
-            var_time_series.push(new_values);
-        }
-        new_nodal_var_values.push(var_time_series);
-
-        if verbose && is_mirror_component {
-            println!("  Negating vector component: {}", var_name);
-        }
-    }
-
-    // Create mirrored element variable values
-    // Structure: [block_idx][var_idx][time_step][elem_idx]
-    // After mirroring, we have original blocks followed by mirrored blocks
-    let mut new_elem_var_values: Vec<Vec<Vec<Vec<f64>>>> = Vec::new();
-
-    // First, keep original block values unchanged
-    for block_vars in &data.elem_var_values {
-        new_elem_var_values.push(block_vars.clone());
-    }
-
-    // Then, add mirrored block values (duplicating original values with vector negation)
-    for (block_idx, block_vars) in data.elem_var_values.iter().enumerate() {
-        let mut mirror_block_vars: Vec<Vec<Vec<f64>>> = Vec::new();
-
-        for (var_idx, var_time_series) in block_vars.iter().enumerate() {
-            let var_name = data
-                .elem_var_names
-                .get(var_idx)
-                .map(|s| s.as_str())
-                .unwrap_or("");
-            let is_mirror_component = is_vector_component(var_name, axis);
-
-            let mut mirror_var_time_series: Vec<Vec<f64>> = Vec::new();
-            for step_values in var_time_series {
-                let mirror_values: Vec<f64> = if is_mirror_component {
-                    step_values.iter().map(|&v| -v).collect()
-                } else {
-                    step_values.clone()
-                };
-                mirror_var_time_series.push(mirror_values);
-            }
-            mirror_block_vars.push(mirror_var_time_series);
-
-            if verbose && is_mirror_component && block_idx == 0 {
-                println!("  Negating element vector component: {}", var_name);
-            }
-        }
-        new_elem_var_values.push(mirror_block_vars);
-    }
-
-    // Create new params
+    // Step 9: Create updated params
     let mut new_params = data.params.clone();
-    new_params.num_nodes = num_new_nodes;
+    new_params.num_nodes = node_mapping.num_new_nodes;
     new_params.num_elems = orig_num_elems * 2;
-    new_params.num_elem_blocks = new_blocks.len();
-    new_params.num_node_sets = new_node_sets.len();
-    new_params.num_side_sets = new_side_sets.len();
+    new_params.num_elem_blocks = blocks_result.blocks.len();
+    new_params.num_node_sets = node_sets_result.node_sets.len();
+    new_params.num_side_sets = side_sets_result.side_sets.len();
 
     Ok(MeshData {
         params: new_params,
         x: new_x,
         y: new_y,
         z: new_z,
-        blocks: new_blocks,
-        connectivities: new_connectivities,
-        block_names: new_block_names,
-        node_sets: new_node_sets,
-        side_sets: new_side_sets,
+        blocks: blocks_result.blocks,
+        connectivities: blocks_result.connectivities,
+        block_names: blocks_result.block_names,
+        node_sets: node_sets_result.node_sets,
+        side_sets: side_sets_result.side_sets,
         nodal_var_names: data.nodal_var_names.clone(),
         nodal_var_values: new_nodal_var_values,
         elem_var_names: data.elem_var_names.clone(),
@@ -688,8 +961,8 @@ fn copy_mirror_merge(
         global_var_names: data.global_var_names.clone(),
         global_var_values: data.global_var_values.clone(),
         times: data.times.clone(),
-        node_set_names: new_node_set_names,
-        side_set_names: new_side_set_names,
+        node_set_names: node_sets_result.node_set_names,
+        side_set_names: side_sets_result.side_set_names,
     })
 }
 
@@ -911,6 +1184,9 @@ pub fn apply_copy_mirror_merge(
     let input_file = ExodusFile::<mode::Read>::open(input_path)?;
     let mesh_data = read_mesh_data(&input_file, verbose)?;
     drop(input_file);
+
+    // Check memory usage and warn if needed
+    warn_memory_usage(&mesh_data, verbose);
 
     // Apply copy-mirror-merge
     let merged_data = copy_mirror_merge(&mesh_data, axis, tolerance, verbose)?;
