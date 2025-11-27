@@ -347,41 +347,26 @@ fn read_mesh_data(file: &ExodusFile<mode::Read>, verbose: bool) -> Result<MeshDa
     })
 }
 
-/// Perform the copy-mirror-merge operation
-fn copy_mirror_merge(
-    data: &MeshData,
-    axis: Axis,
-    tolerance: f64,
-    verbose: bool,
-) -> Result<MeshData> {
-    let orig_num_nodes = data.params.num_nodes;
-    let orig_num_elems = data.params.num_elems;
+// ============================================================================
+// Helper Functions for Copy-Mirror-Merge
+// ============================================================================
 
-    // Find nodes on the symmetry plane
-    let axis_coords = get_axis_coords(&data.x, &data.y, &data.z, axis);
-    let symmetry_nodes: HashSet<usize> = find_symmetry_plane_nodes(axis_coords, axis, tolerance)
-        .into_iter()
-        .collect();
+/// Node mapping result from build_node_mapping
+struct NodeMappingResult {
+    /// Maps original node index (0-based) to new node ID (1-based)
+    mirror_node_map: HashMap<usize, i64>,
+    /// Total number of nodes after mirroring
+    num_new_nodes: usize,
+    /// Number of newly created mirror nodes (excluding symmetry plane nodes)
+    num_mirror_nodes: usize,
+}
 
-    if verbose {
-        println!(
-            "  Found {} nodes on symmetry plane (tolerance: {})",
-            symmetry_nodes.len(),
-            tolerance
-        );
-    }
-
-    if symmetry_nodes.is_empty() {
-        eprintln!(
-            "WARNING: No nodes found on the symmetry plane (axis={:?}, tolerance={}).",
-            axis, tolerance
-        );
-        eprintln!("         Node merging will be skipped. Consider using a larger tolerance.");
-    }
-
-    // Build node mapping: original node i -> new node id
-    // Original nodes: 1..N (1-based in Exodus)
-    // Mirrored nodes: start at N+1, but skip symmetry plane nodes
+/// Build node mapping for mirroring operation
+///
+/// Creates a mapping from original node indices to new node IDs.
+/// Nodes on the symmetry plane map to themselves, while other nodes
+/// get new IDs starting after the original node count.
+fn build_node_mapping(orig_num_nodes: usize, symmetry_nodes: &HashSet<usize>) -> NodeMappingResult {
     let mut mirror_node_map: HashMap<usize, i64> = HashMap::new();
     let mut next_mirror_id = (orig_num_nodes + 1) as i64;
 
@@ -399,14 +384,20 @@ fn copy_mirror_merge(
     let num_new_nodes = (next_mirror_id - 1) as usize;
     let num_mirror_nodes = num_new_nodes - orig_num_nodes;
 
-    if verbose {
-        println!(
-            "  New mesh: {} nodes ({} original + {} mirrored)",
-            num_new_nodes, orig_num_nodes, num_mirror_nodes
-        );
+    NodeMappingResult {
+        mirror_node_map,
+        num_new_nodes,
+        num_mirror_nodes,
     }
+}
 
-    // Create new coordinates
+/// Create mirrored coordinates for nodes not on the symmetry plane
+fn create_mirrored_coordinates(
+    data: &MeshData,
+    axis: Axis,
+    symmetry_nodes: &HashSet<usize>,
+) -> (Vec<f64>, Vec<f64>, Vec<f64>) {
+    let orig_num_nodes = data.params.num_nodes;
     let mut new_x = data.x.clone();
     let mut new_y = data.y.clone();
     let mut new_z = data.z.clone();
@@ -435,7 +426,23 @@ fn copy_mirror_merge(
         }
     }
 
-    // Create mirrored element blocks with connectivity
+    (new_x, new_y, new_z)
+}
+
+/// Result of creating mirrored element blocks
+struct MirroredBlocksResult {
+    blocks: Vec<Block>,
+    connectivities: Vec<Vec<i64>>,
+    block_names: Vec<String>,
+}
+
+/// Create mirrored element blocks with proper connectivity
+fn create_mirrored_blocks(
+    data: &MeshData,
+    axis: Axis,
+    mirror_node_map: &HashMap<usize, i64>,
+    verbose: bool,
+) -> Result<MirroredBlocksResult> {
     let mut new_blocks = data.blocks.clone();
     let mut new_connectivities = data.connectivities.clone();
     let mut new_block_names = data.block_names.clone();
@@ -502,17 +509,24 @@ fn copy_mirror_merge(
         next_block_id += 1;
     }
 
-    if verbose {
-        println!(
-            "  New mesh: {} elements ({} original + {} mirrored) in {} blocks",
-            orig_num_elems * 2,
-            orig_num_elems,
-            orig_num_elems,
-            new_blocks.len()
-        );
-    }
+    Ok(MirroredBlocksResult {
+        blocks: new_blocks,
+        connectivities: new_connectivities,
+        block_names: new_block_names,
+    })
+}
 
-    // Create mirrored node sets with _mirror suffix
+/// Result of creating mirrored node sets
+struct MirroredNodeSetsResult {
+    node_sets: Vec<(i64, Vec<i64>, Vec<f64>)>,
+    node_set_names: Vec<String>,
+}
+
+/// Create mirrored node sets with proper node ID mapping
+fn create_mirrored_node_sets(
+    data: &MeshData,
+    mirror_node_map: &HashMap<usize, i64>,
+) -> MirroredNodeSetsResult {
     let mut new_node_sets = data.node_sets.clone();
     let mut new_node_set_names = data.node_set_names.clone();
 
@@ -552,7 +566,20 @@ fn copy_mirror_merge(
         next_ns_id += 1;
     }
 
-    // Create mirrored side sets with _mirror suffix
+    MirroredNodeSetsResult {
+        node_sets: new_node_sets,
+        node_set_names: new_node_set_names,
+    }
+}
+
+/// Result of creating mirrored side sets
+struct MirroredSideSetsResult {
+    side_sets: Vec<SideSetData>,
+    side_set_names: Vec<String>,
+}
+
+/// Create mirrored side sets with proper element ID offsets
+fn create_mirrored_side_sets(data: &MeshData, orig_num_elems: usize) -> MirroredSideSetsResult {
     let mut new_side_sets = data.side_sets.clone();
     let mut new_side_set_names = data.side_set_names.clone();
 
@@ -591,7 +618,20 @@ fn copy_mirror_merge(
         next_ss_id += 1;
     }
 
-    // Create mirrored nodal variable values
+    MirroredSideSetsResult {
+        side_sets: new_side_sets,
+        side_set_names: new_side_set_names,
+    }
+}
+
+/// Create mirrored nodal variable values
+fn create_mirrored_nodal_vars(
+    data: &MeshData,
+    axis: Axis,
+    symmetry_nodes: &HashSet<usize>,
+    verbose: bool,
+) -> Vec<Vec<Vec<f64>>> {
+    let orig_num_nodes = data.params.num_nodes;
     let mut new_nodal_var_values: Vec<Vec<Vec<f64>>> = Vec::new();
 
     for (var_idx, var_name) in data.nodal_var_names.iter().enumerate() {
@@ -623,7 +663,15 @@ fn copy_mirror_merge(
         }
     }
 
-    // Create mirrored element variable values
+    new_nodal_var_values
+}
+
+/// Create mirrored element variable values
+fn create_mirrored_elem_vars(
+    data: &MeshData,
+    axis: Axis,
+    verbose: bool,
+) -> Vec<Vec<Vec<Vec<f64>>>> {
     // Structure: [block_idx][var_idx][time_step][elem_idx]
     // After mirroring, we have original blocks followed by mirrored blocks
     let mut new_elem_var_values: Vec<Vec<Vec<Vec<f64>>>> = Vec::new();
@@ -663,24 +711,101 @@ fn copy_mirror_merge(
         new_elem_var_values.push(mirror_block_vars);
     }
 
+    new_elem_var_values
+}
+
+// ============================================================================
+// Main Copy-Mirror-Merge Function
+// ============================================================================
+
+/// Perform the copy-mirror-merge operation
+fn copy_mirror_merge(
+    data: &MeshData,
+    axis: Axis,
+    tolerance: f64,
+    verbose: bool,
+) -> Result<MeshData> {
+    let orig_num_nodes = data.params.num_nodes;
+    let orig_num_elems = data.params.num_elems;
+
+    // Find nodes on the symmetry plane
+    let axis_coords = get_axis_coords(&data.x, &data.y, &data.z, axis);
+    let symmetry_nodes: HashSet<usize> = find_symmetry_plane_nodes(axis_coords, axis, tolerance)
+        .into_iter()
+        .collect();
+
+    if verbose {
+        println!(
+            "  Found {} nodes on symmetry plane (tolerance: {})",
+            symmetry_nodes.len(),
+            tolerance
+        );
+    }
+
+    if symmetry_nodes.is_empty() {
+        eprintln!(
+            "WARNING: No nodes found on the symmetry plane (axis={:?}, tolerance={}).",
+            axis, tolerance
+        );
+        eprintln!("         Node merging will be skipped. Consider using a larger tolerance.");
+    }
+
+    // Build node mapping for mirrored nodes
+    let node_mapping = build_node_mapping(orig_num_nodes, &symmetry_nodes);
+
+    if verbose {
+        println!(
+            "  New mesh: {} nodes ({} original + {} mirrored)",
+            node_mapping.num_new_nodes, orig_num_nodes, node_mapping.num_mirror_nodes
+        );
+    }
+
+    // Create mirrored coordinates
+    let (new_x, new_y, new_z) = create_mirrored_coordinates(data, axis, &symmetry_nodes);
+
+    // Create mirrored element blocks
+    let blocks_result = create_mirrored_blocks(data, axis, &node_mapping.mirror_node_map, verbose)?;
+
+    if verbose {
+        println!(
+            "  New mesh: {} elements ({} original + {} mirrored) in {} blocks",
+            orig_num_elems * 2,
+            orig_num_elems,
+            orig_num_elems,
+            blocks_result.blocks.len()
+        );
+    }
+
+    // Create mirrored node sets
+    let node_sets_result = create_mirrored_node_sets(data, &node_mapping.mirror_node_map);
+
+    // Create mirrored side sets
+    let side_sets_result = create_mirrored_side_sets(data, orig_num_elems);
+
+    // Create mirrored nodal variables
+    let new_nodal_var_values = create_mirrored_nodal_vars(data, axis, &symmetry_nodes, verbose);
+
+    // Create mirrored element variables
+    let new_elem_var_values = create_mirrored_elem_vars(data, axis, verbose);
+
     // Create new params
     let mut new_params = data.params.clone();
-    new_params.num_nodes = num_new_nodes;
+    new_params.num_nodes = node_mapping.num_new_nodes;
     new_params.num_elems = orig_num_elems * 2;
-    new_params.num_elem_blocks = new_blocks.len();
-    new_params.num_node_sets = new_node_sets.len();
-    new_params.num_side_sets = new_side_sets.len();
+    new_params.num_elem_blocks = blocks_result.blocks.len();
+    new_params.num_node_sets = node_sets_result.node_sets.len();
+    new_params.num_side_sets = side_sets_result.side_sets.len();
 
     Ok(MeshData {
         params: new_params,
         x: new_x,
         y: new_y,
         z: new_z,
-        blocks: new_blocks,
-        connectivities: new_connectivities,
-        block_names: new_block_names,
-        node_sets: new_node_sets,
-        side_sets: new_side_sets,
+        blocks: blocks_result.blocks,
+        connectivities: blocks_result.connectivities,
+        block_names: blocks_result.block_names,
+        node_sets: node_sets_result.node_sets,
+        side_sets: side_sets_result.side_sets,
         nodal_var_names: data.nodal_var_names.clone(),
         nodal_var_values: new_nodal_var_values,
         elem_var_names: data.elem_var_names.clone(),
@@ -688,8 +813,8 @@ fn copy_mirror_merge(
         global_var_names: data.global_var_names.clone(),
         global_var_values: data.global_var_values.clone(),
         times: data.times.clone(),
-        node_set_names: new_node_set_names,
-        side_set_names: new_side_set_names,
+        node_set_names: node_sets_result.node_set_names,
+        side_set_names: side_sets_result.side_set_names,
     })
 }
 
