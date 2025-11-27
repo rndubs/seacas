@@ -3,12 +3,12 @@
 ## Progress Checklist
 
 ### High Priority
-- [ ] Refactor `copy_mirror_merge()` into smaller focused functions
-- [ ] Add memory usage warnings for large mesh operations
+- [x] Refactor `copy_mirror_merge()` into smaller focused functions
+- [x] Add memory usage warnings for large mesh operations
 
 ### Medium Priority
 - [ ] Fix vector component detection false positives
-- [ ] Reduce excessive cloning in copy_mirror_merge
+- [x] Reduce excessive cloning in copy_mirror_merge
 - [ ] Complete side set side number mapping (TODO in code)
 - [ ] Consolidate test helpers with builder pattern
 
@@ -384,10 +384,10 @@ TransformError::InvalidFormat(format!(
 
 | Priority | Issue | File:Line | Effort | Status |
 |----------|-------|-----------|--------|--------|
-| **High** | Refactor 343-line function | copy_mirror_merge.rs:351-694 | Medium | Pending |
-| **High** | Add memory usage warnings | copy_mirror_merge.rs:351+ | Low | Pending |
+| **High** | Refactor 343-line function | copy_mirror_merge.rs:861-965 | Medium | Complete |
+| **High** | Add memory usage warnings | copy_mirror_merge.rs:17-108 | Low | Complete |
 | **Medium** | Vector component false positives | copy_mirror_merge.rs:127-138 | Low | Pending |
-| **Medium** | Excessive cloning | copy_mirror_merge.rs:439+ | Medium | Pending |
+| **Medium** | Excessive cloning | copy_mirror_merge.rs (refactored) | Medium | Complete |
 | **Medium** | Complete side set mapping TODO | copy_mirror_merge.rs:575-577 | High | Pending |
 | **Medium** | Test helper consolidation | parsers.rs:353-410 | Low | Pending |
 | **Low** | Hard exit in man.rs | man.rs:27,35 | Low | Pending |
