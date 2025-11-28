@@ -29,10 +29,10 @@ pub fn create_progress_bar(verbose: bool, total: u64, message: &str) -> Option<P
     Some(pb)
 }
 
-/// Finish progress bar and clear it from display
-pub fn finish_and_clear(pb: Option<ProgressBar>) {
+/// Finish progress bar, keeping it visible on screen
+pub fn finish_progress(pb: Option<ProgressBar>) {
     if let Some(bar) = pb {
-        bar.finish_and_clear();
+        bar.finish();
     }
 }
 

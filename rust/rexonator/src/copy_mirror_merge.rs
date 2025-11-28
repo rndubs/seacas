@@ -6,7 +6,7 @@
 //! are properly duplicated and transformed.
 
 use crate::cli::{Axis, Result, TransformError};
-use crate::progress::{create_progress_bar, finish_and_clear};
+use crate::progress::{create_progress_bar, finish_progress};
 use exodus_rs::{mode, types::*, ExodusFile};
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
@@ -922,7 +922,7 @@ fn create_mirrored_nodal_vars(
         }
     }
 
-    finish_and_clear(pb);
+    finish_progress(pb);
 
     new_nodal_var_values
 }
@@ -989,7 +989,7 @@ fn create_mirrored_elem_vars(
         new_elem_var_values.push(mirror_block_vars);
     }
 
-    finish_and_clear(pb);
+    finish_progress(pb);
 
     new_elem_var_values
 }
@@ -1112,7 +1112,7 @@ fn read_mesh_data(file: &ExodusFile<mode::Read>, verbose: bool) -> Result<MeshDa
         nodal_var_values.push(var_time_series);
     }
 
-    finish_and_clear(pb_nodal);
+    finish_progress(pb_nodal);
 
     if verbose && !nodal_var_names.is_empty() {
         println!("  Nodal variables: {:?}", nodal_var_names);
@@ -1160,7 +1160,7 @@ fn read_mesh_data(file: &ExodusFile<mode::Read>, verbose: bool) -> Result<MeshDa
         elem_var_values.push(block_vars);
     }
 
-    finish_and_clear(pb_elem);
+    finish_progress(pb_elem);
 
     if verbose && !elem_var_names.is_empty() {
         println!("  Element variables: {:?}", elem_var_names);
@@ -1425,7 +1425,7 @@ fn write_mesh_data(
         }
     }
 
-    finish_and_clear(pb_mesh);
+    finish_progress(pb_mesh);
 
     // Write time steps and variables
     if !data.times.is_empty() {
@@ -1520,7 +1520,7 @@ fn write_mesh_data(
             }
         }
 
-        finish_and_clear(pb_write);
+        finish_progress(pb_write);
     } else if verbose {
         println!("  No time steps - skipping variable output");
     }
