@@ -12,6 +12,7 @@
 mod fixtures;
 use fixtures::*;
 
+use serial_test::serial;
 use std::process::Command;
 
 const TOLERANCE: f64 = 1e-10;
@@ -25,6 +26,7 @@ fn rexonator_cmd() -> Command {
 // ========================================================================
 
 #[test]
+#[serial]
 fn test_translate_positive_x() {
     let ctx = TestContext::new();
     let input = ctx.path("input.exo");
@@ -57,6 +59,7 @@ fn test_translate_positive_x() {
 }
 
 #[test]
+#[serial]
 fn test_translate_negative_offset() {
     let ctx = TestContext::new();
     let input = ctx.path("input.exo");
@@ -88,6 +91,7 @@ fn test_translate_negative_offset() {
 }
 
 #[test]
+#[serial]
 fn test_translate_3d_combined() {
     let ctx = TestContext::new();
     let input = ctx.path("input.exo");
@@ -118,6 +122,7 @@ fn test_translate_3d_combined() {
 }
 
 #[test]
+#[serial]
 fn test_translate_2d_mesh() {
     let ctx = TestContext::new();
     let input = ctx.path("input.exo");
@@ -152,6 +157,7 @@ fn test_translate_2d_mesh() {
 // ========================================================================
 
 #[test]
+#[serial]
 fn test_scale_up() {
     let ctx = TestContext::new();
     let input = ctx.path("input.exo");
@@ -183,6 +189,7 @@ fn test_scale_up() {
 }
 
 #[test]
+#[serial]
 fn test_scale_down() {
     let ctx = TestContext::new();
     let input = ctx.path("input.exo");
@@ -214,6 +221,7 @@ fn test_scale_down() {
 }
 
 #[test]
+#[serial]
 fn test_scale_unit_conversion() {
     // Test converting mm to m (scale by 0.001)
     let ctx = TestContext::new();
@@ -245,6 +253,7 @@ fn test_scale_unit_conversion() {
 // ========================================================================
 
 #[test]
+#[serial]
 fn test_mirror_x() {
     let ctx = TestContext::new();
     let input = ctx.path("input.exo");
@@ -277,6 +286,7 @@ fn test_mirror_x() {
 }
 
 #[test]
+#[serial]
 fn test_mirror_y() {
     let ctx = TestContext::new();
     let input = ctx.path("input.exo");
@@ -307,6 +317,7 @@ fn test_mirror_y() {
 }
 
 #[test]
+#[serial]
 fn test_mirror_z() {
     let ctx = TestContext::new();
     let input = ctx.path("input.exo");
@@ -337,6 +348,7 @@ fn test_mirror_z() {
 }
 
 #[test]
+#[serial]
 fn test_mirror_uppercase() {
     // Test that uppercase axis works
     let ctx = TestContext::new();
@@ -367,6 +379,7 @@ fn test_mirror_uppercase() {
 // ========================================================================
 
 #[test]
+#[serial]
 fn test_rotate_z_90() {
     let ctx = TestContext::new();
     let input = ctx.path("input.exo");
@@ -402,6 +415,7 @@ fn test_rotate_z_90() {
 }
 
 #[test]
+#[serial]
 fn test_rotate_x_90() {
     let ctx = TestContext::new();
     let input = ctx.path("input.exo");
@@ -437,6 +451,7 @@ fn test_rotate_x_90() {
 }
 
 #[test]
+#[serial]
 fn test_rotate_extrinsic_xyz() {
     let ctx = TestContext::new();
     let input = ctx.path("input.exo");
@@ -466,6 +481,7 @@ fn test_rotate_extrinsic_xyz() {
 }
 
 #[test]
+#[serial]
 fn test_rotate_intrinsic_lowercase() {
     let ctx = TestContext::new();
     let input = ctx.path("input.exo");
@@ -499,6 +515,7 @@ fn test_rotate_intrinsic_lowercase() {
 // ========================================================================
 
 #[test]
+#[serial]
 fn test_scale_field_nodal() {
     let ctx = TestContext::new();
     let input = ctx.path("input.exo");
@@ -534,6 +551,7 @@ fn test_scale_field_nodal() {
 }
 
 #[test]
+#[serial]
 fn test_scale_field_multiple() {
     let ctx = TestContext::new();
     let input = ctx.path("input.exo");
@@ -569,6 +587,7 @@ fn test_scale_field_multiple() {
 }
 
 #[test]
+#[serial]
 fn test_scale_field_scientific_notation() {
     let ctx = TestContext::new();
     let input = ctx.path("input.exo");
@@ -600,6 +619,7 @@ fn test_scale_field_scientific_notation() {
 // ========================================================================
 
 #[test]
+#[serial]
 fn test_zero_time_normalization() {
     let ctx = TestContext::new();
     let input = ctx.path("input.exo");
@@ -643,6 +663,7 @@ fn test_zero_time_normalization() {
 }
 
 #[test]
+#[serial]
 fn test_zero_time_with_other_ops() {
     let ctx = TestContext::new();
     let input = ctx.path("input.exo");
@@ -675,6 +696,7 @@ fn test_zero_time_with_other_ops() {
 // ========================================================================
 
 #[test]
+#[serial]
 fn test_order_translate_then_scale() {
     let ctx = TestContext::new();
     let input = ctx.path("input.exo");
@@ -704,6 +726,7 @@ fn test_order_translate_then_scale() {
 }
 
 #[test]
+#[serial]
 fn test_order_scale_then_translate() {
     let ctx = TestContext::new();
     let input = ctx.path("input.exo");
@@ -733,6 +756,7 @@ fn test_order_scale_then_translate() {
 }
 
 #[test]
+#[serial]
 fn test_order_translate_rotate_translate() {
     let ctx = TestContext::new();
     let input = ctx.path("input.exo");
@@ -770,6 +794,7 @@ fn test_order_translate_rotate_translate() {
 }
 
 #[test]
+#[serial]
 fn test_multiple_rotations() {
     let ctx = TestContext::new();
     let input = ctx.path("input.exo");
@@ -809,6 +834,7 @@ fn test_multiple_rotations() {
 // ========================================================================
 
 #[test]
+#[serial]
 fn test_verbose_output() {
     let ctx = TestContext::new();
     let input = ctx.path("input.exo");
@@ -840,6 +866,7 @@ fn test_verbose_output() {
 // ========================================================================
 
 #[test]
+#[serial]
 fn test_transform_tri3_mesh() {
     let ctx = TestContext::new();
     let input = ctx.path("input.exo");
@@ -873,6 +900,7 @@ fn test_transform_tri3_mesh() {
 }
 
 #[test]
+#[serial]
 fn test_transform_tet4_mesh() {
     let ctx = TestContext::new();
     let input = ctx.path("input.exo");
@@ -900,6 +928,7 @@ fn test_transform_tet4_mesh() {
 }
 
 #[test]
+#[serial]
 fn test_transform_wedge6_mesh() {
     let ctx = TestContext::new();
     let input = ctx.path("input.exo");
@@ -925,6 +954,7 @@ fn test_transform_wedge6_mesh() {
 }
 
 #[test]
+#[serial]
 fn test_transform_pyramid5_mesh() {
     let ctx = TestContext::new();
     let input = ctx.path("input.exo");
@@ -955,6 +985,7 @@ fn test_transform_pyramid5_mesh() {
 // ========================================================================
 
 #[test]
+#[serial]
 fn test_error_missing_input() {
     let ctx = TestContext::new();
     let output = ctx.path("output.exo");
@@ -968,6 +999,7 @@ fn test_error_missing_input() {
 }
 
 #[test]
+#[serial]
 fn test_error_invalid_translate() {
     let ctx = TestContext::new();
     let input = ctx.path("input.exo");
@@ -989,6 +1021,7 @@ fn test_error_invalid_translate() {
 }
 
 #[test]
+#[serial]
 fn test_error_invalid_axis() {
     let ctx = TestContext::new();
     let input = ctx.path("input.exo");
@@ -1010,6 +1043,7 @@ fn test_error_invalid_axis() {
 }
 
 #[test]
+#[serial]
 fn test_error_invalid_rotate() {
     let ctx = TestContext::new();
     let input = ctx.path("input.exo");
@@ -1035,6 +1069,7 @@ fn test_error_invalid_rotate() {
 // ========================================================================
 
 #[test]
+#[serial]
 fn test_preserves_node_count() {
     let ctx = TestContext::new();
     let input = ctx.path("input.exo");
@@ -1068,6 +1103,7 @@ fn test_preserves_node_count() {
 }
 
 #[test]
+#[serial]
 fn test_preserves_time_steps() {
     let ctx = TestContext::new();
     let input = ctx.path("input.exo");
@@ -1098,6 +1134,7 @@ fn test_preserves_time_steps() {
 }
 
 #[test]
+#[serial]
 fn test_preserves_variable_names() {
     let ctx = TestContext::new();
     let input = ctx.path("input.exo");

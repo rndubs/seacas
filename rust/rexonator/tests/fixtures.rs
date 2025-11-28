@@ -129,6 +129,7 @@ pub fn create_quad4_mesh(path: &PathBuf) -> Result<(), Box<dyn std::error::Error
     file.put_var(0, EntityType::Nodal, 0, 2, &velocity_y)?;
 
     file.sync()?;
+    drop(file); // Explicitly close the file before returning
     Ok(())
 }
 
@@ -199,6 +200,7 @@ pub fn create_tri3_mesh(path: &PathBuf) -> Result<(), Box<dyn std::error::Error>
     file.put_var(0, EntityType::Nodal, 0, 0, &pressure)?;
 
     file.sync()?;
+    drop(file); // Explicitly close the file before returning
     Ok(())
 }
 
@@ -405,6 +407,7 @@ pub fn create_tet4_mesh(path: &PathBuf) -> Result<(), Box<dyn std::error::Error>
     file.put_var(0, EntityType::Nodal, 0, 1, &u)?;
 
     file.sync()?;
+    drop(file); // Explicitly close the file before returning
     Ok(())
 }
 
@@ -472,6 +475,7 @@ pub fn create_wedge6_mesh(path: &PathBuf) -> Result<(), Box<dyn std::error::Erro
     file.put_name(EntityType::NodeSet, 0, "x0_nodes")?;
 
     file.sync()?;
+    drop(file); // Explicitly close the file before returning
     Ok(())
 }
 
@@ -524,6 +528,7 @@ pub fn create_pyramid5_mesh(path: &PathBuf) -> Result<(), Box<dyn std::error::Er
     file.put_name(EntityType::NodeSet, 0, "base")?;
 
     file.sync()?;
+    drop(file); // Explicitly close the file before returning
     Ok(())
 }
 
@@ -612,6 +617,7 @@ pub fn create_hex8_with_elem_vars(path: &PathBuf) -> Result<(), Box<dyn std::err
     file.put_var(0, EntityType::ElemBlock, 1, 1, &stress_xy)?;
 
     file.sync()?;
+    drop(file); // Explicitly close the file before returning
     Ok(())
 }
 
@@ -713,6 +719,7 @@ pub fn create_simple_cube(path: &PathBuf) -> Result<(), Box<dyn std::error::Erro
     file.put_connectivity(1, &connectivity)?;
 
     file.sync()?;
+    drop(file); // Explicitly close the file before returning
     Ok(())
 }
 
@@ -764,6 +771,7 @@ pub fn create_mesh_with_global_vars(path: &PathBuf) -> Result<(), Box<dyn std::e
     file.put_var(0, EntityType::Global, 0, 1, &[0.01])?;
 
     file.sync()?;
+    drop(file); // Explicitly close the file before returning
     Ok(())
 }
 
@@ -773,6 +781,7 @@ pub fn read_coord_bounds(
 ) -> Result<([f64; 2], [f64; 2], [f64; 2]), Box<dyn std::error::Error>> {
     let file = ExodusFile::<exodus_rs::mode::Read>::open(path)?;
     let coords = file.coords::<f64>()?;
+    drop(file); // Explicitly close the file before returning
 
     let x_min = coords.x.iter().cloned().fold(f64::INFINITY, f64::min);
     let x_max = coords.x.iter().cloned().fold(f64::NEG_INFINITY, f64::max);
@@ -798,6 +807,7 @@ pub fn read_coords(
 ) -> Result<(Vec<f64>, Vec<f64>, Vec<f64>), Box<dyn std::error::Error>> {
     let file = ExodusFile::<exodus_rs::mode::Read>::open(path)?;
     let coords = file.coords::<f64>()?;
+    drop(file); // Explicitly close the file before returning
     Ok((coords.x, coords.y, coords.z))
 }
 
@@ -805,6 +815,7 @@ pub fn read_coords(
 pub fn read_params(path: &PathBuf) -> Result<InitParams, Box<dyn std::error::Error>> {
     let file = ExodusFile::<exodus_rs::mode::Read>::open(path)?;
     let params = file.init_params()?;
+    drop(file); // Explicitly close the file before returning
     Ok(params)
 }
 
@@ -812,6 +823,7 @@ pub fn read_params(path: &PathBuf) -> Result<InitParams, Box<dyn std::error::Err
 pub fn read_times(path: &PathBuf) -> Result<Vec<f64>, Box<dyn std::error::Error>> {
     let file = ExodusFile::<exodus_rs::mode::Read>::open(path)?;
     let times = file.times()?;
+    drop(file); // Explicitly close the file before returning
     Ok(times)
 }
 
@@ -823,6 +835,7 @@ pub fn read_nodal_var(
 ) -> Result<Vec<f64>, Box<dyn std::error::Error>> {
     let file = ExodusFile::<exodus_rs::mode::Read>::open(path)?;
     let values = file.var(time_step, EntityType::Nodal, 0, var_idx)?;
+    drop(file); // Explicitly close the file before returning
     Ok(values)
 }
 
@@ -830,6 +843,7 @@ pub fn read_nodal_var(
 pub fn read_nodal_var_names(path: &PathBuf) -> Result<Vec<String>, Box<dyn std::error::Error>> {
     let file = ExodusFile::<exodus_rs::mode::Read>::open(path)?;
     let names = file.variable_names(EntityType::Nodal)?;
+    drop(file); // Explicitly close the file before returning
     Ok(names)
 }
 
@@ -837,6 +851,7 @@ pub fn read_nodal_var_names(path: &PathBuf) -> Result<Vec<String>, Box<dyn std::
 pub fn read_node_set_ids(path: &PathBuf) -> Result<Vec<i64>, Box<dyn std::error::Error>> {
     let file = ExodusFile::<exodus_rs::mode::Read>::open(path)?;
     let ids = file.set_ids(EntityType::NodeSet)?;
+    drop(file); // Explicitly close the file before returning
     Ok(ids)
 }
 
@@ -847,6 +862,7 @@ pub fn read_names(
 ) -> Result<Vec<String>, Box<dyn std::error::Error>> {
     let file = ExodusFile::<exodus_rs::mode::Read>::open(path)?;
     let names = file.names(entity_type)?;
+    drop(file); // Explicitly close the file before returning
     Ok(names)
 }
 
@@ -854,6 +870,7 @@ pub fn read_names(
 pub fn read_block_ids(path: &PathBuf) -> Result<Vec<i64>, Box<dyn std::error::Error>> {
     let file = ExodusFile::<exodus_rs::mode::Read>::open(path)?;
     let ids = file.block_ids(EntityType::ElemBlock)?;
+    drop(file); // Explicitly close the file before returning
     Ok(ids)
 }
 
@@ -861,6 +878,7 @@ pub fn read_block_ids(path: &PathBuf) -> Result<Vec<i64>, Box<dyn std::error::Er
 pub fn read_side_set_ids(path: &PathBuf) -> Result<Vec<i64>, Box<dyn std::error::Error>> {
     let file = ExodusFile::<exodus_rs::mode::Read>::open(path)?;
     let ids = file.set_ids(EntityType::SideSet)?;
+    drop(file); // Explicitly close the file before returning
     Ok(ids)
 }
 
@@ -871,6 +889,7 @@ pub fn read_side_set(
 ) -> Result<(Vec<i64>, Vec<i64>, Vec<f64>), Box<dyn std::error::Error>> {
     let file = ExodusFile::<exodus_rs::mode::Read>::open(path)?;
     let ss = file.side_set(set_id)?;
+    drop(file); // Explicitly close the file before returning
     Ok((ss.elements, ss.sides, ss.dist_factors))
 }
 
@@ -971,5 +990,6 @@ pub fn create_mesh_with_false_positive_vars(
     file.put_var(0, EntityType::Nodal, 0, 3, &temperature)?;
 
     file.sync()?;
+    drop(file); // Explicitly close the file before returning
     Ok(())
 }

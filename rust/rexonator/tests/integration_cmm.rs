@@ -12,6 +12,7 @@ mod fixtures;
 use fixtures::*;
 
 use exodus_rs::EntityType;
+use serial_test::serial;
 use std::process::Command;
 
 const TOLERANCE: f64 = 1e-10;
@@ -25,6 +26,7 @@ fn rexonator_cmd() -> Command {
 // ========================================================================
 
 #[test]
+#[serial]
 fn test_cmm_hex8_basic() {
     let ctx = TestContext::new();
     let input = ctx.path("input.exo");
@@ -71,6 +73,7 @@ fn test_cmm_hex8_basic() {
 }
 
 #[test]
+#[serial]
 fn test_cmm_hex8_coordinate_bounds() {
     let ctx = TestContext::new();
     let input = ctx.path("input.exo");
@@ -116,6 +119,7 @@ fn test_cmm_hex8_coordinate_bounds() {
 }
 
 #[test]
+#[serial]
 fn test_cmm_y_axis() {
     let ctx = TestContext::new();
     let input = ctx.path("input.exo");
@@ -146,6 +150,7 @@ fn test_cmm_y_axis() {
 }
 
 #[test]
+#[serial]
 fn test_cmm_z_axis() {
     let ctx = TestContext::new();
     let input = ctx.path("input.exo");
@@ -177,6 +182,7 @@ fn test_cmm_z_axis() {
 // ========================================================================
 
 #[test]
+#[serial]
 fn test_cmm_quad4() {
     let ctx = TestContext::new();
     let input = ctx.path("input.exo");
@@ -208,6 +214,7 @@ fn test_cmm_quad4() {
 }
 
 #[test]
+#[serial]
 fn test_cmm_tri3() {
     let ctx = TestContext::new();
     let input = ctx.path("input.exo");
@@ -234,6 +241,7 @@ fn test_cmm_tri3() {
 }
 
 #[test]
+#[serial]
 fn test_cmm_tet4() {
     let ctx = TestContext::new();
     let input = ctx.path("input.exo");
@@ -265,6 +273,7 @@ fn test_cmm_tet4() {
 }
 
 #[test]
+#[serial]
 fn test_cmm_wedge6() {
     let ctx = TestContext::new();
     let input = ctx.path("input.exo");
@@ -291,6 +300,7 @@ fn test_cmm_wedge6() {
 }
 
 #[test]
+#[serial]
 fn test_cmm_pyramid5() {
     let ctx = TestContext::new();
     let input = ctx.path("input.exo");
@@ -321,6 +331,7 @@ fn test_cmm_pyramid5() {
 // ========================================================================
 
 #[test]
+#[serial]
 fn test_cmm_doubles_node_sets() {
     let ctx = TestContext::new();
     let input = ctx.path("input.exo");
@@ -353,6 +364,7 @@ fn test_cmm_doubles_node_sets() {
 }
 
 #[test]
+#[serial]
 fn test_cmm_node_set_names_have_mirror_suffix() {
     let ctx = TestContext::new();
     let input = ctx.path("input.exo");
@@ -383,6 +395,7 @@ fn test_cmm_node_set_names_have_mirror_suffix() {
 }
 
 #[test]
+#[serial]
 fn test_cmm_doubles_side_sets() {
     let ctx = TestContext::new();
     let input = ctx.path("input.exo");
@@ -414,6 +427,7 @@ fn test_cmm_doubles_side_sets() {
 }
 
 #[test]
+#[serial]
 fn test_cmm_doubles_element_blocks() {
     let ctx = TestContext::new();
     let input = ctx.path("input.exo");
@@ -454,6 +468,7 @@ fn test_cmm_doubles_element_blocks() {
 // ========================================================================
 
 #[test]
+#[serial]
 fn test_cmm_negates_vector_x_component() {
     let ctx = TestContext::new();
     let input = ctx.path("input.exo");
@@ -511,6 +526,7 @@ fn test_cmm_negates_vector_x_component() {
 }
 
 #[test]
+#[serial]
 fn test_cmm_preserves_scalar_field() {
     let ctx = TestContext::new();
     let input = ctx.path("input.exo");
@@ -556,6 +572,7 @@ fn test_cmm_preserves_scalar_field() {
 // ========================================================================
 
 #[test]
+#[serial]
 fn test_cmm_custom_tolerance() {
     let ctx = TestContext::new();
     let input = ctx.path("input.exo");
@@ -584,6 +601,7 @@ fn test_cmm_custom_tolerance() {
 }
 
 #[test]
+#[serial]
 fn test_cmm_very_small_tolerance() {
     let ctx = TestContext::new();
     let input = ctx.path("input.exo");
@@ -612,6 +630,7 @@ fn test_cmm_very_small_tolerance() {
 // ========================================================================
 
 #[test]
+#[serial]
 fn test_cmm_with_pre_translate() {
     let ctx = TestContext::new();
     let input = ctx.path("input.exo");
@@ -646,6 +665,7 @@ fn test_cmm_with_pre_translate() {
 }
 
 #[test]
+#[serial]
 fn test_cmm_with_post_scale() {
     let ctx = TestContext::new();
     let input = ctx.path("input.exo");
@@ -676,6 +696,7 @@ fn test_cmm_with_post_scale() {
 }
 
 #[test]
+#[serial]
 fn test_cmm_with_pre_and_post_ops() {
     let ctx = TestContext::new();
     let input = ctx.path("input.exo");
@@ -714,6 +735,7 @@ fn test_cmm_with_pre_and_post_ops() {
 // ========================================================================
 
 #[test]
+#[serial]
 fn test_cmm_verbose_output() {
     let ctx = TestContext::new();
     let input = ctx.path("input.exo");
@@ -748,6 +770,7 @@ fn test_cmm_verbose_output() {
 // ========================================================================
 
 #[test]
+#[serial]
 fn test_cmm_preserves_time_steps() {
     let ctx = TestContext::new();
     let input = ctx.path("input.exo");
@@ -786,6 +809,7 @@ fn test_cmm_preserves_time_steps() {
 }
 
 #[test]
+#[serial]
 fn test_cmm_with_zero_time() {
     let ctx = TestContext::new();
     let input = ctx.path("input.exo");
@@ -818,6 +842,7 @@ fn test_cmm_with_zero_time() {
 // ========================================================================
 
 #[test]
+#[serial]
 fn test_cmm_preserves_variable_names() {
     let ctx = TestContext::new();
     let input = ctx.path("input.exo");
@@ -849,6 +874,7 @@ fn test_cmm_preserves_variable_names() {
 // ========================================================================
 
 #[test]
+#[serial]
 fn test_cmm_with_element_variables() {
     let ctx = TestContext::new();
     let input = ctx.path("input.exo");
