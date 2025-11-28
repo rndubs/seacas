@@ -83,6 +83,23 @@ pub struct Cli {
     )]
     pub merge_tolerance: f64,
 
+    /// Explicitly mark fields as vector components (comma-separated base names).
+    /// During copy-mirror-merge, vector components matching the mirror axis are negated.
+    /// Example: --vector-fields "velocity,displacement,force"
+    /// This will match: velocity_x, velocity_y, velocity_z, displacement_x, etc.
+    #[arg(long = "vector-fields", value_name = "NAMES")]
+    pub vector_fields: Option<String>,
+
+    /// Explicitly mark fields as scalars (not vectors), overriding automatic detection.
+    /// Example: --scalar-fields "max_x,flux_x,index_y"
+    #[arg(long = "scalar-fields", value_name = "NAMES")]
+    pub scalar_fields: Option<String>,
+
+    /// Disable automatic vector component detection.
+    /// Only fields specified with --vector-fields will be treated as vectors.
+    #[arg(long = "no-auto-vector-detection")]
+    pub no_auto_vector_detection: bool,
+
     /// Normalize time values so the first time step is zero
     #[arg(short = 'z', long = "zero-time")]
     pub zero_time: bool,

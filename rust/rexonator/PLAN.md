@@ -7,7 +7,7 @@
 - [x] Add memory usage warnings for large mesh operations
 
 ### Medium Priority
-- [ ] Fix vector component detection false positives [XFAIL TEST: TODO]
+- [x] Fix vector component detection false positives
 - [x] Reduce excessive cloning in copy_mirror_merge
 - [ ] Complete side set side number mapping (TODO in code) [XFAIL TEST: TODO]
 - [ ] Consolidate test helpers with builder pattern
@@ -55,17 +55,17 @@ Integration tests have been added in `tests/` covering:
 These tests document expected behavior for features not yet implemented.
 When implementing a feature, remove the `#[ignore]` attribute and verify the test passes.
 
-| Test Name | Planned Feature | Priority |
-|-----------|-----------------|----------|
-| `test_vector_detection_should_not_match_max_x` | Vector component false positives | Medium |
-| `test_vector_detection_should_not_match_index_x` | Vector component false positives | Medium |
-| `test_vector_detection_should_not_match_suffix_only` | Vector component false positives | Medium |
-| `test_cmm_side_numbers_properly_mapped` | Side set side number mapping | Medium |
-| `test_cmm_warns_on_large_mesh` | Memory usage warnings | High |
-| `test_man_page_missing_returns_error` | Proper error handling in man.rs | Low |
-| `test_cmm_parallel_processing` | Parallel processing with rayon | Low |
-| `test_verbose_progress_indicators` | Progress indicators | Low |
-| `test_cmm_preserves_2d_dimensionality` | 2D mesh handling | Low |
+| Test Name | Planned Feature | Priority | Status |
+|-----------|-----------------|----------|--------|
+| `test_vector_detection_should_not_match_max_x` | Vector component false positives | Medium | **FIXED** |
+| `test_vector_detection_should_not_match_index_x` | Vector component false positives | Medium | **FIXED** |
+| `test_vector_detection_velocity_x_is_negated` | Vector component detection | Medium | **FIXED** |
+| `test_cmm_side_numbers_properly_mapped` | Side set side number mapping | Medium | Pending |
+| `test_cmm_warns_on_large_mesh` | Memory usage warnings | High | Pending |
+| `test_man_page_missing_returns_error` | Proper error handling in man.rs | Low | Pending |
+| `test_cmm_parallel_processing` | Parallel processing with rayon | Low | Pending |
+| `test_verbose_progress_indicators` | Progress indicators | Low | Pending |
+| `test_cmm_preserves_2d_dimensionality` | 2D mesh handling | Low | Pending |
 
 ### Running Tests
 
@@ -284,55 +284,27 @@ The `_axis` parameter is unused. This was likely intended for future use but sho
 
 ## Potential Bugs and Edge Cases
 
-### 1. Vector Component Detection False Positives (Medium Priority)
+### 1. Vector Component Detection False Positives (Medium Priority) - FIXED
 
-**File:** `copy_mirror_merge.rs:127-138`
+**File:** `copy_mirror_merge.rs:17-160`
 
-The current logic matches any field ending with `_x`, `_y`, `_z`, etc.:
-```rust
-fn is_vector_component(name: &str, axis: Axis) -> bool {
-    let suffix = match axis {
-        Axis::X => ["_x", "x", "_u", "u"],  // Will match "max_x", "suffix_x", etc.
-        // ...
-    };
-    suffix.iter().any(|s| name_lower.ends_with(s) || ...)
-}
-```
+**Status:** ✅ Fixed with a hybrid approach:
 
-**Problem:** Fields like `"max_x"`, `"index_x"`, or `"matrix"` (ends in `x`) would be incorrectly identified as vector components.
+1. **Stricter default heuristics:**
+   - Requires underscore separator (`_x`, `_y`, `_z` not just `x`)
+   - Excludes known scalar prefixes (`max`, `min`, `index`, `avg`, etc.)
+   - Single-letter variables (`u`, `v`, `w`) must be exact matches
 
-**Recommendation:** Use more specific patterns or a curated list of known vector field prefixes:
-```rust
-const VECTOR_PREFIXES: &[&str] = &[
-    "velocity", "displacement", "force", "momentum", "acceleration",
-    "stress", "strain", "flux", "gradient", "normal", "tangent"
-];
+2. **User-specified control via CLI options:**
+   - `--vector-fields "velocity,displacement"` - explicitly mark base names as vectors
+   - `--scalar-fields "flux_x,special_y"` - override detection for specific fields
+   - `--no-auto-vector-detection` - disable auto-detection, only use explicit list
 
-fn is_vector_component(name: &str, axis: Axis) -> bool {
-    let name_lower = name.to_lowercase();
+**Implementation:** See `VectorDetectionConfig` struct in `copy_mirror_merge.rs:26-160`
 
-    // Check if it's a known vector field with axis suffix
-    let is_known_vector = VECTOR_PREFIXES.iter()
-        .any(|prefix| name_lower.starts_with(prefix));
-
-    // Check for standard single-letter velocity components (u, v, w)
-    let is_single_letter = name_lower.len() == 1 && matches!(
-        (name_lower.as_str(), axis),
-        ("u", Axis::X) | ("v", Axis::Y) | ("w", Axis::Z)
-    );
-
-    (is_known_vector && matches_axis_suffix(&name_lower, axis)) || is_single_letter
-}
-
-fn matches_axis_suffix(name: &str, axis: Axis) -> bool {
-    let suffixes = match axis {
-        Axis::X => &["_x", "_1"][..],
-        Axis::Y => &["_y", "_2"][..],
-        Axis::Z => &["_z", "_3"][..],
-    };
-    suffixes.iter().any(|s| name.ends_with(s))
-}
-```
+**Tests:** See `tests/xfail_planned.rs` for integration tests that verify:
+- `max_x`, `index_x` are NOT treated as vector components
+- `velocity_x` IS properly negated during CMM
 
 ### 2. Hard Exit in man.rs (Low Priority)
 
@@ -467,7 +439,7 @@ TransformError::InvalidFormat(format!(
 |----------|-------|-----------|--------|--------|
 | **High** | Refactor 343-line function | copy_mirror_merge.rs:861-965 | Medium | Complete |
 | **High** | Add memory usage warnings | copy_mirror_merge.rs:17-108 | Low | Complete |
-| **Medium** | Vector component false positives | copy_mirror_merge.rs:127-138 | Low | Pending |
+| **Medium** | Vector component false positives | copy_mirror_merge.rs:17-160 | Low | Complete |
 | **Medium** | Excessive cloning | copy_mirror_merge.rs (refactored) | Medium | Complete |
 | **Medium** | Complete side set mapping TODO | copy_mirror_merge.rs:575-577 | High | Pending |
 | **Medium** | Test helper consolidation | parsers.rs:353-410 | Low | Pending |

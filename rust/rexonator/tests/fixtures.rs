@@ -854,3 +854,103 @@ pub fn read_block_ids(path: &PathBuf) -> Result<Vec<i64>, Box<dyn std::error::Er
     let ids = file.block_ids(EntityType::ElemBlock)?;
     Ok(ids)
 }
+
+/// Create a mesh with variables that could be false positives for vector detection.
+/// This includes both real vector components and scalar fields that look like vectors.
+pub fn create_mesh_with_false_positive_vars(
+    path: &PathBuf,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let x_coords: Vec<f64> = vec![
+        0.0, 0.5, 1.0, // y=0
+        0.0, 0.5, 1.0, // y=0.5
+        0.0, 0.5, 1.0, // y=1
+        0.0, 0.5, 1.0, // y=0 (z=1 layer)
+        0.0, 0.5, 1.0, // y=0.5
+        0.0, 0.5, 1.0, // y=1
+    ];
+
+    let y_coords: Vec<f64> = vec![
+        0.0, 0.0, 0.0, 0.5, 0.5, 0.5, 1.0, 1.0, 1.0, 0.0, 0.0, 0.0, 0.5, 0.5, 0.5, 1.0, 1.0, 1.0,
+    ];
+
+    let z_coords: Vec<f64> = vec![
+        0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0,
+    ];
+
+    let connectivity: Vec<i64> = vec![
+        1, 2, 5, 4, 10, 11, 14, 13, // Element 1
+        2, 3, 6, 5, 11, 12, 15, 14, // Element 2
+        4, 5, 8, 7, 13, 14, 17, 16, // Element 3
+        5, 6, 9, 8, 14, 15, 18, 17, // Element 4
+    ];
+
+    let options = CreateOptions {
+        mode: CreateMode::Clobber,
+        ..Default::default()
+    };
+    let mut file = ExodusFile::create(path, options)?;
+
+    let params = InitParams {
+        title: "Mesh with false positive variable names".to_string(),
+        num_dim: 3,
+        num_nodes: 18,
+        num_elems: 4,
+        num_elem_blocks: 1,
+        num_node_sets: 1,
+        num_side_sets: 0,
+        ..Default::default()
+    };
+    file.init(&params)?;
+
+    file.put_coords(&x_coords, Some(&y_coords), Some(&z_coords))?;
+
+    let block = Block {
+        id: 1,
+        entity_type: EntityType::ElemBlock,
+        topology: "HEX8".to_string(),
+        num_entries: 4,
+        num_nodes_per_entry: 8,
+        num_edges_per_entry: 0,
+        num_faces_per_entry: 0,
+        num_attributes: 0,
+    };
+    file.put_block(&block)?;
+    file.put_connectivity(1, &connectivity)?;
+    file.put_name(EntityType::ElemBlock, 0, "hex_block")?;
+
+    // Node set: symmetry plane (x=0)
+    let sym_nodes: Vec<i64> = vec![1, 4, 7, 10, 13, 16];
+    file.put_node_set(1, &sym_nodes, None)?;
+    file.put_name(EntityType::NodeSet, 0, "symmetry")?;
+
+    // Define variables with potential false positives:
+    // - velocity_x: real vector component (SHOULD be negated)
+    // - max_x: scalar max value (should NOT be negated)
+    // - index_x: scalar index (should NOT be negated)
+    // - temperature: plain scalar (should NOT be negated)
+    file.define_variables(
+        EntityType::Nodal,
+        &["velocity_x", "max_x", "index_x", "temperature"],
+    )?;
+
+    file.put_time(0, 0.0)?;
+
+    // velocity_x: varies with x (positive values)
+    let velocity_x: Vec<f64> = x_coords.iter().map(|&x| x * 2.0).collect();
+    file.put_var(0, EntityType::Nodal, 0, 0, &velocity_x)?;
+
+    // max_x: constant value representing a maximum x-coordinate
+    let max_x: Vec<f64> = vec![1.0; 18];
+    file.put_var(0, EntityType::Nodal, 0, 1, &max_x)?;
+
+    // index_x: represents x-index in a grid
+    let index_x: Vec<f64> = x_coords.iter().map(|&x| (x * 2.0).round()).collect();
+    file.put_var(0, EntityType::Nodal, 0, 2, &index_x)?;
+
+    // temperature: varies with y
+    let temperature: Vec<f64> = y_coords.iter().map(|&y| y * 100.0).collect();
+    file.put_var(0, EntityType::Nodal, 0, 3, &temperature)?;
+
+    file.sync()?;
+    Ok(())
+}
