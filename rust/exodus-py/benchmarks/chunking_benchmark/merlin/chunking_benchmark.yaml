@@ -38,7 +38,8 @@ env:
         RESULTS_DIR: $(MERLIN_WORKSPACE)/results
         PLOTS_DIR: $(MERLIN_WORKSPACE)/plots
 
-        # Input mesh (generated in setup step)
+        # Input mesh path (DEPRECATED - each run_benchmark task now generates its own)
+        # Kept for backward compatibility only
         INPUT_MESH: $(OUTPUT_PATH)/input_mesh.exo
 
         # Mesh generation parameters
@@ -153,46 +154,30 @@ study:
           walltime: "00:15:00"
 
     ###########################################################################
-    # Step 2: Generate the benchmark mesh
+    # Step 2: Generate the benchmark mesh (DEPRECATED - kept for compatibility)
     ###########################################################################
+    # NOTE: This step is no longer used by the main workflow. Each run_benchmark
+    # task now generates its own input mesh with configuration-specific chunking
+    # parameters. This ensures that both READ and WRITE performance are tested
+    # with the same chunking strategy.
+    #
+    # This step is kept for backward compatibility and manual testing only.
     - name: generate_mesh
-      description: Generate the ~100GB benchmark mesh on Lustre
+      description: "[DEPRECATED] Generate shared benchmark mesh (not used by run_benchmark)"
       run:
           cmd: |
               set -euo pipefail
 
-              echo "Generating benchmark mesh..."
-              echo "Working directory: $(pwd)"
+              echo "NOTE: This step is deprecated. Each run_benchmark task now"
+              echo "generates its own mesh with configuration-specific chunking."
+              echo ""
+              echo "This step is kept for manual testing and backward compatibility."
+              echo "Skipping mesh generation..."
 
-              # Activate venv
-              source $(VENV_PATH)/bin/activate
-
-              # Check if mesh already exists
-              if [ -f "$(INPUT_MESH)" ]; then
-                  echo "Mesh already exists: $(INPUT_MESH)"
-                  ls -lh $(INPUT_MESH)
-                  exit 0
-              fi
-
-              # Copy generate_mesh.py to working directory
-              cp $(SCRIPT_DIR)/generate_mesh.py ./generate_mesh.py
-
-              # Generate mesh
-              python3 ./generate_mesh.py \
-                  --output $(INPUT_MESH) \
-                  --num-nodes $(NUM_NODES) \
-                  --num-timesteps $(NUM_TIMESTEPS) \
-                  --cache-mb 512 \
-                  --node-chunk-size 25000 \
-                  --element-chunk-size 25000 \
-                  --time-chunk-size 100
-
-              # Report file size
-              echo "Mesh generated:"
-              ls -lh $(INPUT_MESH)
+              exit 0
           nodes: 1
           procs: 1
-          walltime: "00:10:00"
+          walltime: "00:05:00"
           depends: [setup]
 
     ###########################################################################
@@ -204,8 +189,8 @@ study:
           cmd: |
               set -euo pipefail
 
-              # Timeout limit in seconds (1200s = 20 minutes)
-              TIMEOUT_SECONDS=1200
+              # Timeout limit in seconds (1500s = 25 minutes, increased to account for mesh generation)
+              TIMEOUT_SECONDS=1500
 
               echo "========================================================================"
               echo "Running benchmark configuration:"
@@ -251,28 +236,90 @@ study:
               # Disable HDF5 file locking to allow concurrent reads on Lustre
               export HDF5_USE_FILE_LOCKING=FALSE
 
-              # Copy input mesh to task working directory to avoid Lustre I/O contention
-              # Each task gets its own copy, eliminating concurrent read issues
-              LOCAL_MESH="./input_mesh.exo"
-              echo "Copying input mesh to task directory..."
-              cp $(INPUT_MESH) "$LOCAL_MESH"
-              echo "Mesh copy complete: $(ls -lh $LOCAL_MESH)"
-
-              # Copy transform_mesh.py to working directory
+              # Copy scripts to working directory
+              cp $(SCRIPT_DIR)/generate_mesh.py ./generate_mesh.py
               cp $(SCRIPT_DIR)/transform_mesh.py ./transform_mesh.py
 
-              # Create unique output filenames
+              # Create unique filenames based on configuration
               CONFIG_STR="c$(CACHE_MB)_n$(NODE_CHUNK_SIZE)_e$(ELEMENT_CHUNK_SIZE)_t$(TIME_CHUNK_SIZE)_p$(PREEMPTION)"
+              LOCAL_MESH="./input_mesh_${CONFIG_STR}.exo"
               OUTPUT_MESH="$(RESULTS_DIR)/output_${CONFIG_STR}.exo"
               RESULT_JSON="$(RESULTS_DIR)/result_${CONFIG_STR}.json"
 
               # Record start time for timeout tracking
               START_TIME=$(date +%s)
 
+              # ================================================================
+              # STEP 1: Generate input mesh with THIS configuration's chunking
+              # ================================================================
+              echo ""
+              echo "========================================================================"
+              echo "STEP 1: Generating input mesh with configuration-specific chunking"
+              echo "  Node Chunk:    $(NODE_CHUNK_SIZE)"
+              echo "  Element Chunk: $(ELEMENT_CHUNK_SIZE)"
+              echo "  Time Chunk:    $(TIME_CHUNK_SIZE)"
+              echo "========================================================================"
+
+              set +e  # Disable exit on error to capture exit code
+              python3 ./generate_mesh.py \
+                  --output "$LOCAL_MESH" \
+                  --num-nodes $(NUM_NODES) \
+                  --num-timesteps $(NUM_TIMESTEPS) \
+                  --cache-mb $(CACHE_MB) \
+                  --node-chunk-size $(NODE_CHUNK_SIZE) \
+                  --element-chunk-size $(ELEMENT_CHUNK_SIZE) \
+                  --time-chunk-size $(TIME_CHUNK_SIZE)
+              GEN_EXIT_CODE=$?
+              set -e
+
+              if [ $GEN_EXIT_CODE -ne 0 ]; then
+                  echo "ERROR: Mesh generation failed with exit code $GEN_EXIT_CODE"
+                  END_TIME=$(date +%s)
+                  ELAPSED=$((END_TIME - START_TIME))
+
+                  python3 $(SPECROOT)/write_result_json.py \
+                      --output "$RESULT_JSON" \
+                      --status error \
+                      --exit-code ${GEN_EXIT_CODE} \
+                      --elapsed-seconds ${ELAPSED} \
+                      --cache-mb $(CACHE_MB) \
+                      --node-chunk $(NODE_CHUNK_SIZE) \
+                      --elem-chunk $(ELEMENT_CHUNK_SIZE) \
+                      --time-chunk $(TIME_CHUNK_SIZE) \
+                      --preemption $(PREEMPTION) \
+                      --input-file "$LOCAL_MESH" \
+                      --error "Mesh generation failed with exit code ${GEN_EXIT_CODE}"
+
+                  rm -f "$LOCAL_MESH"
+                  exit 0
+              fi
+
+              echo "Mesh generated: $(ls -lh $LOCAL_MESH)"
+
+              # ================================================================
+              # STEP 2: Run the transform benchmark
+              # ================================================================
+              echo ""
+              echo "========================================================================"
+              echo "STEP 2: Running transform benchmark"
+              echo "========================================================================"
+
+              # Calculate remaining time for transform
+              CURRENT_TIME=$(date +%s)
+              ELAPSED_SO_FAR=$((CURRENT_TIME - START_TIME))
+              REMAINING_TIMEOUT=$((TIMEOUT_SECONDS - ELAPSED_SO_FAR))
+
+              if [ $REMAINING_TIMEOUT -lt 60 ]; then
+                  echo "WARNING: Less than 60 seconds remaining after mesh generation"
+                  REMAINING_TIMEOUT=60
+              fi
+
+              echo "Time remaining for transform: ${REMAINING_TIMEOUT}s"
+
               # Run the transform with timeout
               # timeout returns exit code 124 if the command times out
               set +e  # Disable exit on error to capture timeout exit code
-              timeout --signal=TERM --kill-after=30 ${TIMEOUT_SECONDS}s \
+              timeout --signal=TERM --kill-after=30 ${REMAINING_TIMEOUT}s \
                   python3 ./transform_mesh.py \
                       --input "$LOCAL_MESH" \
                       --output "$OUTPUT_MESH" \
@@ -306,7 +353,7 @@ study:
                       --elem-chunk $(ELEMENT_CHUNK_SIZE) \
                       --time-chunk $(TIME_CHUNK_SIZE) \
                       --preemption $(PREEMPTION) \
-                      --input-file "$(INPUT_MESH)" \
+                      --input-file "$LOCAL_MESH" \
                       --error "Benchmark exceeded ${TIMEOUT_SECONDS}s time limit and was terminated"
 
                   # Cleanup any partial output mesh and local input mesh copy
@@ -335,7 +382,7 @@ study:
                       --elem-chunk $(ELEMENT_CHUNK_SIZE) \
                       --time-chunk $(TIME_CHUNK_SIZE) \
                       --preemption $(PREEMPTION) \
-                      --input-file "$(INPUT_MESH)" \
+                      --input-file "$LOCAL_MESH" \
                       --error "Benchmark failed with exit code ${EXIT_CODE}"
 
                   # Cleanup any partial output mesh and local input mesh copy
@@ -358,8 +405,8 @@ study:
               echo "Benchmark complete. Results saved to: $RESULT_JSON"
           nodes: 1
           procs: 1
-          walltime: "00:25:00"
-          depends: [generate_mesh]
+          walltime: "00:35:00"
+          depends: [setup]
 
     ###########################################################################
     # Step 4: Collect and aggregate results
@@ -465,5 +512,5 @@ merlin:
             # Workers for serial tasks (setup, collect, plot)
             serial_workers:
                 args: -l INFO --concurrency 1 --prefetch-multiplier 1 -O fair
-                steps: [setup, generate_mesh, collect_results, generate_plots]
+                steps: [setup, collect_results, generate_plots]
                 nodes: 1
