@@ -15,7 +15,7 @@ use clap::Parser;
 use exodus_rs::ExodusFile;
 
 use cli::{Axis, Cli, Operation, Result, TransformError};
-use copy_mirror_merge::apply_copy_mirror_merge;
+use copy_mirror_merge::{apply_copy_mirror_merge, VectorDetectionConfig};
 use man::show_man_page;
 use operations::{apply_simple_operation, normalize_time};
 use parsers::extract_ordered_operations;
@@ -91,6 +91,13 @@ fn main() -> Result<()> {
 
         let (cmm_axis, cmm_tolerance) = cmm_op.unwrap();
 
+        // Build vector detection config from CLI options
+        let vector_config = VectorDetectionConfig::from_cli_options(
+            cli.vector_fields.as_deref(),
+            cli.scalar_fields.as_deref(),
+            cli.no_auto_vector_detection,
+        );
+
         // Step 1: Apply pre-CMM operations (if any)
         if !pre_cmm_ops.is_empty() {
             if cli.verbose {
@@ -118,13 +125,27 @@ fn main() -> Result<()> {
             if cli.verbose {
                 println!("Applying copy-mirror-merge:");
             }
-            apply_copy_mirror_merge(output, output, cmm_axis, cmm_tolerance, cli.verbose)?;
+            apply_copy_mirror_merge(
+                output,
+                output,
+                cmm_axis,
+                cmm_tolerance,
+                &vector_config,
+                cli.verbose,
+            )?;
         } else {
             // No pre-CMM ops, apply CMM directly from input to output
             if cli.verbose {
                 println!("Applying copy-mirror-merge:");
             }
-            apply_copy_mirror_merge(input, output, cmm_axis, cmm_tolerance, cli.verbose)?;
+            apply_copy_mirror_merge(
+                input,
+                output,
+                cmm_axis,
+                cmm_tolerance,
+                &vector_config,
+                cli.verbose,
+            )?;
         }
 
         // Step 3: Apply post-CMM operations (if any)

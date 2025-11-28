@@ -11,6 +11,155 @@ use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 
 // ============================================================================
+// Vector Component Detection
+// ============================================================================
+
+/// Known prefixes that indicate scalar values, not vector components.
+/// These are common patterns like "max_x" (maximum x value) that should NOT
+/// be treated as vector components even though they end with "_x".
+const SCALAR_PREFIXES: &[&str] = &[
+    "max", "min", "avg", "average", "mean", "sum", "total",
+    "index", "idx", "count", "num", "start", "end",
+    "first", "last", "row", "col", "column",
+];
+
+/// Configuration for vector component detection during copy-mirror-merge.
+///
+/// This allows users to explicitly control which variables are treated as
+/// vector components (and thus have their values negated when mirroring).
+#[derive(Debug, Clone, Default)]
+pub struct VectorDetectionConfig {
+    /// Base names of fields that are definitely vectors (e.g., "velocity", "displacement").
+    /// Fields like "velocity_x", "velocity_y", "velocity_z" will match.
+    pub vector_fields: Vec<String>,
+
+    /// Specific field names that are definitely NOT vectors (e.g., "max_x", "flux_x").
+    /// These override automatic detection.
+    pub scalar_fields: Vec<String>,
+
+    /// If true, disable automatic vector detection entirely.
+    /// Only fields matching `vector_fields` will be treated as vectors.
+    pub no_auto_detection: bool,
+}
+
+impl VectorDetectionConfig {
+    /// Create a new VectorDetectionConfig from CLI options.
+    pub fn from_cli_options(
+        vector_fields: Option<&str>,
+        scalar_fields: Option<&str>,
+        no_auto_detection: bool,
+    ) -> Self {
+        Self {
+            vector_fields: vector_fields
+                .map(|s| s.split(',').map(|v| v.trim().to_lowercase()).collect())
+                .unwrap_or_default(),
+            scalar_fields: scalar_fields
+                .map(|s| s.split(',').map(|v| v.trim().to_lowercase()).collect())
+                .unwrap_or_default(),
+            no_auto_detection,
+        }
+    }
+
+    /// Check if a variable name is a vector component for the given axis.
+    pub fn is_vector_component(&self, name: &str, axis: Axis) -> bool {
+        let name_lower = name.to_lowercase();
+
+        // 1. Explicit scalar override - highest priority
+        if self.scalar_fields.iter().any(|s| s == &name_lower) {
+            return false;
+        }
+
+        // 2. Check if it matches user-specified vector fields
+        let matches_user_vector = self.matches_user_vector_field(&name_lower, axis);
+        if matches_user_vector {
+            return true;
+        }
+
+        // 3. If auto-detection is disabled, stop here
+        if self.no_auto_detection {
+            return false;
+        }
+
+        // 4. Apply improved automatic detection heuristics
+        self.auto_detect_vector_component(&name_lower, axis)
+    }
+
+    /// Check if a field name matches a user-specified vector field pattern.
+    fn matches_user_vector_field(&self, name_lower: &str, axis: Axis) -> bool {
+        let suffixes = match axis {
+            Axis::X => &["_x", "_1", "_u"][..],
+            Axis::Y => &["_y", "_2", "_v"][..],
+            Axis::Z => &["_z", "_3", "_w"][..],
+        };
+
+        for base in &self.vector_fields {
+            // Check if name is "base_x", "base_y", "base_z", etc.
+            for suffix in suffixes {
+                let pattern = format!("{}{}", base, suffix);
+                if name_lower == pattern {
+                    return true;
+                }
+            }
+            // Also check if name exactly equals the base (single-component vector)
+            if name_lower == base {
+                return true;
+            }
+        }
+        false
+    }
+
+    /// Improved automatic vector component detection with conservative heuristics.
+    fn auto_detect_vector_component(&self, name_lower: &str, axis: Axis) -> bool {
+        // Single-letter variables: exact match only (u, v, w)
+        if name_lower.len() == 1 {
+            return matches!(
+                (name_lower, axis),
+                ("u", Axis::X) | ("v", Axis::Y) | ("w", Axis::Z)
+            );
+        }
+
+        // Require underscore + component suffix (stricter than before)
+        let (primary_suffix, alt_suffix) = match axis {
+            Axis::X => ("_x", "_1"),
+            Axis::Y => ("_y", "_2"),
+            Axis::Z => ("_z", "_3"),
+        };
+
+        let suffix_match = if name_lower.ends_with(primary_suffix) {
+            Some(primary_suffix)
+        } else if name_lower.ends_with(alt_suffix) {
+            Some(alt_suffix)
+        } else {
+            None
+        };
+
+        let Some(suffix) = suffix_match else {
+            return false;
+        };
+
+        // Get the base name (everything before the suffix)
+        let base = &name_lower[..name_lower.len() - suffix.len()];
+
+        // Exclude known scalar patterns
+        if SCALAR_PREFIXES.iter().any(|&prefix| base == prefix) {
+            return false;
+        }
+
+        // Also exclude if base ends with a scalar prefix after underscore
+        // e.g., "stress_max_x" should not match
+        for prefix in SCALAR_PREFIXES {
+            let pattern = format!("_{}", prefix);
+            if base.ends_with(&pattern) {
+                return false;
+            }
+        }
+
+        // If we get here, it looks like a vector component
+        true
+    }
+}
+
+// ============================================================================
 // Memory Estimation and Warnings
 // ============================================================================
 
@@ -227,19 +376,6 @@ fn get_mirror_permutation(topology: &str, axis: Axis) -> Option<Vec<usize>> {
     }
 }
 
-/// Check if a variable name suggests it's a vector component
-fn is_vector_component(name: &str, axis: Axis) -> bool {
-    let name_lower = name.to_lowercase();
-    let suffix = match axis {
-        Axis::X => ["_x", "x", "_u", "u"],
-        Axis::Y => ["_y", "y", "_v", "v"],
-        Axis::Z => ["_z", "z", "_w", "w"],
-    };
-
-    suffix
-        .iter()
-        .any(|s| name_lower.ends_with(s) || (name_lower.len() == 1 && name_lower == *s))
-}
 
 // ============================================================================
 // Mirrored Data Creation Functions
@@ -549,6 +685,7 @@ fn create_mirrored_nodal_vars(
     data: &MeshData,
     axis: Axis,
     symmetry_nodes: &HashSet<usize>,
+    vector_config: &VectorDetectionConfig,
     verbose: bool,
 ) -> Vec<Vec<Vec<f64>>> {
     let orig_num_nodes = data.params.num_nodes;
@@ -558,7 +695,7 @@ fn create_mirrored_nodal_vars(
     let mut new_nodal_var_values: Vec<Vec<Vec<f64>>> = Vec::with_capacity(num_vars);
 
     for (var_idx, var_name) in data.nodal_var_names.iter().enumerate() {
-        let is_mirror_component = is_vector_component(var_name, axis);
+        let is_mirror_component = vector_config.is_vector_component(var_name, axis);
 
         let mut var_time_series = Vec::with_capacity(num_time_steps);
         for step in 0..num_time_steps {
@@ -599,6 +736,7 @@ fn create_mirrored_nodal_vars(
 fn create_mirrored_elem_vars(
     data: &MeshData,
     axis: Axis,
+    vector_config: &VectorDetectionConfig,
     verbose: bool,
 ) -> Vec<Vec<Vec<Vec<f64>>>> {
     let num_blocks = data.blocks.len();
@@ -621,7 +759,7 @@ fn create_mirrored_elem_vars(
                 .get(var_idx)
                 .map(|s| s.as_str())
                 .unwrap_or("");
-            let is_mirror_component = is_vector_component(var_name, axis);
+            let is_mirror_component = vector_config.is_vector_component(var_name, axis);
 
             let mut mirror_var_time_series: Vec<Vec<f64>> =
                 Vec::with_capacity(var_time_series.len());
@@ -871,6 +1009,7 @@ fn copy_mirror_merge(
     data: &MeshData,
     axis: Axis,
     tolerance: f64,
+    vector_config: &VectorDetectionConfig,
     verbose: bool,
 ) -> Result<MeshData> {
     let orig_num_nodes = data.params.num_nodes;
@@ -931,10 +1070,11 @@ fn copy_mirror_merge(
     let side_sets_result = create_mirrored_side_sets(data, orig_num_elems);
 
     // Step 7: Create mirrored nodal variables
-    let new_nodal_var_values = create_mirrored_nodal_vars(data, axis, &symmetry_nodes, verbose);
+    let new_nodal_var_values =
+        create_mirrored_nodal_vars(data, axis, &symmetry_nodes, vector_config, verbose);
 
     // Step 8: Create mirrored element variables
-    let new_elem_var_values = create_mirrored_elem_vars(data, axis, verbose);
+    let new_elem_var_values = create_mirrored_elem_vars(data, axis, vector_config, verbose);
 
     // Step 9: Create updated params
     let mut new_params = data.params.clone();
@@ -1171,6 +1311,7 @@ pub fn apply_copy_mirror_merge(
     output_path: &PathBuf,
     axis: Axis,
     tolerance: f64,
+    vector_config: &VectorDetectionConfig,
     verbose: bool,
 ) -> Result<()> {
     if verbose {
@@ -1178,6 +1319,21 @@ pub fn apply_copy_mirror_merge(
             "  Copy-mirror-merge about {:?} axis (tolerance: {})",
             axis, tolerance
         );
+        if !vector_config.vector_fields.is_empty() {
+            println!(
+                "  User-specified vector fields: {:?}",
+                vector_config.vector_fields
+            );
+        }
+        if !vector_config.scalar_fields.is_empty() {
+            println!(
+                "  User-specified scalar fields (excluded from negation): {:?}",
+                vector_config.scalar_fields
+            );
+        }
+        if vector_config.no_auto_detection {
+            println!("  Automatic vector detection: disabled");
+        }
     }
 
     // Read input mesh
@@ -1189,7 +1345,7 @@ pub fn apply_copy_mirror_merge(
     warn_memory_usage(&mesh_data, verbose);
 
     // Apply copy-mirror-merge
-    let merged_data = copy_mirror_merge(&mesh_data, axis, tolerance, verbose)?;
+    let merged_data = copy_mirror_merge(&mesh_data, axis, tolerance, vector_config, verbose)?;
 
     // Write output mesh
     write_mesh_data(output_path, &merged_data, verbose)?;
@@ -1237,23 +1393,123 @@ mod tests {
     }
 
     #[test]
-    fn test_is_vector_component() {
-        // Test X-axis vector components
-        assert!(is_vector_component("velocity_x", Axis::X));
-        assert!(is_vector_component("u", Axis::X));
-        assert!(is_vector_component("displacement_x", Axis::X));
-        assert!(!is_vector_component("velocity_y", Axis::X));
-        assert!(!is_vector_component("temperature", Axis::X));
+    fn test_vector_detection_default_config() {
+        let config = VectorDetectionConfig::default();
+
+        // Test X-axis vector components with underscore suffix
+        assert!(config.is_vector_component("velocity_x", Axis::X));
+        assert!(config.is_vector_component("displacement_x", Axis::X));
+        assert!(config.is_vector_component("force_x", Axis::X));
+        assert!(!config.is_vector_component("velocity_y", Axis::X));
+        assert!(!config.is_vector_component("temperature", Axis::X));
+
+        // Test single-letter variables (exact match only)
+        assert!(config.is_vector_component("u", Axis::X));
+        assert!(config.is_vector_component("v", Axis::Y));
+        assert!(config.is_vector_component("w", Axis::Z));
+        assert!(!config.is_vector_component("u", Axis::Y)); // u is X component
+        assert!(!config.is_vector_component("v", Axis::X)); // v is Y component
 
         // Test Y-axis vector components
-        assert!(is_vector_component("velocity_y", Axis::Y));
-        assert!(is_vector_component("v", Axis::Y));
-        assert!(!is_vector_component("velocity_x", Axis::Y));
+        assert!(config.is_vector_component("velocity_y", Axis::Y));
+        assert!(!config.is_vector_component("velocity_x", Axis::Y));
 
         // Test Z-axis vector components
-        assert!(is_vector_component("velocity_z", Axis::Z));
-        assert!(is_vector_component("w", Axis::Z));
-        assert!(!is_vector_component("velocity_x", Axis::Z));
+        assert!(config.is_vector_component("velocity_z", Axis::Z));
+        assert!(!config.is_vector_component("velocity_x", Axis::Z));
+
+        // Test numeric suffixes (_1, _2, _3)
+        assert!(config.is_vector_component("stress_1", Axis::X));
+        assert!(config.is_vector_component("stress_2", Axis::Y));
+        assert!(config.is_vector_component("stress_3", Axis::Z));
+    }
+
+    #[test]
+    fn test_vector_detection_false_positives_prevented() {
+        let config = VectorDetectionConfig::default();
+
+        // These should NOT be detected as vector components
+        // (key fix for the false positive issue)
+        assert!(!config.is_vector_component("max_x", Axis::X));
+        assert!(!config.is_vector_component("min_x", Axis::X));
+        assert!(!config.is_vector_component("avg_x", Axis::X));
+        assert!(!config.is_vector_component("index_x", Axis::X));
+        assert!(!config.is_vector_component("count_x", Axis::X));
+        assert!(!config.is_vector_component("total_y", Axis::Y));
+        assert!(!config.is_vector_component("sum_z", Axis::Z));
+
+        // Words ending in 'x' that aren't vectors (stricter matching now)
+        assert!(!config.is_vector_component("matrix", Axis::X));
+        assert!(!config.is_vector_component("suffix", Axis::X));
+        assert!(!config.is_vector_component("index", Axis::X));
+
+        // Compound scalar patterns
+        assert!(!config.is_vector_component("stress_max_x", Axis::X));
+        assert!(!config.is_vector_component("temp_min_y", Axis::Y));
+    }
+
+    #[test]
+    fn test_vector_detection_user_specified_vectors() {
+        let config = VectorDetectionConfig::from_cli_options(
+            Some("flux,custom"),
+            None,
+            false,
+        );
+
+        // User-specified vectors should be detected
+        assert!(config.is_vector_component("flux_x", Axis::X));
+        assert!(config.is_vector_component("flux_y", Axis::Y));
+        assert!(config.is_vector_component("flux_z", Axis::Z));
+        assert!(config.is_vector_component("custom_x", Axis::X));
+
+        // Auto-detection still works for standard patterns
+        assert!(config.is_vector_component("velocity_x", Axis::X));
+        assert!(config.is_vector_component("u", Axis::X));
+    }
+
+    #[test]
+    fn test_vector_detection_scalar_override() {
+        let config = VectorDetectionConfig::from_cli_options(
+            None,
+            Some("flux_x,special_y"),
+            false,
+        );
+
+        // Scalar overrides should prevent detection
+        assert!(!config.is_vector_component("flux_x", Axis::X));
+        assert!(!config.is_vector_component("special_y", Axis::Y));
+
+        // Other vectors still work
+        assert!(config.is_vector_component("velocity_x", Axis::X));
+    }
+
+    #[test]
+    fn test_vector_detection_no_auto_mode() {
+        let config = VectorDetectionConfig::from_cli_options(
+            Some("velocity"),
+            None,
+            true, // no_auto_detection
+        );
+
+        // Only user-specified vectors should be detected
+        assert!(config.is_vector_component("velocity_x", Axis::X));
+        assert!(config.is_vector_component("velocity_y", Axis::Y));
+
+        // Auto-detection patterns should NOT work
+        assert!(!config.is_vector_component("displacement_x", Axis::X));
+        assert!(!config.is_vector_component("u", Axis::X));
+        assert!(!config.is_vector_component("force_x", Axis::X));
+    }
+
+    #[test]
+    fn test_vector_detection_case_insensitive() {
+        let config = VectorDetectionConfig::default();
+
+        // Should be case-insensitive
+        assert!(config.is_vector_component("Velocity_X", Axis::X));
+        assert!(config.is_vector_component("DISPLACEMENT_Y", Axis::Y));
+        assert!(config.is_vector_component("Force_Z", Axis::Z));
+        assert!(config.is_vector_component("U", Axis::X));
     }
 
     #[test]
