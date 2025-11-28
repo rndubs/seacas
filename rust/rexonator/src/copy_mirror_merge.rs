@@ -822,6 +822,17 @@ fn create_mirrored_side_sets(
 
         let mirror_df = dist_factors.clone();
 
+        // Calculate changed count before moving mirror_sides
+        let changed_count = if verbose && !sides.is_empty() {
+            sides
+                .iter()
+                .zip(mirror_sides.iter())
+                .filter(|(orig, mir)| orig != mir)
+                .count()
+        } else {
+            0
+        };
+
         new_side_sets.push((next_ss_id, mirror_elements, mirror_sides, mirror_df));
 
         let default_name = format!("sideset_{}", orig_id);
@@ -832,21 +843,14 @@ fn create_mirrored_side_sets(
             .unwrap_or(&default_name);
         new_side_set_names.push(format!("{}_mirror", orig_name));
 
-        if verbose && !sides.is_empty() {
-            let changed_count = sides
-                .iter()
-                .zip(mirror_sides.iter())
-                .filter(|(orig, mir)| orig != mir)
-                .count();
-            if changed_count > 0 {
-                println!(
-                    "  Side set {}: remapped {} of {} side numbers for {:?}-axis mirror",
-                    orig_id,
-                    changed_count,
-                    sides.len(),
-                    axis
-                );
-            }
+        if verbose && changed_count > 0 {
+            println!(
+                "  Side set {}: remapped {} of {} side numbers for {:?}-axis mirror",
+                orig_id,
+                changed_count,
+                sides.len(),
+                axis
+            );
         }
 
         next_ss_id += 1;
