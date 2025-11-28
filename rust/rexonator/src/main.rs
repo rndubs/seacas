@@ -10,6 +10,7 @@ mod man;
 mod operations;
 mod parsers;
 mod performance;
+mod progress;
 
 use clap::Parser;
 use exodus_rs::ExodusFile;
