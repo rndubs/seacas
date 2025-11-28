@@ -15,6 +15,7 @@ use fixtures::{
     create_quad4_mesh, read_nodal_var, read_params, read_side_set, read_side_set_ids, TestContext,
 };
 
+use serial_test::serial;
 use std::process::Command;
 
 fn rexonator_cmd() -> Command {
@@ -32,6 +33,7 @@ fn rexonator_cmd() -> Command {
 // ========================================================================
 
 #[test]
+#[serial]
 fn test_vector_detection_should_not_match_max_x() {
     // A field named "max_x" should NOT be negated during CMM
     // because it's not a vector component (it's a maximum X value).
@@ -73,6 +75,7 @@ fn test_vector_detection_should_not_match_max_x() {
 }
 
 #[test]
+#[serial]
 fn test_vector_detection_should_not_match_index_x() {
     // A field named "index_x" should NOT be treated as a vector component
     let ctx = TestContext::new();
@@ -112,6 +115,7 @@ fn test_vector_detection_should_not_match_index_x() {
 }
 
 #[test]
+#[serial]
 fn test_vector_detection_velocity_x_is_negated() {
     // Verify that actual vector components ARE still negated correctly
     let ctx = TestContext::new();
@@ -177,6 +181,7 @@ fn test_vector_detection_velocity_x_is_negated() {
 // ========================================================================
 
 #[test]
+#[serial]
 fn test_cmm_side_numbers_properly_mapped() {
     // When mirroring elements, the side numbers may need to change
     // depending on the element topology and mirror axis.
@@ -236,6 +241,7 @@ fn test_cmm_side_numbers_properly_mapped() {
 }
 
 #[test]
+#[serial]
 fn test_cmm_side_numbers_mapped_for_perpendicular_faces() {
     // Test that faces perpendicular to the mirror axis ARE remapped.
     // We need to create a mesh with a side set on a face perpendicular to X.
@@ -342,6 +348,7 @@ fn test_cmm_side_numbers_mapped_for_perpendicular_faces() {
 // ========================================================================
 
 #[test]
+#[serial]
 #[ignore = "XFAIL: Memory usage warnings not yet implemented - see PLAN.md"]
 fn test_cmm_warns_on_large_mesh() {
     // When processing large meshes, verbose mode should warn about
@@ -383,6 +390,7 @@ fn test_cmm_warns_on_large_mesh() {
 // ========================================================================
 
 #[test]
+#[serial]
 #[ignore = "XFAIL: Proper error handling in man.rs not yet implemented - see PLAN.md"]
 fn test_man_page_missing_returns_error() {
     // When the man page file is missing, rexonator should return
@@ -407,6 +415,7 @@ fn test_man_page_missing_returns_error() {
 // ========================================================================
 
 #[test]
+#[serial]
 #[ignore = "XFAIL: Parallel processing not yet implemented - see PLAN.md"]
 fn test_cmm_parallel_processing() {
     // Large mesh operations could benefit from parallel processing.
@@ -443,6 +452,7 @@ fn test_cmm_parallel_processing() {
 // ========================================================================
 
 #[test]
+#[serial]
 #[ignore = "XFAIL: Progress indicators not yet implemented - see PLAN.md"]
 fn test_verbose_progress_indicators() {
     // With large meshes, verbose mode should show progress updates
@@ -482,6 +492,7 @@ fn test_verbose_progress_indicators() {
 // ========================================================================
 
 #[test]
+#[serial]
 #[ignore = "XFAIL: 2D mesh dimensionality preservation not verified - see PLAN.md"]
 fn test_cmm_preserves_2d_dimensionality() {
     // A 2D mesh should remain 2D after CMM (num_dim should not change).
@@ -520,6 +531,7 @@ fn test_cmm_preserves_2d_dimensionality() {
 // ========================================================================
 
 #[test]
+#[serial]
 fn test_cmm_error_on_unsupported_topology() {
     // CMM should fail with a clear error for unsupported topologies
     // Currently supported: HEX8, TET4, WEDGE6, PYRAMID5, QUAD4, TRI3
@@ -541,6 +553,7 @@ fn test_cmm_error_on_unsupported_topology() {
 // ========================================================================
 
 #[test]
+#[serial]
 fn test_cmm_warns_about_global_variables() {
     // When CMM is used on a mesh with global variables, a warning
     // should be printed because some global vars may need manual
