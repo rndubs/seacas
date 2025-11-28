@@ -155,6 +155,48 @@ Default: 0.001
 .IP
 If no nodes are found within the tolerance, a warning is printed and
 no node merging occurs.
+.SS Vector Detection Options
+These options control how vector field components are detected during
+\fB\-\-copy\-mirror\-merge\fR. Vector components matching the mirror axis
+are negated in the mirrored mesh.
+.TP
+.BI \-\-vector\-fields " NAMES"
+Explicitly mark fields as vector components. Specify a comma-separated list
+of base names (without the axis suffix). Fields matching these base names
+with axis suffixes (\fB_x\fR, \fB_y\fR, \fB_z\fR, \fB_1\fR, \fB_2\fR, \fB_3\fR,
+\fB_u\fR, \fB_v\fR, \fB_w\fR) will be treated as vector components.
+.IP
+Example: \fB\-\-vector\-fields "velocity,displacement,force"\fR will treat
+\fBvelocity_x\fR, \fBvelocity_y\fR, \fBdisplacement_x\fR, etc. as vectors.
+.IP
+This is useful when automatic detection fails to recognize your vector fields.
+.TP
+.BI \-\-scalar\-fields " NAMES"
+Explicitly mark specific fields as scalars (not vectors), overriding automatic
+detection. Specify a comma-separated list of exact field names.
+.IP
+Example: \fB\-\-scalar\-fields "max_x,flux_x,index_y"\fR prevents these fields
+from being negated even if they would otherwise match vector patterns.
+.IP
+Scalar overrides have the highest priority and will prevent negation even if
+the field matches a \fB\-\-vector\-fields\fR pattern.
+.TP
+.B \-\-no\-auto\-vector\-detection
+Disable automatic vector component detection. When set, only fields explicitly
+specified with \fB\-\-vector\-fields\fR will be treated as vectors.
+.IP
+By default, the tool automatically detects vector components using heuristics:
+.RS
+.IP \(bu 2
+Fields ending with \fB_x\fR, \fB_y\fR, \fB_z\fR (with underscore separator)
+.IP \(bu 2
+Fields ending with \fB_1\fR, \fB_2\fR, \fB_3\fR (numeric suffixes)
+.IP \(bu 2
+Single-letter variables \fBu\fR, \fBv\fR, \fBw\fR (exact match only)
+.RE
+.IP
+Known scalar patterns like \fBmax_x\fR, \fBmin_y\fR, \fBindex_z\fR are
+automatically excluded from detection.
 .SS Time Options
 .TP
 .BR \-z ", " \-\-zero\-time
@@ -362,6 +404,30 @@ rexonator half.exo full.exo \\
 .IP
 Use a larger tolerance (0.01) to merge nodes that may not be exactly on
 the symmetry plane due to mesh generation tolerances.
+.TP
+\fBCopy-mirror-merge with explicit vector fields:\fR
+.nf
+rexonator half.exo full.exo \\
+    \-\-copy\-mirror\-merge x \\
+    \-\-vector\-fields "flux,custom_vector" \\
+    \-\-scalar\-fields "max_x,boundary_x" \\
+    \-v
+.fi
+.IP
+Explicitly specify which fields are vectors (flux_x, flux_y, etc. and
+custom_vector_x, etc.) and which should be treated as scalars despite
+having "_x" suffix.
+.TP
+\fBCopy-mirror-merge with no automatic detection:\fR
+.nf
+rexonator half.exo full.exo \\
+    \-\-copy\-mirror\-merge x \\
+    \-\-no\-auto\-vector\-detection \\
+    \-\-vector\-fields "velocity,displacement"
+.fi
+.IP
+Disable automatic vector detection and only negate the explicitly
+specified velocity and displacement vector components.
 .TP
 \fBIntrinsic vs extrinsic rotation comparison:\fR
 .nf

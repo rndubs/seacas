@@ -18,9 +18,8 @@ use std::path::PathBuf;
 /// These are common patterns like "max_x" (maximum x value) that should NOT
 /// be treated as vector components even though they end with "_x".
 const SCALAR_PREFIXES: &[&str] = &[
-    "max", "min", "avg", "average", "mean", "sum", "total",
-    "index", "idx", "count", "num", "start", "end",
-    "first", "last", "row", "col", "column",
+    "max", "min", "avg", "average", "mean", "sum", "total", "index", "idx", "count", "num",
+    "start", "end", "first", "last", "row", "col", "column",
 ];
 
 /// Configuration for vector component detection during copy-mirror-merge.
@@ -141,7 +140,7 @@ impl VectorDetectionConfig {
         let base = &name_lower[..name_lower.len() - suffix.len()];
 
         // Exclude known scalar patterns
-        if SCALAR_PREFIXES.iter().any(|&prefix| base == prefix) {
+        if SCALAR_PREFIXES.contains(&base) {
             return false;
         }
 
@@ -375,7 +374,6 @@ fn get_mirror_permutation(topology: &str, axis: Axis) -> Option<Vec<usize>> {
         _ => None, // Unsupported topology
     }
 }
-
 
 // ============================================================================
 // Mirrored Data Creation Functions
@@ -1450,11 +1448,7 @@ mod tests {
 
     #[test]
     fn test_vector_detection_user_specified_vectors() {
-        let config = VectorDetectionConfig::from_cli_options(
-            Some("flux,custom"),
-            None,
-            false,
-        );
+        let config = VectorDetectionConfig::from_cli_options(Some("flux,custom"), None, false);
 
         // User-specified vectors should be detected
         assert!(config.is_vector_component("flux_x", Axis::X));
@@ -1469,11 +1463,7 @@ mod tests {
 
     #[test]
     fn test_vector_detection_scalar_override() {
-        let config = VectorDetectionConfig::from_cli_options(
-            None,
-            Some("flux_x,special_y"),
-            false,
-        );
+        let config = VectorDetectionConfig::from_cli_options(None, Some("flux_x,special_y"), false);
 
         // Scalar overrides should prevent detection
         assert!(!config.is_vector_component("flux_x", Axis::X));
