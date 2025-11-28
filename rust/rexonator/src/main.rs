@@ -131,6 +131,7 @@ fn main() -> Result<()> {
                 cmm_axis,
                 cmm_tolerance,
                 &vector_config,
+                Some(perf_config.to_exodus_config()),
                 cli.verbose,
             )?;
         } else {
@@ -144,6 +145,7 @@ fn main() -> Result<()> {
                 cmm_axis,
                 cmm_tolerance,
                 &vector_config,
+                Some(perf_config.to_exodus_config()),
                 cli.verbose,
             )?;
         }

@@ -1291,7 +1291,12 @@ fn copy_mirror_merge(
 }
 
 /// Write mesh data to a new file
-fn write_mesh_data(path: &PathBuf, data: &MeshData, verbose: bool) -> Result<()> {
+fn write_mesh_data(
+    path: &PathBuf,
+    data: &MeshData,
+    perf_config: Option<exodus_rs::PerformanceConfig>,
+    verbose: bool,
+) -> Result<()> {
     use exodus_rs::types::CreateOptions;
 
     if verbose {
@@ -1301,9 +1306,10 @@ fn write_mesh_data(path: &PathBuf, data: &MeshData, verbose: bool) -> Result<()>
         );
     }
 
-    // Create new file with clobber mode
+    // Create new file with clobber mode and performance settings
     let options = CreateOptions {
         mode: CreateMode::Clobber,
+        performance: perf_config,
         ..Default::default()
     };
     let mut file = ExodusFile::create(path, options)?;
@@ -1496,6 +1502,7 @@ pub fn apply_copy_mirror_merge(
     axis: Axis,
     tolerance: f64,
     vector_config: &VectorDetectionConfig,
+    perf_config: Option<exodus_rs::PerformanceConfig>,
     verbose: bool,
 ) -> Result<()> {
     if verbose {
@@ -1531,8 +1538,8 @@ pub fn apply_copy_mirror_merge(
     // Apply copy-mirror-merge
     let merged_data = copy_mirror_merge(&mesh_data, axis, tolerance, vector_config, verbose)?;
 
-    // Write output mesh
-    write_mesh_data(output_path, &merged_data, verbose)?;
+    // Write output mesh with performance settings
+    write_mesh_data(output_path, &merged_data, perf_config, verbose)?;
 
     Ok(())
 }

@@ -14,7 +14,7 @@
 
 ### Low Priority
 - [ ] Replace `exit()` with proper error returns in man.rs [XFAIL TEST: `test_man_page_missing_returns_error`]
-- [ ] Remove or implement unused performance config fields
+- [x] Remove or implement unused performance config fields
 - [ ] Add parallel processing with rayon for large meshes [XFAIL TEST: `test_cmm_parallel_processing`]
 - [ ] Add benchmarks for performance-critical operations
 - [ ] Add progress indicators for verbose mode on large operations [XFAIL TEST: `test_verbose_progress_indicators`]
@@ -453,7 +453,7 @@ TransformError::InvalidFormat(format!(
 | **Medium** | Complete side set mapping TODO | copy_mirror_merge.rs:378-497 | High | Complete |
 | **Medium** | Test helper consolidation | parsers.rs:352-496 | Low | Complete |
 | **Low** | Hard exit in man.rs | man.rs:27,35 | Low | Pending |
-| **Low** | Unused performance config fields | performance.rs:98-102 | Low | Pending |
+| **Low** | Unused performance config fields | performance.rs:98-102 | Low | Complete |
 | **Low** | Add parallel processing (rayon) | copy_mirror_merge.rs | Medium | Pending |
 | **Low** | Add benchmarks | new file | Medium | Pending |
 | **Low** | Progress indicators | copy_mirror_merge.rs | Low | Pending |
