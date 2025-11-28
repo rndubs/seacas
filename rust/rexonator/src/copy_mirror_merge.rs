@@ -878,11 +878,24 @@ fn create_mirrored_nodal_vars(
 
     let mut new_nodal_var_values: Vec<Vec<Vec<f64>>> = Vec::with_capacity(num_vars);
 
+    if verbose && num_vars > 0 {
+        println!("  Processing {} nodal variables...", num_vars);
+    }
+
     for (var_idx, var_name) in data.nodal_var_names.iter().enumerate() {
         let is_mirror_component = vector_config.is_vector_component(var_name, axis);
 
+        // Progress indicator for variables
+        if verbose && num_vars > 10 && var_idx % 10 == 0 && var_idx > 0 {
+            println!("  Processing nodal variable {}/{}", var_idx + 1, num_vars);
+        }
+
         let mut var_time_series = Vec::with_capacity(num_time_steps);
         for step in 0..num_time_steps {
+            // Progress indicator for time steps (only for first variable to avoid spam)
+            if verbose && var_idx == 0 && num_time_steps > 100 && step % 100 == 0 && step > 0 {
+                println!("  Processing time step {}/{}", step + 1, num_time_steps);
+            }
             let orig_values = &data.nodal_var_values[var_idx][step];
 
             // Pre-allocate with capacity for original + mirrored nodes
@@ -928,6 +941,14 @@ fn create_mirrored_elem_vars(
     // Pre-allocate for original + mirrored blocks
     let mut new_elem_var_values: Vec<Vec<Vec<Vec<f64>>>> = Vec::with_capacity(num_blocks * 2);
 
+    if verbose && !data.elem_var_names.is_empty() {
+        println!(
+            "  Processing {} element variables across {} blocks...",
+            data.elem_var_names.len(),
+            num_blocks
+        );
+    }
+
     // First, keep original block values unchanged
     for block_vars in &data.elem_var_values {
         new_elem_var_values.push(block_vars.clone());
@@ -935,6 +956,9 @@ fn create_mirrored_elem_vars(
 
     // Then, add mirrored block values (duplicating original values with vector negation)
     for (block_idx, block_vars) in data.elem_var_values.iter().enumerate() {
+        if verbose && num_blocks > 10 && block_idx % 10 == 0 && block_idx > 0 {
+            println!("  Processing element block {}/{}", block_idx + 1, num_blocks);
+        }
         let mut mirror_block_vars: Vec<Vec<Vec<f64>>> = Vec::with_capacity(block_vars.len());
 
         for (var_idx, var_time_series) in block_vars.iter().enumerate() {

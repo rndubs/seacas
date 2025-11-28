@@ -465,10 +465,9 @@ fn test_cmm_parallel_processing() {
 
 #[test]
 #[serial]
-#[ignore = "XFAIL: Progress indicators not yet implemented - see PLAN.md"]
 fn test_verbose_progress_indicators() {
-    // With large meshes, verbose mode should show progress updates
-    // like "Processing time step 50/100".
+    // FIXED: Progress indicators now work in verbose mode.
+    // With meshes that have variables, verbose mode shows progress updates.
     let ctx = TestContext::new();
     let input = ctx.path("input.exo");
     let output = ctx.path("output.exo");
@@ -488,11 +487,16 @@ fn test_verbose_progress_indicators() {
 
     assert!(result.status.success());
 
-    // When implemented:
-    // For large meshes with many time steps/variables, verbose output
-    // should include progress like:
-    // "  Processing time step 50/100"
-    // "  Processing nodal variable 5/10"
+    // Check that verbose output includes progress messages
+    let stdout = String::from_utf8_lossy(&result.stdout);
+
+    // For meshes with nodal variables, should see processing message
+    // Note: create_hex8_mesh has nodal variables
+    assert!(
+        stdout.contains("Processing") || stdout.contains("nodal variable"),
+        "Verbose mode should show progress indicators, got: {}",
+        stdout
+    );
 }
 
 // ========================================================================
