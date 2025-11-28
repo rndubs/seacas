@@ -81,6 +81,26 @@ jobs:
         cd rust/exodus-rs
         cargo check --all-features
 
+    - name: Check rexonator formatting
+      run: |
+        cd rust/rexonator
+        cargo fmt --all -- --check
+
+    - name: Run rexonator clippy
+      run: |
+        cd rust/rexonator
+        cargo clippy --features netcdf4 -- -D warnings
+
+    - name: Build rexonator (debug)
+      run: |
+        cd rust/rexonator
+        cargo build --features netcdf4
+
+    - name: Build rexonator (release)
+      run: |
+        cd rust/rexonator
+        cargo build --release --features netcdf4
+
     - name: Build exodus-py
       run: |
         python -m venv build-venv

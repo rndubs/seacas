@@ -349,69 +349,150 @@ mod tests {
         assert!(!arg_matches_flag("translate", "--translate")); // Missing dashes
     }
 
-    /// Helper to create a test CLI with specific operations
-    fn make_test_cli(
+    /// Builder for creating test CLI instances with fluent API.
+    ///
+    /// This builder provides a clean way to construct `Cli` instances for testing,
+    /// with sensible defaults and chainable methods for each configuration option.
+    ///
+    /// # Examples
+    ///
+    /// ```ignore
+    /// // Basic transformation test
+    /// let cli = TestCliBuilder::new()
+    ///     .translate(vec!["1,0,0".to_string()])
+    ///     .rotate(vec!["Z,90".to_string()])
+    ///     .build();
+    ///
+    /// // Copy-mirror-merge test with custom tolerance
+    /// let cli = TestCliBuilder::new()
+    ///     .copy_mirror_merge(vec!["x".to_string()])
+    ///     .merge_tolerance(0.005)
+    ///     .build();
+    /// ```
+    #[derive(Default)]
+    struct TestCliBuilder {
         translate: Vec<String>,
         rotate: Vec<String>,
         scale_len: Vec<f64>,
         mirror: Vec<String>,
-    ) -> Cli {
-        Cli {
-            input: Some(PathBuf::from("input.exo")),
-            output: Some(PathBuf::from("output.exo")),
-            scale_len,
-            mirror,
-            translate,
-            rotate,
-            scale_field: vec![],
-            copy_mirror_merge: vec![],
-            merge_tolerance: 0.001,
-            vector_fields: None,
-            scalar_fields: None,
-            no_auto_vector_detection: false,
-            zero_time: false,
-            verbose: false,
-            cache_size: None,
-            preemption: None,
-            node_chunk: None,
-            element_chunk: None,
-            time_chunk: None,
-            show_perf_config: false,
-            man: false,
-        }
+        scale_field: Vec<String>,
+        copy_mirror_merge: Vec<String>,
+        merge_tolerance: Option<f64>,
+        vector_fields: Option<String>,
+        scalar_fields: Option<String>,
+        no_auto_vector_detection: bool,
+        zero_time: bool,
+        verbose: bool,
     }
 
-    /// Helper to create a test CLI with copy-mirror-merge
-    fn make_test_cli_with_cmm(
-        translate: Vec<String>,
-        rotate: Vec<String>,
-        scale_len: Vec<f64>,
-        mirror: Vec<String>,
-        copy_mirror_merge: Vec<String>,
-        merge_tolerance: f64,
-    ) -> Cli {
-        Cli {
-            input: Some(PathBuf::from("input.exo")),
-            output: Some(PathBuf::from("output.exo")),
-            scale_len,
-            mirror,
-            translate,
-            rotate,
-            scale_field: vec![],
-            copy_mirror_merge,
-            merge_tolerance,
-            vector_fields: None,
-            scalar_fields: None,
-            no_auto_vector_detection: false,
-            zero_time: false,
-            verbose: false,
-            cache_size: None,
-            preemption: None,
-            node_chunk: None,
-            element_chunk: None,
-            time_chunk: None,
-            show_perf_config: false,
-            man: false,
+    impl TestCliBuilder {
+        /// Create a new builder with default values.
+        fn new() -> Self {
+            Self::default()
+        }
+
+        /// Set translation operations.
+        fn translate(mut self, v: Vec<String>) -> Self {
+            self.translate = v;
+            self
+        }
+
+        /// Set rotation operations.
+        fn rotate(mut self, v: Vec<String>) -> Self {
+            self.rotate = v;
+            self
+        }
+
+        /// Set scale length factors.
+        fn scale_len(mut self, v: Vec<f64>) -> Self {
+            self.scale_len = v;
+            self
+        }
+
+        /// Set mirror axes.
+        fn mirror(mut self, v: Vec<String>) -> Self {
+            self.mirror = v;
+            self
+        }
+
+        /// Set scale-field operations.
+        fn scale_field(mut self, v: Vec<String>) -> Self {
+            self.scale_field = v;
+            self
+        }
+
+        /// Set copy-mirror-merge axes.
+        fn copy_mirror_merge(mut self, v: Vec<String>) -> Self {
+            self.copy_mirror_merge = v;
+            self
+        }
+
+        /// Set merge tolerance for copy-mirror-merge operations.
+        fn merge_tolerance(mut self, tol: f64) -> Self {
+            self.merge_tolerance = Some(tol);
+            self
+        }
+
+        /// Set explicit vector field names.
+        #[allow(dead_code)]
+        fn vector_fields(mut self, fields: &str) -> Self {
+            self.vector_fields = Some(fields.to_string());
+            self
+        }
+
+        /// Set explicit scalar field names.
+        #[allow(dead_code)]
+        fn scalar_fields(mut self, fields: &str) -> Self {
+            self.scalar_fields = Some(fields.to_string());
+            self
+        }
+
+        /// Disable automatic vector detection.
+        #[allow(dead_code)]
+        fn no_auto_vector_detection(mut self, value: bool) -> Self {
+            self.no_auto_vector_detection = value;
+            self
+        }
+
+        /// Enable zero-time normalization.
+        #[allow(dead_code)]
+        fn zero_time(mut self, value: bool) -> Self {
+            self.zero_time = value;
+            self
+        }
+
+        /// Enable verbose output.
+        #[allow(dead_code)]
+        fn verbose(mut self, value: bool) -> Self {
+            self.verbose = value;
+            self
+        }
+
+        /// Build the final `Cli` instance.
+        fn build(self) -> Cli {
+            Cli {
+                input: Some(PathBuf::from("input.exo")),
+                output: Some(PathBuf::from("output.exo")),
+                scale_len: self.scale_len,
+                mirror: self.mirror,
+                translate: self.translate,
+                rotate: self.rotate,
+                scale_field: self.scale_field,
+                copy_mirror_merge: self.copy_mirror_merge,
+                merge_tolerance: self.merge_tolerance.unwrap_or(0.001),
+                vector_fields: self.vector_fields,
+                scalar_fields: self.scalar_fields,
+                no_auto_vector_detection: self.no_auto_vector_detection,
+                zero_time: self.zero_time,
+                verbose: self.verbose,
+                cache_size: None,
+                preemption: None,
+                node_chunk: None,
+                element_chunk: None,
+                time_chunk: None,
+                show_perf_config: false,
+                man: false,
+            }
         }
     }
 
@@ -431,12 +512,10 @@ mod tests {
         .map(String::from)
         .collect();
 
-        let cli = make_test_cli(
-            vec!["1,0,0".to_string()],
-            vec!["Z,90".to_string()],
-            vec![],
-            vec![],
-        );
+        let cli = TestCliBuilder::new()
+            .translate(vec!["1,0,0".to_string()])
+            .rotate(vec!["Z,90".to_string()])
+            .build();
 
         let ops = extract_ordered_operations_from_args(&args, &cli, false).unwrap();
 
@@ -461,12 +540,10 @@ mod tests {
         .map(String::from)
         .collect();
 
-        let cli = make_test_cli(
-            vec!["1,0,0".to_string()],
-            vec!["Z,90".to_string()],
-            vec![],
-            vec![],
-        );
+        let cli = TestCliBuilder::new()
+            .translate(vec!["1,0,0".to_string()])
+            .rotate(vec!["Z,90".to_string()])
+            .build();
 
         let ops = extract_ordered_operations_from_args(&args, &cli, false).unwrap();
 
@@ -493,12 +570,10 @@ mod tests {
         .map(String::from)
         .collect();
 
-        let cli = make_test_cli(
-            vec!["1,0,0".to_string(), "2,0,0".to_string()],
-            vec!["Z,90".to_string()],
-            vec![],
-            vec![],
-        );
+        let cli = TestCliBuilder::new()
+            .translate(vec!["1,0,0".to_string(), "2,0,0".to_string()])
+            .rotate(vec!["Z,90".to_string()])
+            .build();
 
         let ops = extract_ordered_operations_from_args(&args, &cli, false).unwrap();
 
@@ -528,12 +603,12 @@ mod tests {
         .map(String::from)
         .collect();
 
-        let cli = make_test_cli(
-            vec!["1,0,0".to_string()],
-            vec!["Z,90".to_string()],
-            vec![2.0],
-            vec!["x".to_string()],
-        );
+        let cli = TestCliBuilder::new()
+            .translate(vec!["1,0,0".to_string()])
+            .rotate(vec!["Z,90".to_string()])
+            .scale_len(vec![2.0])
+            .mirror(vec!["x".to_string()])
+            .build();
 
         let ops = extract_ordered_operations_from_args(&args, &cli, false).unwrap();
 
@@ -558,12 +633,10 @@ mod tests {
         .map(String::from)
         .collect();
 
-        let cli = make_test_cli(
-            vec!["1,0,0".to_string()],
-            vec!["Z,90".to_string()],
-            vec![],
-            vec![],
-        );
+        let cli = TestCliBuilder::new()
+            .translate(vec!["1,0,0".to_string()])
+            .rotate(vec!["Z,90".to_string()])
+            .build();
 
         let ops = extract_ordered_operations_from_args(&args, &cli, false).unwrap();
 
@@ -586,12 +659,10 @@ mod tests {
         .map(String::from)
         .collect();
 
-        let cli = make_test_cli(
-            vec!["1,0,0".to_string()],
-            vec!["Z,90".to_string()],
-            vec![],
-            vec![],
-        );
+        let cli = TestCliBuilder::new()
+            .translate(vec!["1,0,0".to_string()])
+            .rotate(vec!["Z,90".to_string()])
+            .build();
 
         let ops = extract_ordered_operations_from_args(&args, &cli, false).unwrap();
 
@@ -616,8 +687,10 @@ mod tests {
         .map(String::from)
         .collect();
 
-        let mut cli = make_test_cli(vec![], vec![], vec![2.0], vec![]);
-        cli.scale_field = vec!["temperature,1.5".to_string()];
+        let cli = TestCliBuilder::new()
+            .scale_len(vec![2.0])
+            .scale_field(vec!["temperature,1.5".to_string()])
+            .build();
 
         let ops = extract_ordered_operations_from_args(&args, &cli, false).unwrap();
 
@@ -647,12 +720,13 @@ mod tests {
         .map(String::from)
         .collect();
 
-        let mut cli = make_test_cli(vec![], vec![], vec![], vec![]);
-        cli.scale_field = vec![
-            "temperature,1.5".to_string(),
-            "pressure,0.5".to_string(),
-            "velocity,2.0".to_string(),
-        ];
+        let cli = TestCliBuilder::new()
+            .scale_field(vec![
+                "temperature,1.5".to_string(),
+                "pressure,0.5".to_string(),
+                "velocity,2.0".to_string(),
+            ])
+            .build();
 
         let ops = extract_ordered_operations_from_args(&args, &cli, false).unwrap();
 
@@ -691,13 +765,14 @@ mod tests {
         .map(String::from)
         .collect();
 
-        let mut cli = make_test_cli(
-            vec!["1,0,0".to_string()],
-            vec!["Z,90".to_string()],
-            vec![],
-            vec![],
-        );
-        cli.scale_field = vec!["stress,1.23".to_string(), "temperature,1.8".to_string()];
+        let cli = TestCliBuilder::new()
+            .translate(vec!["1,0,0".to_string()])
+            .rotate(vec!["Z,90".to_string()])
+            .scale_field(vec![
+                "stress,1.23".to_string(),
+                "temperature,1.8".to_string(),
+            ])
+            .build();
 
         let ops = extract_ordered_operations_from_args(&args, &cli, false).unwrap();
 
@@ -728,8 +803,12 @@ mod tests {
         .map(String::from)
         .collect();
 
-        let mut cli = make_test_cli(vec![], vec![], vec![], vec![]);
-        cli.scale_field = vec!["temperature,1.5".to_string(), "pressure,0.5".to_string()];
+        let cli = TestCliBuilder::new()
+            .scale_field(vec![
+                "temperature,1.5".to_string(),
+                "pressure,0.5".to_string(),
+            ])
+            .build();
 
         let ops = extract_ordered_operations_from_args(&args, &cli, false).unwrap();
 
@@ -768,8 +847,9 @@ mod tests {
             .map(String::from)
             .collect();
 
-        let cli =
-            make_test_cli_with_cmm(vec![], vec![], vec![], vec![], vec!["x".to_string()], 0.001);
+        let cli = TestCliBuilder::new()
+            .copy_mirror_merge(vec!["x".to_string()])
+            .build();
 
         let ops = extract_ordered_operations_from_args(&args, &cli, false).unwrap();
 
@@ -797,14 +877,12 @@ mod tests {
         .map(String::from)
         .collect();
 
-        let cli = make_test_cli_with_cmm(
-            vec!["1,0,0".to_string()],
-            vec!["Z,90".to_string()],
-            vec![],
-            vec![],
-            vec!["x".to_string()],
-            0.005,
-        );
+        let cli = TestCliBuilder::new()
+            .translate(vec!["1,0,0".to_string()])
+            .rotate(vec!["Z,90".to_string()])
+            .copy_mirror_merge(vec!["x".to_string()])
+            .merge_tolerance(0.005)
+            .build();
 
         let ops = extract_ordered_operations_from_args(&args, &cli, false).unwrap();
 
@@ -824,8 +902,9 @@ mod tests {
             .map(String::from)
             .collect();
 
-        let cli =
-            make_test_cli_with_cmm(vec![], vec![], vec![], vec![], vec!["y".to_string()], 0.001);
+        let cli = TestCliBuilder::new()
+            .copy_mirror_merge(vec!["y".to_string()])
+            .build();
 
         let ops = extract_ordered_operations_from_args(&args, &cli, false).unwrap();
 
