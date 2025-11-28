@@ -280,14 +280,11 @@ let cli = TestCliBuilder::new()
 - `test_cmm_side_numbers_properly_mapped` - verifies sides parallel to mirror axis stay unchanged
 - `test_cmm_side_numbers_mapped_for_perpendicular_faces` - verifies perpendicular faces are remapped
 
-### 4. Unused Function Parameter
+### 4. Unused Function Parameter - FIXED
 
-**File:** `copy_mirror_merge.rs:54`
-```rust
-fn find_symmetry_plane_nodes(coords: &[f64], _axis: Axis, tolerance: f64) -> Vec<usize> {
-```
+**File:** `copy_mirror_merge.rs:306`
 
-The `_axis` parameter is unused. This was likely intended for future use but should be removed or documented.
+The unused `_axis` parameter has been removed from `find_symmetry_plane_nodes()`. The axis selection now happens entirely in the caller via `get_axis_coords()`, making the function signature clearer and more accurate.
 
 ---
 
