@@ -204,8 +204,8 @@ study:
           cmd: |
               set -euo pipefail
 
-              # Timeout limit in seconds (600s = 10 minutes)
-              TIMEOUT_SECONDS=600
+              # Timeout limit in seconds (1200s = 20 minutes)
+              TIMEOUT_SECONDS=1200
 
               echo "========================================================================"
               echo "Running benchmark configuration:"
@@ -358,7 +358,7 @@ study:
               echo "Benchmark complete. Results saved to: $RESULT_JSON"
           nodes: 1
           procs: 1
-          walltime: "00:10:00"
+          walltime: "00:25:00"
           depends: [generate_mesh]
 
     ###########################################################################
@@ -460,7 +460,7 @@ merlin:
             benchmark_workers:
                 args: -l INFO --concurrency 1 --prefetch-multiplier 1 -O fair
                 steps: [run_benchmark]
-                nodes: 16
+                nodes: 32
 
             # Workers for serial tasks (setup, collect, plot)
             serial_workers:

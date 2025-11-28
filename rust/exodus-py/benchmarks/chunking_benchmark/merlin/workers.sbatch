@@ -1,7 +1,10 @@
 #!/bin/bash
-#SBATCH -N 16
+#SBATCH -N 32
+#SBATCH --ntasks=32
+#SBATCH --ntasks-per-node=1
+#SBATCH --exclusive
 #SBATCH -p pbatch
-#SBATCH -t 12:00:00
+#SBATCH -t 24:00:00
 #SBATCH -J merlin_workers
 #SBATCH -o merlin_workers_%j.out
 

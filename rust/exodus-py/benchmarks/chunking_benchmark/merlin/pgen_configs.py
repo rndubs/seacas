@@ -42,10 +42,10 @@ BASELINE_CONFIG = {
 # At 10 timesteps: 50k elements = ~2 MiB (L2-sized chunk)
 # Trimmed to focus on cache-friendly sizes: 432 configs (full factorial)
 PARAM_RANGES = {
-    "CACHE_MB": [32, 64, 96, 128],                           # Stay under L3 (105 MiB)
-    "NODE_CHUNK_SIZE": [50_000, 75_000, 100_000],           # 2-4 MiB at 10 timesteps
-    "ELEMENT_CHUNK_SIZE": [25_000, 37_500, 50_000, 75_000], # 1-3 MiB at 10 timesteps
-    "TIME_CHUNK_SIZE": [5, 10, 20],                        # Avoid extremes
+    "CACHE_MB": [1, 32, 64, 96, 128, 160],                           # Stay under L3 (105 MiB)
+    "NODE_CHUNK_SIZE": [10_000, 50_000, 75_000, 100_000, 200_000],           # 2-4 MiB at 10 timesteps
+    "ELEMENT_CHUNK_SIZE": [25_000, 37_500, 50_000, 75_000, 100_000], # 1-3 MiB at 10 timesteps
+    "TIME_CHUNK_SIZE": [1, 5, 10, 20],                        # Avoid extremes
     "PREEMPTION": [0.0, 0.5, 1.0],                          # Test extremes + middle
 }
 
@@ -195,7 +195,13 @@ def get_custom_generator(env, **kwargs):
 
 
 def write_csv(configs: List[Dict], outfile: str):
-    """Write configurations to CSV file for Merlin."""
+    """Write configurations to CSV file for Merlin.
+
+    Note: Does NOT write header row because Merlin's column_labels
+    defines the columns. Writing a header would cause Merlin to
+    treat the header row as sample 0, resulting in literal variable
+    names (e.g., "CACHE_MB") being passed instead of values.
+    """
     if not configs:
         print("ERROR: No configurations to write", file=sys.stderr)
         return
@@ -205,7 +211,8 @@ def write_csv(configs: List[Dict], outfile: str):
 
     with open(outfile, 'w', newline='') as f:
         writer = csv.DictWriter(f, fieldnames=fieldnames)
-        writer.writeheader()
+        # DO NOT write header - Merlin uses column_labels instead
+        # writer.writeheader()  # Commented out to prevent header being treated as sample 0
         writer.writerows(configs)
 
     print(f"Generated {len(configs)} configurations")
