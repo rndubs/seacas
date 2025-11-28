@@ -22,6 +22,9 @@ numpy = "0.27"
 rayon = "1.8"
 serde = { version = "1.0", features = ["derive"] }
 
+# Progress indicators
+indicatif = "0.17"
+
 # Testing (shared dev-dependencies)
 approx = "0.5"
 tempfile = "3.8"

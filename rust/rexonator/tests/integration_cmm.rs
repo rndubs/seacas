@@ -1270,3 +1270,78 @@ fn test_vector_detection_velocity_x_is_negated() {
         "Mirrored velocity_x values should include negated values"
     );
 }
+
+// ========================================================================
+// Progress Indicator Tests
+// ========================================================================
+
+/// Test that verbose mode with progress indicators works correctly
+#[test]
+#[serial]
+fn test_verbose_progress_indicators() {
+    let ctx = TestContext::new();
+    let input = ctx.path("input.exo");
+    let output = ctx.path("output.exo");
+
+    // Create mesh with multiple time steps and variables for meaningful progress
+    create_hex8_mesh(&input).expect("Failed to create HEX8 mesh");
+
+    // Run with verbose mode - progress indicators should show without errors
+    let result = rexonator_cmd()
+        .args([
+            input.to_str().unwrap(),
+            output.to_str().unwrap(),
+            "--copy-mirror-merge",
+            "x",
+            "--verbose",
+        ])
+        .output()
+        .expect("Failed to run rexonator");
+
+    assert!(
+        result.status.success(),
+        "CMM with verbose mode should succeed.\nstderr: {}",
+        String::from_utf8_lossy(&result.stderr)
+    );
+
+    // Verify the output was created correctly
+    let params = read_params(&output).expect("Failed to read output params");
+    assert!(params.num_nodes > 0, "Output should have nodes");
+    assert!(params.num_elems > 0, "Output should have elements");
+}
+
+/// Test verbose mode with element variables (more progress operations)
+#[test]
+#[serial]
+fn test_verbose_progress_with_elem_vars() {
+    let ctx = TestContext::new();
+    let input = ctx.path("input.exo");
+    let output = ctx.path("output.exo");
+
+    // Create mesh with element variables
+    create_hex8_with_elem_vars(&input).expect("Failed to create HEX8 mesh with elem vars");
+
+    let result = rexonator_cmd()
+        .args([
+            input.to_str().unwrap(),
+            output.to_str().unwrap(),
+            "--copy-mirror-merge",
+            "x",
+            "--verbose",
+        ])
+        .output()
+        .expect("Failed to run rexonator");
+
+    assert!(
+        result.status.success(),
+        "CMM with verbose mode and element vars should succeed.\nstderr: {}",
+        String::from_utf8_lossy(&result.stderr)
+    );
+
+    // Verify the output was created correctly
+    let params = read_params(&output).expect("Failed to read output params");
+    assert_eq!(
+        params.num_elems, 8,
+        "Should have doubled elements (4 original + 4 mirrored)"
+    );
+}

@@ -6,6 +6,7 @@
 //! are properly duplicated and transformed.
 
 use crate::cli::{Axis, Result, TransformError};
+use crate::progress::{create_progress_bar, finish_progress};
 use exodus_rs::{mode, types::*, ExodusFile};
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
@@ -878,6 +879,10 @@ fn create_mirrored_nodal_vars(
 
     let mut new_nodal_var_values: Vec<Vec<Vec<f64>>> = Vec::with_capacity(num_vars);
 
+    // Progress bar for mirroring nodal variables
+    let total_ops = (num_vars * num_time_steps) as u64;
+    let pb = create_progress_bar(verbose, total_ops, "Mirroring nodal variables");
+
     for (var_idx, var_name) in data.nodal_var_names.iter().enumerate() {
         let is_mirror_component = vector_config.is_vector_component(var_name, axis);
 
@@ -903,13 +908,21 @@ fn create_mirrored_nodal_vars(
             }
 
             var_time_series.push(new_values);
+
+            if let Some(ref bar) = pb {
+                bar.inc(1);
+            }
         }
         new_nodal_var_values.push(var_time_series);
 
         if verbose && is_mirror_component {
-            println!("  Negating vector component: {}", var_name);
+            if let Some(ref bar) = pb {
+                bar.println(format!("  Negating vector component: {}", var_name));
+            }
         }
     }
+
+    finish_progress(pb);
 
     new_nodal_var_values
 }
@@ -924,6 +937,8 @@ fn create_mirrored_elem_vars(
     verbose: bool,
 ) -> Vec<Vec<Vec<Vec<f64>>>> {
     let num_blocks = data.blocks.len();
+    let num_vars = data.elem_var_names.len();
+    let num_time_steps = data.times.len();
 
     // Pre-allocate for original + mirrored blocks
     let mut new_elem_var_values: Vec<Vec<Vec<Vec<f64>>>> = Vec::with_capacity(num_blocks * 2);
@@ -932,6 +947,10 @@ fn create_mirrored_elem_vars(
     for block_vars in &data.elem_var_values {
         new_elem_var_values.push(block_vars.clone());
     }
+
+    // Progress bar for mirroring element variables (blocks * vars * time steps)
+    let total_ops = (num_blocks * num_vars * num_time_steps) as u64;
+    let pb = create_progress_bar(verbose, total_ops, "Mirroring element variables");
 
     // Then, add mirrored block values (duplicating original values with vector negation)
     for (block_idx, block_vars) in data.elem_var_values.iter().enumerate() {
@@ -954,15 +973,23 @@ fn create_mirrored_elem_vars(
                     step_values.clone()
                 };
                 mirror_var_time_series.push(mirror_values);
+
+                if let Some(ref bar) = pb {
+                    bar.inc(1);
+                }
             }
             mirror_block_vars.push(mirror_var_time_series);
 
             if verbose && is_mirror_component && block_idx == 0 {
-                println!("  Negating element vector component: {}", var_name);
+                if let Some(ref bar) = pb {
+                    bar.println(format!("  Negating element vector component: {}", var_name));
+                }
             }
         }
         new_elem_var_values.push(mirror_block_vars);
     }
+
+    finish_progress(pb);
 
     new_elem_var_values
 }
@@ -1069,14 +1096,23 @@ fn read_mesh_data(file: &ExodusFile<mode::Read>, verbose: bool) -> Result<MeshDa
         );
     }
 
+    // Progress bar for reading nodal variables (vars * time steps)
+    let nodal_read_total = (nodal_var_names.len() * num_time_steps) as u64;
+    let pb_nodal = create_progress_bar(verbose, nodal_read_total, "Reading nodal variables");
+
     for var_idx in 0..nodal_var_names.len() {
         let mut var_time_series = Vec::new();
         for step in 0..num_time_steps {
             let values = file.var(step, EntityType::Nodal, 0, var_idx)?;
             var_time_series.push(values);
+            if let Some(ref bar) = pb_nodal {
+                bar.inc(1);
+            }
         }
         nodal_var_values.push(var_time_series);
     }
+
+    finish_progress(pb_nodal);
 
     if verbose && !nodal_var_names.is_empty() {
         println!("  Nodal variables: {:?}", nodal_var_names);
@@ -1094,7 +1130,11 @@ fn read_mesh_data(file: &ExodusFile<mode::Read>, verbose: bool) -> Result<MeshDa
         );
     }
 
-    for (block_idx, block) in blocks.iter().enumerate() {
+    // Progress bar for reading element variables (blocks * vars * time steps)
+    let elem_read_total = (blocks.len() * elem_var_names.len() * num_time_steps) as u64;
+    let pb_elem = create_progress_bar(verbose, elem_read_total, "Reading element variables");
+
+    for block in blocks.iter() {
         let mut block_vars: Vec<Vec<Vec<f64>>> = Vec::new(); // [var_idx][time_step][elem_idx]
 
         for var_idx in 0..elem_var_names.len() {
@@ -1103,36 +1143,27 @@ fn read_mesh_data(file: &ExodusFile<mode::Read>, verbose: bool) -> Result<MeshDa
                 // Use block.id as entity_id for element block variables
                 match file.var(step, EntityType::ElemBlock, block.id, var_idx) {
                     Ok(values) => {
-                        if verbose && step == 0 && block_idx == 0 {
-                            println!(
-                                "    Read {} values for elem var {} on block {}",
-                                values.len(),
-                                var_idx,
-                                block.id
-                            );
-                        }
                         var_time_series.push(values);
                     }
-                    Err(e) => {
-                        if verbose && step == 0 {
-                            println!(
-                                "    Warning: Could not read elem var {} on block {}: {}",
-                                var_idx, block.id, e
-                            );
-                        }
+                    Err(_) => {
                         // Variable might not be defined for this block (truth table)
                         // Use empty vector to indicate no data
                         var_time_series.push(Vec::new());
                     }
                 }
+                if let Some(ref bar) = pb_elem {
+                    bar.inc(1);
+                }
             }
             block_vars.push(var_time_series);
         }
         elem_var_values.push(block_vars);
+    }
 
-        if verbose && !elem_var_names.is_empty() && block_idx == 0 {
-            println!("  Element variables: {:?}", elem_var_names);
-        }
+    finish_progress(pb_elem);
+
+    if verbose && !elem_var_names.is_empty() {
+        println!("  Element variables: {:?}", elem_var_names);
     }
 
     // Read global variables
@@ -1330,6 +1361,10 @@ fn write_mesh_data(
     };
     file.put_coords(&data.x, y_opt, z_opt)?;
 
+    // Progress bar for writing mesh structure
+    let mesh_items = data.blocks.len() + data.node_sets.len() + data.side_sets.len();
+    let pb_mesh = create_progress_bar(verbose, mesh_items as u64, "Writing mesh structure");
+
     // Write all element blocks
     for (idx, (block, connectivity)) in data
         .blocks
@@ -1345,6 +1380,9 @@ fn write_mesh_data(
             if !name.is_empty() {
                 file.put_name(EntityType::ElemBlock, idx, name)?;
             }
+        }
+        if let Some(ref bar) = pb_mesh {
+            bar.inc(1);
         }
     }
 
@@ -1363,6 +1401,9 @@ fn write_mesh_data(
                 file.put_name(EntityType::NodeSet, idx, name)?;
             }
         }
+        if let Some(ref bar) = pb_mesh {
+            bar.inc(1);
+        }
     }
 
     // Write side sets
@@ -1379,7 +1420,12 @@ fn write_mesh_data(
                 file.put_name(EntityType::SideSet, idx, name)?;
             }
         }
+        if let Some(ref bar) = pb_mesh {
+            bar.inc(1);
+        }
     }
+
+    finish_progress(pb_mesh);
 
     // Write time steps and variables
     if !data.times.is_empty() {
@@ -1430,6 +1476,9 @@ fn write_mesh_data(
             }
         }
 
+        // Progress bar for writing time steps
+        let pb_write = create_progress_bar(verbose, data.times.len() as u64, "Writing time steps");
+
         // Write time values and variable data
         for (step, &time) in data.times.iter().enumerate() {
             file.put_time(step, time)?;
@@ -1453,15 +1502,6 @@ fn write_mesh_data(
                     for (var_idx, var_time_series) in block_vars.iter().enumerate() {
                         if let Some(values) = var_time_series.get(step) {
                             if !values.is_empty() {
-                                if verbose && step == 0 {
-                                    println!(
-                                        "    Writing {} values for elem var {} on block {} (id={})",
-                                        values.len(),
-                                        var_idx,
-                                        block_idx,
-                                        block.id
-                                    );
-                                }
                                 file.put_var(
                                     step,
                                     EntityType::ElemBlock,
@@ -1469,19 +1509,18 @@ fn write_mesh_data(
                                     var_idx,
                                     values,
                                 )?;
-                            } else if verbose && step == 0 {
-                                println!(
-                                    "    Skipping empty elem var {} on block {} (id={})",
-                                    var_idx, block_idx, block.id
-                                );
                             }
                         }
                     }
-                } else if verbose && step == 0 {
-                    println!("    No elem var data for block {}", block_idx);
                 }
             }
+
+            if let Some(ref bar) = pb_write {
+                bar.inc(1);
+            }
         }
+
+        finish_progress(pb_write);
     } else if verbose {
         println!("  No time steps - skipping variable output");
     }
