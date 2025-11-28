@@ -167,6 +167,7 @@ fn main() -> Result<()> {
                 println!("Normalizing time values:");
             }
             normalize_time(&mut file, cli.verbose)?;
+            file.sync()?;
         }
     } else {
         // Simple path: no CopyMirrorMerge, use existing approach
@@ -202,6 +203,9 @@ fn main() -> Result<()> {
             }
             normalize_time(&mut file, cli.verbose)?;
         }
+
+        // Ensure all changes are written to disk
+        file.sync()?;
     }
 
     if cli.verbose {

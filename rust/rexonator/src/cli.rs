@@ -50,22 +50,26 @@ pub struct Cli {
     #[arg(long, value_name = "AXIS")]
     pub mirror: Vec<String>,
 
-    /// Translate mesh by x,y,z offset (e.g., "1.0,2.0,3.0")
-    #[arg(long, value_name = "X,Y,Z")]
+    /// Translate mesh by x,y,z offset (e.g., "1.0,2.0,3.0" or "-5,-3,-2")
+    #[arg(long, value_name = "X,Y,Z", allow_hyphen_values = true)]
     pub translate: Vec<String>,
 
     /// Rotate mesh using Euler angles.
     /// Format: "SEQUENCE,angle1,angle2,angle3" where SEQUENCE is 1-3 axes.
     /// Uppercase (XYZ) = extrinsic (fixed frame), lowercase (xyz) = intrinsic (body frame).
     /// Examples: "Z,90" or "XYZ,30,45,60" or "zyx,10,20,30"
-    #[arg(long, value_name = "SEQ,ANGLES")]
+    #[arg(long, value_name = "SEQ,ANGLES", allow_hyphen_values = true)]
     pub rotate: Vec<String>,
 
     /// Scale individual field variables by name.
     /// Format: "field_name,scale_factor"
-    /// Examples: "stress,1.23" or "temperature,0.5"
+    /// Examples: "stress,1.23" or "temperature,0.5" or "displacement,-1.0"
     /// Can be specified multiple times to scale different fields
-    #[arg(long = "scale-field", value_name = "NAME,FACTOR")]
+    #[arg(
+        long = "scale-field",
+        value_name = "NAME,FACTOR",
+        allow_hyphen_values = true
+    )]
     pub scale_field: Vec<String>,
 
     /// Copy, mirror, and merge mesh about a symmetry plane.
