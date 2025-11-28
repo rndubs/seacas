@@ -145,6 +145,18 @@ impl FileMode for mode::Read {}
 impl FileMode for mode::Write {}
 impl FileMode for mode::Append {}
 
+/// Trait for file modes that support write operations (Write and Append)
+pub trait WritableMode: FileMode {}
+
+impl WritableMode for mode::Write {}
+impl WritableMode for mode::Append {}
+
+/// Trait for file modes that support read operations (Read and Append)
+pub trait ReadableMode: FileMode {}
+
+impl ReadableMode for mode::Read {}
+impl ReadableMode for mode::Append {}
+
 mod private {
     pub trait Sealed {}
     impl Sealed for super::mode::Read {}

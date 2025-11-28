@@ -5,6 +5,7 @@
 
 use crate::error::{EntityId, ExodusError, Result};
 use crate::types::{Block, Connectivity, EntityType, Topology};
+use crate::utils::naming;
 use crate::{mode, ExodusFile, FileMode};
 
 // Common block operations (available in all modes)
@@ -24,18 +25,261 @@ impl<M: FileMode> ExodusFile<M> {
     ///
     /// Returns an error if entity type is not a block type
     pub fn block_ids(&self, entity_type: EntityType) -> Result<Vec<EntityId>> {
-        let id_var_name = match entity_type {
-            EntityType::ElemBlock => "eb_prop1",
-            EntityType::EdgeBlock => "ed_prop1",
-            EntityType::FaceBlock => "fa_prop1",
-            _ => return Err(ExodusError::InvalidEntityType(entity_type.to_string())),
-        };
+        let id_var_name = naming::prop_id_var(entity_type);
 
         if let Some(var) = self.nc_file.variable(id_var_name) {
             let ids: Vec<i64> = var.get_values(..)?;
             Ok(ids)
         } else {
             Ok(Vec::new())
+        }
+    }
+
+    /// Get block parameters
+    ///
+    /// # Arguments
+    ///
+    /// * `block_id` - ID of the block to query
+    ///
+    /// # Returns
+    ///
+    /// Block parameters including topology, sizes, etc.
+    pub fn block(&self, block_id: EntityId) -> Result<Block> {
+        // Try to find the block in elem blocks first
+        if let Ok(block) = self.get_block_info(EntityType::ElemBlock, block_id) {
+            return Ok(block);
+        }
+
+        // Try edge blocks
+        if let Ok(block) = self.get_block_info(EntityType::EdgeBlock, block_id) {
+            return Ok(block);
+        }
+
+        // Try face blocks
+        if let Ok(block) = self.get_block_info(EntityType::FaceBlock, block_id) {
+            return Ok(block);
+        }
+
+        Err(ExodusError::EntityNotFound {
+            entity_type: EntityType::ElemBlock.to_string(),
+            id: block_id,
+        })
+    }
+
+    /// Get element connectivity for a block
+    ///
+    /// # Arguments
+    ///
+    /// * `block_id` - ID of the block
+    ///
+    /// # Returns
+    ///
+    /// Flat array of node IDs
+    pub fn connectivity(&self, block_id: EntityId) -> Result<Vec<i64>> {
+        let block_index = self.find_block_index(EntityType::ElemBlock, block_id)?;
+        let conn_var_name = naming::connectivity_var(block_index);
+
+        let var = self
+            .nc_file
+            .variable(&conn_var_name)
+            .ok_or_else(|| ExodusError::VariableNotDefined(conn_var_name.clone()))?;
+
+        let conn_i32: Vec<i32> = var.get_values(..)?;
+        let conn: Vec<i64> = conn_i32.iter().map(|&x| x as i64).collect();
+
+        Ok(conn)
+    }
+
+    /// Get connectivity as structured data
+    ///
+    /// # Arguments
+    ///
+    /// * `block_id` - ID of the block
+    ///
+    /// # Returns
+    ///
+    /// Connectivity struct with shape information
+    pub fn connectivity_structured(&self, block_id: EntityId) -> Result<Connectivity> {
+        let block = self.block(block_id)?;
+        let data = self.connectivity(block_id)?;
+
+        Ok(Connectivity {
+            block_id,
+            topology: Topology::from_string(&block.topology),
+            data,
+            num_entries: block.num_entries,
+            nodes_per_entry: block.num_nodes_per_entry,
+        })
+    }
+
+    /// Get connectivity as a 2D ndarray (NumPy-compatible)
+    ///
+    /// Returns connectivity as a 2D ndarray with shape (num_elements, nodes_per_element).
+    /// This is more efficient for NumPy integration via PyO3 as it provides a contiguous
+    /// memory layout compatible with NumPy arrays.
+    ///
+    /// # Arguments
+    ///
+    /// * `block_id` - ID of the block
+    ///
+    /// # Returns
+    ///
+    /// An `Array2<i64>` with shape (num_elements, nodes_per_element) where each row
+    /// contains the node IDs for one element.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - Block is not found
+    /// - Connectivity variable is not defined
+    /// - NetCDF read fails
+    /// - Data cannot be reshaped (inconsistent dimensions)
+    #[cfg(feature = "ndarray")]
+    pub fn connectivity_array(&self, block_id: EntityId) -> Result<ndarray::Array2<i64>> {
+        use ndarray::Array2;
+
+        let conn_data = self.connectivity_structured(block_id)?;
+
+        // Handle empty case
+        if conn_data.num_entries == 0 || conn_data.nodes_per_entry == 0 {
+            return Ok(Array2::zeros((0, 0)));
+        }
+
+        // Reshape flat vector into 2D array (num_elements, nodes_per_element)
+        Array2::from_shape_vec(
+            (conn_data.num_entries, conn_data.nodes_per_entry),
+            conn_data.data,
+        )
+        .map_err(|e| {
+            ExodusError::Other(format!(
+                "Failed to reshape connectivity array for block {}: {}",
+                block_id, e
+            ))
+        })
+    }
+
+    /// Get block attributes
+    ///
+    /// # Arguments
+    ///
+    /// * `block_id` - ID of the block
+    ///
+    /// # Returns
+    ///
+    /// Flat array of attribute values
+    pub fn block_attributes(&self, block_id: EntityId) -> Result<Vec<f64>> {
+        let block_index = self.find_block_index(EntityType::ElemBlock, block_id)?;
+        let attr_var_name = naming::block_attribute_var(block_index);
+
+        if let Some(var) = self.nc_file.variable(&attr_var_name) {
+            let attrs: Vec<f64> = var.get_values(..)?;
+            Ok(attrs)
+        } else {
+            Ok(Vec::new())
+        }
+    }
+
+    /// Get block attribute names
+    ///
+    /// # Arguments
+    ///
+    /// * `block_id` - ID of the block
+    ///
+    /// # Returns
+    ///
+    /// Vector of attribute names
+    pub fn block_attribute_names(&self, block_id: EntityId) -> Result<Vec<String>> {
+        let block_index = self.find_block_index(EntityType::ElemBlock, block_id)?;
+        let attr_name_var = naming::block_attribute_name_var(block_index);
+
+        if let Some(var) = self.nc_file.variable(&attr_name_var) {
+            let block = self.block(block_id)?;
+            let mut names = Vec::with_capacity(block.num_attributes);
+
+            for i in 0..block.num_attributes {
+                let bytes: Vec<i8> = var.get_values((i..i + 1, 0..33))?;
+                let name = String::from_utf8_lossy(
+                    &bytes
+                        .iter()
+                        .take_while(|&&b| b != 0)
+                        .map(|&b| b as u8)
+                        .collect::<Vec<u8>>(),
+                )
+                .trim()
+                .to_string();
+                names.push(name);
+            }
+
+            Ok(names)
+        } else {
+            Ok(Vec::new())
+        }
+    }
+
+    // Internal helper to get block info
+    fn get_block_info(&self, entity_type: EntityType, block_id: EntityId) -> Result<Block> {
+        let block_index = self.find_block_index(entity_type, block_id)?;
+        let conn_var_name = naming::connectivity_var(block_index);
+
+        let var = self
+            .nc_file
+            .variable(&conn_var_name)
+            .ok_or_else(|| ExodusError::VariableNotDefined(conn_var_name.clone()))?;
+
+        // Get topology from attribute
+        let topology = var
+            .attribute("elem_type")
+            .and_then(|attr| {
+                if let Ok(netcdf::AttributeValue::Str(s)) = attr.value() {
+                    Some(s)
+                } else {
+                    None
+                }
+            })
+            .unwrap_or_else(|| "UNKNOWN".to_string());
+
+        // Get dimensions
+        let dims = var.dimensions();
+        let num_entries = dims.first().map(|d| d.len()).unwrap_or(0);
+        let num_nodes_per_entry = dims.get(1).map(|d| d.len()).unwrap_or(0);
+
+        // Check for attributes
+        let attr_dim_name = naming::block_attributes_dim(block_index);
+        let num_attributes = self
+            .nc_file
+            .dimension(&attr_dim_name)
+            .map(|d| d.len())
+            .unwrap_or(0);
+
+        Ok(Block {
+            id: block_id,
+            entity_type,
+            topology,
+            num_entries,
+            num_nodes_per_entry,
+            num_edges_per_entry: 0,
+            num_faces_per_entry: 0,
+            num_attributes,
+        })
+    }
+
+    // Internal helper to find block index by ID
+    fn find_block_index(&self, entity_type: EntityType, block_id: EntityId) -> Result<usize> {
+        let id_var_name = naming::prop_id_var(entity_type);
+
+        if let Some(var) = self.nc_file.variable(id_var_name) {
+            let ids: Vec<i64> = var.get_values(..)?;
+            ids.iter()
+                .position(|&id| id == block_id)
+                .ok_or_else(|| ExodusError::EntityNotFound {
+                    entity_type: entity_type.to_string(),
+                    id: block_id,
+                })
+        } else {
+            Err(ExodusError::EntityNotFound {
+                entity_type: entity_type.to_string(),
+                id: block_id,
+            })
         }
     }
 }
@@ -108,22 +352,9 @@ impl ExodusFile<mode::Write> {
 
         let block_index = self.get_block_index(block.entity_type, block.id)?;
 
-        // Create dimensions for this block (names depend on entity type)
-        let (dim_name_entries, dim_name_nodes) = match block.entity_type {
-            EntityType::ElemBlock => (
-                format!("num_el_in_blk{}", block_index + 1),
-                format!("num_nod_per_el{}", block_index + 1),
-            ),
-            EntityType::EdgeBlock => (
-                format!("num_ed_in_blk{}", block_index + 1),
-                format!("num_nod_per_ed{}", block_index + 1),
-            ),
-            EntityType::FaceBlock => (
-                format!("num_fa_in_blk{}", block_index + 1),
-                format!("num_nod_per_fa{}", block_index + 1),
-            ),
-            _ => unreachable!(), // Already validated above
-        };
+        // Create dimensions for this block using naming helpers
+        let dim_name_entries = naming::block_entries_dim(block.entity_type, block_index);
+        let dim_name_nodes = naming::block_nodes_per_entry_dim(block.entity_type, block_index);
 
         self.nc_file
             .add_dimension(&dim_name_entries, block.num_entries)?;
@@ -131,7 +362,7 @@ impl ExodusFile<mode::Write> {
             .add_dimension(&dim_name_nodes, block.num_nodes_per_entry)?;
 
         // Create connectivity variable
-        let conn_var_name = format!("connect{}", block_index + 1);
+        let conn_var_name = naming::connectivity_var(block_index);
         let mut conn_var = self
             .nc_file
             .add_variable::<i32>(&conn_var_name, &[&dim_name_entries, &dim_name_nodes])?;
@@ -158,19 +389,19 @@ impl ExodusFile<mode::Write> {
         conn_var.put_attribute("elem_type", block.topology.as_str())?;
 
         // Set block ID
-        let id_var_name = self.get_block_id_var_name(block.entity_type)?;
-        if let Some(mut id_var) = self.nc_file.variable_mut(&id_var_name) {
+        let id_var_name = naming::prop_id_var(block.entity_type);
+        if let Some(mut id_var) = self.nc_file.variable_mut(id_var_name) {
             // Use put_values with a slice instead of put_value
             id_var.put_values(&[block.id], block_index..block_index + 1)?;
         }
 
         // Create attribute variable if needed
         if block.num_attributes > 0 {
-            let attr_dim_name = format!("num_att_in_blk{}", block_index + 1);
+            let attr_dim_name = naming::block_attributes_dim(block_index);
             self.nc_file
                 .add_dimension(&attr_dim_name, block.num_attributes)?;
 
-            let attr_var_name = format!("attrib{}", block_index + 1);
+            let attr_var_name = naming::block_attribute_var(block_index);
             let mut attr_var = self
                 .nc_file
                 .add_variable::<f64>(&attr_var_name, &[&dim_name_entries, &attr_dim_name])?;
@@ -210,8 +441,8 @@ impl ExodusFile<mode::Write> {
         self.ensure_data_mode()?;
 
         // Try to find the block in all block types (ElemBlock, EdgeBlock, FaceBlock)
-        let (block_index, _entity_type) = self.find_block_in_any_type(block_id)?;
-        let conn_var_name = format!("connect{}", block_index + 1);
+        let (block_index, _entity_type) = self.find_block_in_any_type_write(block_id)?;
+        let conn_var_name = naming::connectivity_var(block_index);
 
         let mut var = self.nc_file.variable_mut(&conn_var_name).ok_or_else(|| {
             ExodusError::VariableNotDefined(format!("Connectivity variable {}", conn_var_name))
@@ -239,8 +470,8 @@ impl ExodusFile<mode::Write> {
     /// - Array length mismatch
     /// - Block has no attributes defined
     pub fn put_block_attributes(&mut self, block_id: EntityId, attributes: &[f64]) -> Result<()> {
-        let (block_index, _entity_type) = self.find_block_in_any_type(block_id)?;
-        let attr_var_name = format!("attrib{}", block_index + 1);
+        let (block_index, _entity_type) = self.find_block_in_any_type_write(block_id)?;
+        let attr_var_name = naming::block_attribute_var(block_index);
 
         let mut var = self.nc_file.variable_mut(&attr_var_name).ok_or_else(|| {
             ExodusError::VariableNotDefined(format!("Attribute variable {}", attr_var_name))
@@ -262,12 +493,12 @@ impl ExodusFile<mode::Write> {
         block_id: EntityId,
         names: &[impl AsRef<str>],
     ) -> Result<()> {
-        let block_index = self.find_block_index(EntityType::ElemBlock, block_id)?;
-        let attr_name_var = format!("attrib_name{}", block_index + 1);
+        let block_index = self.find_block_index_write(EntityType::ElemBlock, block_id)?;
+        let attr_name_var = naming::block_attribute_name_var(block_index);
 
         // Create the variable if it doesn't exist
         if self.nc_file.variable(&attr_name_var).is_none() {
-            let dim_name = format!("num_att_in_blk{}", block_index + 1);
+            let dim_name = naming::block_attributes_dim(block_index);
             let len_string = "len_string";
 
             // Add len_string dimension if not present
@@ -293,12 +524,14 @@ impl ExodusFile<mode::Write> {
         Ok(())
     }
 
-    // Helper methods
+    // Helper methods for Write mode
+
+    /// Get the next available block index for new blocks
     fn get_block_index(&self, _entity_type: EntityType, _block_id: EntityId) -> Result<usize> {
         // Count how many blocks have been written by checking for connectivity variables
         let mut count = 0;
         loop {
-            let conn_var_name = format!("connect{}", count + 1);
+            let conn_var_name = naming::connectivity_var(count);
             if self.nc_file.variable(&conn_var_name).is_none() {
                 break;
             }
@@ -307,20 +540,11 @@ impl ExodusFile<mode::Write> {
         Ok(count)
     }
 
-    fn get_block_id_var_name(&self, entity_type: EntityType) -> Result<String> {
-        let var_name = match entity_type {
-            EntityType::ElemBlock => "eb_prop1",
-            EntityType::EdgeBlock => "ed_prop1",
-            EntityType::FaceBlock => "fa_prop1",
-            _ => return Err(ExodusError::InvalidEntityType(entity_type.to_string())),
-        };
-        Ok(var_name.to_string())
-    }
+    /// Find block index by ID (Write mode specific - uses naming helper)
+    fn find_block_index_write(&self, entity_type: EntityType, block_id: EntityId) -> Result<usize> {
+        let id_var_name = naming::prop_id_var(entity_type);
 
-    fn find_block_index(&self, entity_type: EntityType, block_id: EntityId) -> Result<usize> {
-        let id_var_name = self.get_block_id_var_name(entity_type)?;
-
-        if let Some(var) = self.nc_file.variable(&id_var_name) {
+        if let Some(var) = self.nc_file.variable(id_var_name) {
             let ids: Vec<i64> = var.get_values(..)?;
             ids.iter()
                 .position(|&id| id == block_id)
@@ -337,17 +561,17 @@ impl ExodusFile<mode::Write> {
     }
 
     /// Find a block by ID across all block types (ElemBlock, EdgeBlock, FaceBlock)
-    fn find_block_in_any_type(&self, block_id: EntityId) -> Result<(usize, EntityType)> {
+    fn find_block_in_any_type_write(&self, block_id: EntityId) -> Result<(usize, EntityType)> {
         // Try ElemBlock first
-        if let Ok(index) = self.find_block_index(EntityType::ElemBlock, block_id) {
+        if let Ok(index) = self.find_block_index_write(EntityType::ElemBlock, block_id) {
             return Ok((index, EntityType::ElemBlock));
         }
         // Try EdgeBlock
-        if let Ok(index) = self.find_block_index(EntityType::EdgeBlock, block_id) {
+        if let Ok(index) = self.find_block_index_write(EntityType::EdgeBlock, block_id) {
             return Ok((index, EntityType::EdgeBlock));
         }
         // Try FaceBlock
-        if let Ok(index) = self.find_block_index(EntityType::FaceBlock, block_id) {
+        if let Ok(index) = self.find_block_index_write(EntityType::FaceBlock, block_id) {
             return Ok((index, EntityType::FaceBlock));
         }
         // Not found in any block type
@@ -358,369 +582,10 @@ impl ExodusFile<mode::Write> {
     }
 }
 
-// Block operations for read mode
-#[cfg(feature = "netcdf4")]
-impl ExodusFile<mode::Read> {
-    /// Get block parameters
-    ///
-    /// # Arguments
-    ///
-    /// * `block_id` - ID of the block to query
-    ///
-    /// # Returns
-    ///
-    /// Block parameters including topology, sizes, etc.
-    pub fn block(&self, block_id: EntityId) -> Result<Block> {
-        // Try to find the block in elem blocks first
-        if let Ok(block) = self.get_block_info(EntityType::ElemBlock, block_id) {
-            return Ok(block);
-        }
+// Note: Read-only block operations (block, connectivity, block_attributes, etc.)
+// are now available in the generic impl<M: FileMode> ExodusFile<M> block above.
 
-        // Try edge blocks
-        if let Ok(block) = self.get_block_info(EntityType::EdgeBlock, block_id) {
-            return Ok(block);
-        }
-
-        // Try face blocks
-        if let Ok(block) = self.get_block_info(EntityType::FaceBlock, block_id) {
-            return Ok(block);
-        }
-
-        Err(ExodusError::EntityNotFound {
-            entity_type: EntityType::ElemBlock.to_string(),
-            id: block_id,
-        })
-    }
-
-    /// Get element connectivity for a block
-    ///
-    /// # Arguments
-    ///
-    /// * `block_id` - ID of the block
-    ///
-    /// # Returns
-    ///
-    /// Flat array of node IDs
-    pub fn connectivity(&self, block_id: EntityId) -> Result<Vec<i64>> {
-        let block_index = self.find_block_index_read(EntityType::ElemBlock, block_id)?;
-        let conn_var_name = format!("connect{}", block_index + 1);
-
-        let var = self
-            .nc_file
-            .variable(&conn_var_name)
-            .ok_or_else(|| ExodusError::VariableNotDefined(conn_var_name.clone()))?;
-
-        let conn_i32: Vec<i32> = var.get_values(..)?;
-        let conn: Vec<i64> = conn_i32.iter().map(|&x| x as i64).collect();
-
-        Ok(conn)
-    }
-
-    /// Get connectivity as structured data
-    ///
-    /// # Arguments
-    ///
-    /// * `block_id` - ID of the block
-    ///
-    /// # Returns
-    ///
-    /// Connectivity struct with shape information
-    pub fn connectivity_structured(&self, block_id: EntityId) -> Result<Connectivity> {
-        let block = self.block(block_id)?;
-        let data = self.connectivity(block_id)?;
-
-        Ok(Connectivity {
-            block_id,
-            topology: Topology::from_string(&block.topology),
-            data,
-            num_entries: block.num_entries,
-            nodes_per_entry: block.num_nodes_per_entry,
-        })
-    }
-
-    /// Get connectivity as a 2D ndarray (NumPy-compatible)
-    ///
-    /// Returns connectivity as a 2D ndarray with shape (num_elements, nodes_per_element).
-    /// This is more efficient for NumPy integration via PyO3 as it provides a contiguous
-    /// memory layout compatible with NumPy arrays.
-    ///
-    /// # Arguments
-    ///
-    /// * `block_id` - ID of the block
-    ///
-    /// # Returns
-    ///
-    /// An `Array2<i64>` with shape (num_elements, nodes_per_element) where each row
-    /// contains the node IDs for one element.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if:
-    /// - Block is not found
-    /// - Connectivity variable is not defined
-    /// - NetCDF read fails
-    /// - Data cannot be reshaped (inconsistent dimensions)
-    ///
-    /// # Example
-    ///
-    /// ```rust,ignore
-    /// use exodus_rs::ExodusFile;
-    /// use exodus_rs::mode::Read;
-    ///
-    /// let file = ExodusFile::<Read>::open("mesh.exo")?;
-    /// let conn = file.connectivity_array(1)?;
-    /// println!("Shape: {:?}", conn.shape());  // (num_elements, nodes_per_element)
-    /// println!("Element 0 nodes: {:?}", conn.row(0));
-    /// # Ok::<(), exodus_rs::ExodusError>(())
-    /// ```
-    #[cfg(feature = "ndarray")]
-    pub fn connectivity_array(&self, block_id: EntityId) -> Result<ndarray::Array2<i64>> {
-        use ndarray::Array2;
-
-        let conn_data = self.connectivity_structured(block_id)?;
-
-        // Handle empty case
-        if conn_data.num_entries == 0 || conn_data.nodes_per_entry == 0 {
-            return Ok(Array2::zeros((0, 0)));
-        }
-
-        // Reshape flat vector into 2D array (num_elements, nodes_per_element)
-        // Note: Array2::from_shape_vec expects data in row-major (C) order
-        Array2::from_shape_vec(
-            (conn_data.num_entries, conn_data.nodes_per_entry),
-            conn_data.data,
-        )
-        .map_err(|e| {
-            ExodusError::Other(format!(
-                "Failed to reshape connectivity array for block {}: {}",
-                block_id, e
-            ))
-        })
-    }
-
-    /// Get block attributes
-    ///
-    /// # Arguments
-    ///
-    /// * `block_id` - ID of the block
-    ///
-    /// # Returns
-    ///
-    /// Flat array of attribute values
-    pub fn block_attributes(&self, block_id: EntityId) -> Result<Vec<f64>> {
-        let block_index = self.find_block_index_read(EntityType::ElemBlock, block_id)?;
-        let attr_var_name = format!("attrib{}", block_index + 1);
-
-        if let Some(var) = self.nc_file.variable(&attr_var_name) {
-            let attrs: Vec<f64> = var.get_values(..)?;
-            Ok(attrs)
-        } else {
-            Ok(Vec::new())
-        }
-    }
-
-    /// Get block attribute names
-    ///
-    /// # Arguments
-    ///
-    /// * `block_id` - ID of the block
-    ///
-    /// # Returns
-    ///
-    /// Vector of attribute names
-    pub fn block_attribute_names(&self, block_id: EntityId) -> Result<Vec<String>> {
-        let block_index = self.find_block_index_read(EntityType::ElemBlock, block_id)?;
-        let attr_name_var = format!("attrib_name{}", block_index + 1);
-
-        if let Some(var) = self.nc_file.variable(&attr_name_var) {
-            let block = self.block(block_id)?;
-            let mut names = Vec::with_capacity(block.num_attributes);
-
-            for i in 0..block.num_attributes {
-                let bytes: Vec<i8> = var.get_values((i..i + 1, 0..33))?;
-                let name = String::from_utf8_lossy(
-                    &bytes
-                        .iter()
-                        .take_while(|&&b| b != 0)
-                        .map(|&b| b as u8)
-                        .collect::<Vec<u8>>(),
-                )
-                .trim()
-                .to_string();
-                names.push(name);
-            }
-
-            Ok(names)
-        } else {
-            Ok(Vec::new())
-        }
-    }
-
-    // Helper methods
-    fn get_block_info(&self, entity_type: EntityType, block_id: EntityId) -> Result<Block> {
-        let block_index = self.find_block_index_read(entity_type, block_id)?;
-        let conn_var_name = format!("connect{}", block_index + 1);
-
-        let var = self
-            .nc_file
-            .variable(&conn_var_name)
-            .ok_or_else(|| ExodusError::VariableNotDefined(conn_var_name.clone()))?;
-
-        // Get topology from attribute
-        let topology = var
-            .attribute("elem_type")
-            .and_then(|attr| {
-                if let Ok(netcdf::AttributeValue::Str(s)) = attr.value() {
-                    Some(s)
-                } else {
-                    None
-                }
-            })
-            .unwrap_or_else(|| "UNKNOWN".to_string());
-
-        // Get dimensions
-        let dims = var.dimensions();
-        let num_entries = dims.first().map(|d| d.len()).unwrap_or(0);
-        let num_nodes_per_entry = dims.get(1).map(|d| d.len()).unwrap_or(0);
-
-        // Check for attributes
-        let attr_dim_name = format!("num_att_in_blk{}", block_index + 1);
-        let num_attributes = self
-            .nc_file
-            .dimension(&attr_dim_name)
-            .map(|d| d.len())
-            .unwrap_or(0);
-
-        Ok(Block {
-            id: block_id,
-            entity_type,
-            topology,
-            num_entries,
-            num_nodes_per_entry,
-            num_edges_per_entry: 0,
-            num_faces_per_entry: 0,
-            num_attributes,
-        })
-    }
-
-    fn find_block_index_read(&self, entity_type: EntityType, block_id: EntityId) -> Result<usize> {
-        let id_var_name = match entity_type {
-            EntityType::ElemBlock => "eb_prop1",
-            EntityType::EdgeBlock => "ed_prop1",
-            EntityType::FaceBlock => "fa_prop1",
-            _ => return Err(ExodusError::InvalidEntityType(entity_type.to_string())),
-        };
-
-        if let Some(var) = self.nc_file.variable(id_var_name) {
-            let ids: Vec<i64> = var.get_values(..)?;
-            ids.iter()
-                .position(|&id| id == block_id)
-                .ok_or_else(|| ExodusError::EntityNotFound {
-                    entity_type: entity_type.to_string(),
-                    id: block_id,
-                })
-        } else {
-            Err(ExodusError::EntityNotFound {
-                entity_type: entity_type.to_string(),
-                id: block_id,
-            })
-        }
-    }
-}
-
-// Block operations for append mode
-#[cfg(feature = "netcdf4")]
-impl ExodusFile<mode::Append> {
-    /// Get block parameters (read operation)
-    pub fn block(&self, block_id: EntityId) -> Result<Block> {
-        // Reuse read implementation
-        if let Ok(block) = self.get_block_info_append(EntityType::ElemBlock, block_id) {
-            return Ok(block);
-        }
-        if let Ok(block) = self.get_block_info_append(EntityType::EdgeBlock, block_id) {
-            return Ok(block);
-        }
-        if let Ok(block) = self.get_block_info_append(EntityType::FaceBlock, block_id) {
-            return Ok(block);
-        }
-
-        Err(ExodusError::EntityNotFound {
-            entity_type: EntityType::ElemBlock.to_string(),
-            id: block_id,
-        })
-    }
-
-    fn get_block_info_append(&self, entity_type: EntityType, block_id: EntityId) -> Result<Block> {
-        let block_index = self.find_block_index_append(entity_type, block_id)?;
-        let conn_var_name = format!("connect{}", block_index + 1);
-
-        let var = self
-            .nc_file
-            .variable(&conn_var_name)
-            .ok_or_else(|| ExodusError::VariableNotDefined(conn_var_name.clone()))?;
-
-        let topology = var
-            .attribute("elem_type")
-            .and_then(|attr| {
-                if let Ok(netcdf::AttributeValue::Str(s)) = attr.value() {
-                    Some(s)
-                } else {
-                    None
-                }
-            })
-            .unwrap_or_else(|| "UNKNOWN".to_string());
-
-        let dims = var.dimensions();
-        let num_entries = dims.first().map(|d| d.len()).unwrap_or(0);
-        let num_nodes_per_entry = dims.get(1).map(|d| d.len()).unwrap_or(0);
-
-        let attr_dim_name = format!("num_att_in_blk{}", block_index + 1);
-        let num_attributes = self
-            .nc_file
-            .dimension(&attr_dim_name)
-            .map(|d| d.len())
-            .unwrap_or(0);
-
-        Ok(Block {
-            id: block_id,
-            entity_type,
-            topology,
-            num_entries,
-            num_nodes_per_entry,
-            num_edges_per_entry: 0,
-            num_faces_per_entry: 0,
-            num_attributes,
-        })
-    }
-
-    fn find_block_index_append(
-        &self,
-        entity_type: EntityType,
-        block_id: EntityId,
-    ) -> Result<usize> {
-        let id_var_name = match entity_type {
-            EntityType::ElemBlock => "eb_prop1",
-            EntityType::EdgeBlock => "ed_prop1",
-            EntityType::FaceBlock => "fa_prop1",
-            _ => return Err(ExodusError::InvalidEntityType(entity_type.to_string())),
-        };
-
-        if let Some(var) = self.nc_file.variable(id_var_name) {
-            let ids: Vec<i64> = var.get_values(..)?;
-            ids.iter()
-                .position(|&id| id == block_id)
-                .ok_or_else(|| ExodusError::EntityNotFound {
-                    entity_type: entity_type.to_string(),
-                    id: block_id,
-                })
-        } else {
-            Err(ExodusError::EntityNotFound {
-                entity_type: entity_type.to_string(),
-                id: block_id,
-            })
-        }
-    }
-}
+// Note: Append mode uses the generic impl<M: FileMode> ExodusFile<M> for read operations.
 
 #[cfg(test)]
 #[cfg(feature = "netcdf4")]
