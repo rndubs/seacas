@@ -331,6 +331,7 @@ pub fn create_hex8_mesh(path: &PathBuf) -> Result<(), Box<dyn std::error::Error>
     file.put_var(1, EntityType::Nodal, 0, 3, &velocity_z)?;
 
     file.sync()?;
+    drop(file); // Explicitly close the file before returning
     Ok(())
 }
 
@@ -665,6 +666,7 @@ pub fn create_mesh_with_time_steps(path: &PathBuf) -> Result<(), Box<dyn std::er
     }
 
     file.sync()?;
+    drop(file); // Explicitly close the file before returning
     Ok(())
 }
 
