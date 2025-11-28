@@ -54,12 +54,26 @@ impl ExodusFile<mode::Append> {
         // Apply translation
         for i in 0..coords.x.len() {
             coords.x[i] += translation[0];
+        }
+        for i in 0..coords.y.len() {
             coords.y[i] += translation[1];
+        }
+        for i in 0..coords.z.len() {
             coords.z[i] += translation[2];
         }
 
-        // Write back
-        self.put_coords(&coords.x, Some(&coords.y), Some(&coords.z))?;
+        // Write back - handle 2D meshes by passing None for empty z
+        let y_opt = if coords.y.is_empty() {
+            None
+        } else {
+            Some(coords.y.as_slice())
+        };
+        let z_opt = if coords.z.is_empty() {
+            None
+        } else {
+            Some(coords.z.as_slice())
+        };
+        self.put_coords(&coords.x, y_opt, z_opt)?;
 
         Ok(())
     }
@@ -214,16 +228,29 @@ impl ExodusFile<mode::Append> {
         let mut new_y = Vec::with_capacity(num_nodes);
         let mut new_z = Vec::with_capacity(num_nodes);
 
+        // Determine if this is a 2D or 3D mesh
+        let is_2d = coords.z.is_empty();
+
         for i in 0..num_nodes {
-            let point = [coords.x[i], coords.y[i], coords.z[i]];
+            let y_val = if coords.y.is_empty() { 0.0 } else { coords.y[i] };
+            let z_val = if is_2d { 0.0 } else { coords.z[i] };
+            let point = [coords.x[i], y_val, z_val];
             let rotated = apply_rotation_to_vector(rotation_matrix, &point);
             new_x.push(rotated[0]);
             new_y.push(rotated[1]);
-            new_z.push(rotated[2]);
+            if !is_2d {
+                new_z.push(rotated[2]);
+            }
         }
 
-        // Write back
-        self.put_coords(&new_x, Some(&new_y), Some(&new_z))?;
+        // Write back - handle 2D meshes by passing None for empty z
+        let y_opt = if coords.y.is_empty() {
+            None
+        } else {
+            Some(new_y.as_slice())
+        };
+        let z_opt = if is_2d { None } else { Some(new_z.as_slice()) };
+        self.put_coords(&new_x, y_opt, z_opt)?;
 
         Ok(())
     }
@@ -287,12 +314,26 @@ impl ExodusFile<mode::Append> {
         // Apply scaling
         for i in 0..coords.x.len() {
             coords.x[i] *= scale_factors[0];
+        }
+        for i in 0..coords.y.len() {
             coords.y[i] *= scale_factors[1];
+        }
+        for i in 0..coords.z.len() {
             coords.z[i] *= scale_factors[2];
         }
 
-        // Write back
-        self.put_coords(&coords.x, Some(&coords.y), Some(&coords.z))?;
+        // Write back - handle 2D meshes by passing None for empty z
+        let y_opt = if coords.y.is_empty() {
+            None
+        } else {
+            Some(coords.y.as_slice())
+        };
+        let z_opt = if coords.z.is_empty() {
+            None
+        } else {
+            Some(coords.z.as_slice())
+        };
+        self.put_coords(&coords.x, y_opt, z_opt)?;
 
         Ok(())
     }

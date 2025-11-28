@@ -10,7 +10,7 @@
 - [x] Fix vector component detection false positives
 - [x] Reduce excessive cloning in copy_mirror_merge
 - [x] Complete side set side number mapping
-- [ ] Consolidate test helpers with builder pattern
+- [x] Consolidate test helpers with builder pattern
 
 ### Low Priority
 - [ ] Replace `exit()` with proper error returns in man.rs [XFAIL TEST: `test_man_page_missing_returns_error`]
@@ -451,7 +451,7 @@ TransformError::InvalidFormat(format!(
 | **Medium** | Vector component false positives | copy_mirror_merge.rs:17-160 | Low | Complete |
 | **Medium** | Excessive cloning | copy_mirror_merge.rs (refactored) | Medium | Complete |
 | **Medium** | Complete side set mapping TODO | copy_mirror_merge.rs:378-497 | High | Complete |
-| **Medium** | Test helper consolidation | parsers.rs:353-410 | Low | Pending |
+| **Medium** | Test helper consolidation | parsers.rs:352-496 | Low | Complete |
 | **Low** | Hard exit in man.rs | man.rs:27,35 | Low | Pending |
 | **Low** | Unused performance config fields | performance.rs:98-102 | Low | Pending |
 | **Low** | Add parallel processing (rayon) | copy_mirror_merge.rs | Medium | Pending |
