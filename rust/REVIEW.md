@@ -2,13 +2,21 @@
 
 Based on the review of `src/lib.rs`, `src/file.rs`, `src/coord.rs`, `src/init.rs`, `src/block.rs`, and `src/variable.rs`, here's a consolidated list of recommendations to improve the quality, performance, and maintainability of the `exodus-rs` library:
 
-**1. Refactor Code Duplication (High Impact - Maintainability & Correctness)**
+**1. Refactor Code Duplication (High Impact - Maintainability & Correctness)** ✅ ADDRESSED
 
 *   **Problem:** Significant code duplication exists across `ExodusFile<mode::Write>`, `ExodusFile<mode::Read>`, and `ExodusFile<mode::Append>` for similar operations (e.g., getting/putting metadata, finding entities, handling variables).
 *   **Recommendation:**
     *   **Shared Read-Only Access:** For methods that only read data and don't require `&mut self` (e.g., `set_ids`, `set`, `block_ids`, `block`), define them in `impl<M: FileMode> ExodusFile<M>`. This is already well-implemented for some methods; extend this pattern.
     *   **Shared Write/Append Access:** For methods that modify the file and are common to `Write` and `Append` modes (e.g., `put_set`, `put_block`, `put_var`), create internal traits (e.g., `ExodusWriteOps`, `ExodusModifyOps`) and implement these traits for both `ExodusFile<mode::Write>` and `ExodusFile<mode::Append>`. This will centralize logic and prevent errors.
     *   **Helper Functions for Variable/Dimension Naming:** Create private helper functions (e.g., in `src/utils`) that generate NetCDF variable and dimension names based on `EntityType`, entity IDs, and variable indices. This will eliminate numerous hardcoded string formats and reduce the chance of typos.
+*   **Implementation Summary:**
+    *   Created `src/utils/naming.rs` with helper functions for generating NetCDF variable and dimension names based on `EntityType` and indices
+    *   Added `WritableMode` and `ReadableMode` marker traits in `lib.rs` to enable shared implementations
+    *   Moved shared write operations (`sync`, `end_define`, `reenter_define`, `is_define_mode`, `ensure_define_mode`, `ensure_data_mode`) to `impl<M: WritableMode> ExodusFile<M>` in `file.rs`
+    *   Moved read-only block operations (`block`, `connectivity`, `block_attributes`, `block_attribute_names`, `get_block_info`, `find_block_index`) to `impl<M: FileMode> ExodusFile<M>` in `block.rs`
+    *   Moved `init_params` to `impl<M: FileMode> ExodusFile<M>` in `init.rs`
+    *   Updated `block.rs` Write impl to use naming helpers for dimension/variable names
+    *   Removed duplicate implementations from Read and Append mode-specific impls
 
 **2. Optimize Performance for Large Datasets (High Impact - Performance)**
 

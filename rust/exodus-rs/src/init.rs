@@ -566,8 +566,12 @@ impl ExodusFile<mode::Write> {
     }
 }
 
+// =============================================================================
+// Read Operations (available in all modes)
+// =============================================================================
+
 #[cfg(feature = "netcdf4")]
-impl ExodusFile<mode::Read> {
+impl<M: crate::FileMode> ExodusFile<M> {
     /// Get initialization parameters from the file
     ///
     /// Reads the database parameters that were written during initialization.
@@ -720,53 +724,6 @@ impl ExodusFile<mode::Read> {
             .dimension("num_blob")
             .map(|d| d.len())
             .unwrap_or(0);
-
-        Ok(params)
-    }
-}
-
-#[cfg(feature = "netcdf4")]
-impl ExodusFile<mode::Append> {
-    /// Get initialization parameters from the file
-    ///
-    /// Same as `ExodusFile<mode::Read>::init_params()` but for append mode.
-    pub fn init_params(&self) -> Result<InitParams> {
-        let mut params = InitParams::default();
-
-        // Read title
-        if let Some(attr) = self.nc_file.attribute("title") {
-            if let Ok(netcdf::AttributeValue::Str(s)) = attr.value() {
-                params.title = s;
-            }
-        }
-
-        // Read num_dim (required)
-        params.num_dim = self
-            .nc_file
-            .dimension("num_dim")
-            .ok_or_else(|| ExodusError::VariableNotDefined("num_dim".to_string()))?
-            .len();
-
-        // Read other dimensions (same as Read mode)
-        params.num_nodes = self
-            .nc_file
-            .dimension("num_nodes")
-            .map(|d| d.len())
-            .unwrap_or(0);
-
-        params.num_elems = self
-            .nc_file
-            .dimension("num_elem")
-            .map(|d| d.len())
-            .unwrap_or(0);
-
-        params.num_elem_blocks = self
-            .nc_file
-            .dimension("num_el_blk")
-            .map(|d| d.len())
-            .unwrap_or(0);
-
-        // ... (same pattern for all other dimensions)
 
         Ok(params)
     }
