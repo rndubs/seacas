@@ -103,6 +103,19 @@ pub struct PerformanceOptions {
 }
 
 impl PerformanceOptions {
+    /// Convert to exodus_rs::PerformanceConfig for file operations
+    ///
+    /// This allows the CLI performance settings to be used when creating
+    /// new exodus files during operations like copy-mirror-merge.
+    pub fn to_exodus_config(&self) -> exodus_rs::PerformanceConfig {
+        exodus_rs::PerformanceConfig::auto()
+            .with_cache_size(self.cache_size)
+            .with_preemption(self.preemption)
+            .with_node_chunk_size(self.node_chunk_size)
+            .with_element_chunk_size(self.element_chunk_size)
+            .with_time_chunk_size(self.time_chunk_size)
+    }
+
     /// Build performance options from CLI arguments
     pub fn from_cli(cli: &Cli) -> Self {
         // Start with auto-detected defaults based on environment

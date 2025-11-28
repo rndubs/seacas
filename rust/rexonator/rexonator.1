@@ -208,6 +208,15 @@ different times, or when the absolute time values are not meaningful.
 .SS NetCDF5/HDF5 Performance Options
 These options control HDF5 chunk caching and chunking behavior for improved
 I/O performance with large mesh files.
+.PP
+\fBNote on applicability:\fR Cache settings (\fB\-\-cache\-size\fR,
+\fB\-\-preemption\fR) are applied via HDF5 environment variables and affect
+\fBall\fR file operations (reading and writing). Chunk settings
+(\fB\-\-node\-chunk\fR, \fB\-\-element\-chunk\fR, \fB\-\-time\-chunk\fR) only
+affect \fBnew file creation\fR, which currently only occurs during
+\fB\-\-copy\-mirror\-merge\fR operations. For simple transformations (translate,
+rotate, scale, mirror), the input file is copied and modified in-place,
+preserving the original chunk layout.
 .TP
 .BI \-\-cache\-size " MB"
 Set the HDF5 chunk cache size in megabytes. Larger cache sizes improve I/O
@@ -234,16 +243,19 @@ Example: \fB\-\-preemption 0.5\fR for balanced read/write performance.
 .BI \-\-node\-chunk " SIZE"
 Set the number of nodes per HDF5 chunk for nodal data. This affects
 how data is organized in new files for optimal I/O patterns.
+Only applies to \fB\-\-copy\-mirror\-merge\fR operations.
 .IP
 Default: 1,000-10,000 depending on environment.
 .TP
 .BI \-\-element\-chunk " SIZE"
 Set the number of elements per HDF5 chunk for element data.
+Only applies to \fB\-\-copy\-mirror\-merge\fR operations.
 .IP
 Default: 1,000-10,000 depending on environment.
 .TP
 .BI \-\-time\-chunk " SIZE"
 Set the number of time steps per HDF5 chunk.
+Only applies to \fB\-\-copy\-mirror\-merge\fR operations.
 .RS
 .IP \(bu 2
 \fB0\fR \- No time chunking (default, mesh-oriented I/O)
