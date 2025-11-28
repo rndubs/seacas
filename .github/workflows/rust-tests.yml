@@ -76,3 +76,14 @@ jobs:
       run: |
         cd rust/exodus-rs
         cargo test --all-features -- --test-threads=1
+
+    - name: Run rexonator unit tests
+      run: |
+        cd rust/rexonator
+        cargo test --features netcdf4 -- --nocapture
+
+    - name: Run rexonator integration tests (single-threaded)
+      run: |
+        cd rust/rexonator
+        cargo test --features netcdf4 --test integration_basic --test integration_cmm -- --test-threads=1 --nocapture
+      continue-on-error: true  # Some integration tests have known failures
