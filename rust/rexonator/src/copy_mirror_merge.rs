@@ -6,7 +6,7 @@
 //! are properly duplicated and transformed.
 
 use crate::cli::{Axis, Result, TransformError};
-use crate::progress::{create_progress_bar, finish_and_clear, finish_progress};
+use crate::progress::{create_progress_bar, finish_and_clear};
 use exodus_rs::{mode, types::*, ExodusFile};
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
