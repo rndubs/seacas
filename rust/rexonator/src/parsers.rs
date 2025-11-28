@@ -487,9 +487,6 @@ mod tests {
                 verbose: self.verbose,
                 cache_size: None,
                 preemption: None,
-                node_chunk: None,
-                element_chunk: None,
-                time_chunk: None,
                 show_perf_config: false,
                 man: false,
             }

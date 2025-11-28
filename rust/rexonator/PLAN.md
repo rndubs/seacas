@@ -13,8 +13,8 @@
 - [x] Consolidate test helpers with builder pattern
 
 ### Low Priority
-- [ ] Replace `exit()` with proper error returns in man.rs [XFAIL TEST: `test_man_page_missing_returns_error`]
-- [ ] Remove or implement unused performance config fields
+- [x] Replace `exit()` with proper error returns in man.rs [XFAIL TEST: `test_man_page_missing_returns_error`]
+- [x] Remove or implement unused performance config fields
 - [ ] Add parallel processing with rayon for large meshes [XFAIL TEST: `test_cmm_parallel_processing`]
 - [ ] Add benchmarks for performance-critical operations
 - [ ] Add progress indicators for verbose mode on large operations [XFAIL TEST: `test_verbose_progress_indicators`]
@@ -163,18 +163,20 @@ for (var_idx, var_name) in data.nodal_var_names.iter().enumerate() {
 
 **Recommendation:** Consider using `rayon` for parallel iteration on large meshes with many time steps.
 
-### 4. Unused Performance Configuration Fields
+### 4. Unused Performance Configuration Fields - FIXED
 
 **File:** `performance.rs:98-102`
 
-The `node_chunk_size`, `element_chunk_size`, and `time_chunk_size` fields are stored but only displayed, never actually used for chunking operations:
-```rust
-node_chunk_size: usize,      // Stored but not used
-element_chunk_size: usize,   // Stored but not used
-time_chunk_size: usize,      // Stored but not used
-```
+**Status:** ✅ Fixed - Removed unused chunk size fields.
 
-**Recommendation:** Either implement actual chunking using these values or remove them from the configuration.
+The `node_chunk_size`, `element_chunk_size`, and `time_chunk_size` fields were removed from:
+- CLI arguments (`cli.rs`)
+- `PerformanceOptions` struct
+- `from_cli()` method
+- Display implementation
+- All tests
+
+These fields were only being displayed but never actually used for chunking operations. Removing them prevents user confusion and makes the codebase cleaner.
 
 ---
 
@@ -315,34 +317,17 @@ The `_axis` parameter is unused. This was likely intended for future use but sho
 - `max_x`, `index_x` are NOT treated as vector components
 - `velocity_x` IS properly negated during CMM
 
-### 2. Hard Exit in man.rs (Low Priority)
+### 2. Hard Exit in man.rs (Low Priority) - FIXED
 
 **File:** `man.rs:27, 35`
-```rust
-std::process::exit(1);  // Bypasses normal error handling
-```
 
-**Recommendation:** Return proper errors instead:
-```rust
-if !man_page.exists() {
-    return Err(TransformError::Io(std::io::Error::new(
-        std::io::ErrorKind::NotFound,
-        format!(
-            "Man page not found at: {}. Please ensure rexonator.1 is in the same directory as the executable.",
-            man_page.display()
-        ),
-    )));
-}
+**Status:** ✅ Fixed - Replaced `exit()` calls with proper error returns.
 
-// ...
+The `show_man_page()` function now returns:
+- `Err(TransformError::Io)` when man page is not found (instead of calling `exit(1)`)
+- `Err(TransformError::Io)` when man command fails (instead of calling `exit(1)`)
 
-if !status.success() {
-    return Err(TransformError::Io(std::io::Error::new(
-        std::io::ErrorKind::Other,
-        "Failed to display man page",
-    )));
-}
-```
+These errors propagate through `main()` and result in proper exit codes without bypassing Rust's error handling.
 
 ### 3. Unwrap on Empty Sequence (Low Priority)
 
@@ -452,8 +437,8 @@ TransformError::InvalidFormat(format!(
 | **Medium** | Excessive cloning | copy_mirror_merge.rs (refactored) | Medium | Complete |
 | **Medium** | Complete side set mapping TODO | copy_mirror_merge.rs:378-497 | High | Complete |
 | **Medium** | Test helper consolidation | parsers.rs:352-496 | Low | Complete |
-| **Low** | Hard exit in man.rs | man.rs:27,35 | Low | Pending |
-| **Low** | Unused performance config fields | performance.rs:98-102 | Low | Pending |
+| **Low** | Hard exit in man.rs | man.rs:27,35 | Low | Complete |
+| **Low** | Unused performance config fields | performance.rs:98-102 | Low | Complete |
 | **Low** | Add parallel processing (rayon) | copy_mirror_merge.rs | Medium | Pending |
 | **Low** | Add benchmarks | new file | Medium | Pending |
 | **Low** | Progress indicators | copy_mirror_merge.rs | Low | Pending |

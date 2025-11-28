@@ -125,24 +125,6 @@ pub struct Cli {
     #[arg(long, value_name = "VALUE")]
     pub preemption: Option<f64>,
 
-    /// Node chunk size: number of nodes per HDF5 chunk.
-    /// Affects chunking for nodal data in new files.
-    /// Default: 1,000-10,000 based on environment.
-    #[arg(long, value_name = "SIZE")]
-    pub node_chunk: Option<usize>,
-
-    /// Element chunk size: number of elements per HDF5 chunk.
-    /// Affects chunking for element data in new files.
-    /// Default: 1,000-10,000 based on environment.
-    #[arg(long, value_name = "SIZE")]
-    pub element_chunk: Option<usize>,
-
-    /// Time step chunk size: number of time steps per HDF5 chunk.
-    /// 0 = no time chunking (mesh-oriented I/O, default).
-    /// 1+ = chunk multiple time steps together.
-    #[arg(long, value_name = "SIZE")]
-    pub time_chunk: Option<usize>,
-
     /// Print performance configuration and exit
     #[arg(long)]
     pub show_perf_config: bool,

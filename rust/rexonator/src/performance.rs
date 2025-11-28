@@ -94,12 +94,6 @@ pub struct PerformanceOptions {
     num_slots: usize,
     /// Preemption policy (0.0-1.0)
     preemption: f64,
-    /// Node chunk size
-    node_chunk_size: usize,
-    /// Element chunk size
-    element_chunk_size: usize,
-    /// Time chunk size
-    time_chunk_size: usize,
 }
 
 impl PerformanceOptions {
@@ -107,10 +101,10 @@ impl PerformanceOptions {
     pub fn from_cli(cli: &Cli) -> Self {
         // Start with auto-detected defaults based on environment
         let node_type = detect_node_type();
-        let (default_cache, default_chunk) = match node_type {
-            NodeType::Compute => (128 * 1024 * 1024, 10_000), // 128 MB, 10k nodes/elements
-            NodeType::Login => (4 * 1024 * 1024, 1_000),      // 4 MB, 1k nodes/elements
-            NodeType::Unknown => (16 * 1024 * 1024, 5_000),   // 16 MB, 5k nodes/elements
+        let default_cache = match node_type {
+            NodeType::Compute => 128 * 1024 * 1024, // 128 MB
+            NodeType::Login => 4 * 1024 * 1024,      // 4 MB
+            NodeType::Unknown => 16 * 1024 * 1024,   // 16 MB
         };
 
         let cache_size = cli
@@ -119,10 +113,6 @@ impl PerformanceOptions {
             .unwrap_or(default_cache);
 
         let preemption = cli.preemption.unwrap_or(0.75).clamp(0.0, 1.0);
-
-        let node_chunk_size = cli.node_chunk.unwrap_or(default_chunk);
-        let element_chunk_size = cli.element_chunk.unwrap_or(default_chunk);
-        let time_chunk_size = cli.time_chunk.unwrap_or(0);
 
         // Auto-calculate hash slots based on cache size
         // Target: ~100x the number of chunks that fit in cache
@@ -137,9 +127,6 @@ impl PerformanceOptions {
             cache_size,
             num_slots,
             preemption,
-            node_chunk_size,
-            element_chunk_size,
-            time_chunk_size,
         }
     }
 
@@ -172,17 +159,7 @@ impl fmt::Display for PerformanceOptions {
             self.cache_size
         )?;
         writeln!(f, "  Cache slots: {} (auto-calculated)", self.num_slots)?;
-        writeln!(f, "  Preemption: {:.2}", self.preemption)?;
-        writeln!(f, "  Node chunk size: {} nodes", self.node_chunk_size)?;
-        writeln!(
-            f,
-            "  Element chunk size: {} elements",
-            self.element_chunk_size
-        )?;
-        write!(f, "  Time chunk size: {} steps", self.time_chunk_size)?;
-        if self.time_chunk_size == 0 {
-            write!(f, " (no time chunking)")?;
-        }
+        write!(f, "  Preemption: {:.2}", self.preemption)?;
         Ok(())
     }
 }
@@ -233,9 +210,6 @@ mod tests {
             verbose: false,
             cache_size: None,
             preemption: None,
-            node_chunk: None,
-            element_chunk: None,
-            time_chunk: None,
             show_perf_config: false,
             man: false,
         };
@@ -245,15 +219,8 @@ mod tests {
         // Check default preemption
         assert!((perf.preemption - 0.75).abs() < 0.001);
 
-        // Check time chunk default (0 = no chunking)
-        assert_eq!(perf.time_chunk_size, 0);
-
         // Check that cache size is reasonable (at least 1 MB)
         assert!(perf.cache_size >= 1024 * 1024);
-
-        // Check that chunk sizes are reasonable
-        assert!(perf.node_chunk_size >= 1000);
-        assert!(perf.element_chunk_size >= 1000);
     }
 
     #[test]
@@ -273,11 +240,8 @@ mod tests {
             no_auto_vector_detection: false,
             zero_time: false,
             verbose: false,
-            cache_size: Some(256),      // 256 MB
-            preemption: Some(0.5),      // Balanced write/read
-            node_chunk: Some(20000),    // 20k nodes
-            element_chunk: Some(15000), // 15k elements
-            time_chunk: Some(10),       // 10 time steps
+            cache_size: Some(256), // 256 MB
+            preemption: Some(0.5), // Balanced write/read
             show_perf_config: false,
             man: false,
         };
@@ -286,9 +250,6 @@ mod tests {
 
         assert_eq!(perf.cache_size, 256 * 1024 * 1024);
         assert!((perf.preemption - 0.5).abs() < 0.001);
-        assert_eq!(perf.node_chunk_size, 20000);
-        assert_eq!(perf.element_chunk_size, 15000);
-        assert_eq!(perf.time_chunk_size, 10);
     }
 
     #[test]
@@ -310,9 +271,6 @@ mod tests {
             verbose: false,
             cache_size: None,
             preemption: Some(1.5), // Out of range (should clamp to 1.0)
-            node_chunk: None,
-            element_chunk: None,
-            time_chunk: None,
             show_perf_config: false,
             man: false,
         };
