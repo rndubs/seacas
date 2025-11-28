@@ -138,19 +138,20 @@ impl<M: FileMode> ExodusFile<M> {
     pub fn connectivity_array(&self, block_id: EntityId) -> Result<ndarray::Array2<i64>> {
         use ndarray::Array2;
 
-        let conn_data = self.connectivity_structured(block_id)?;
+        // Get block info for dimensions (avoids reading through connectivity_structured)
+        let block = self.block(block_id)?;
 
         // Handle empty case
-        if conn_data.num_entries == 0 || conn_data.nodes_per_entry == 0 {
+        if block.num_entries == 0 || block.num_nodes_per_entry == 0 {
             return Ok(Array2::zeros((0, 0)));
         }
 
-        // Reshape flat vector into 2D array (num_elements, nodes_per_element)
-        Array2::from_shape_vec(
-            (conn_data.num_entries, conn_data.nodes_per_entry),
-            conn_data.data,
-        )
-        .map_err(|e| {
+        // Read connectivity data directly (avoids intermediate Connectivity struct allocation)
+        let data = self.connectivity(block_id)?;
+
+        // Reshape flat vector directly into 2D array (num_elements, nodes_per_element)
+        // from_shape_vec takes ownership without copying the data
+        Array2::from_shape_vec((block.num_entries, block.num_nodes_per_entry), data).map_err(|e| {
             ExodusError::Other(format!(
                 "Failed to reshape connectivity array for block {}: {}",
                 block_id, e
