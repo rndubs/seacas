@@ -303,7 +303,7 @@ struct MeshData {
 }
 
 /// Find nodes on the symmetry plane
-fn find_symmetry_plane_nodes(coords: &[f64], _axis: Axis, tolerance: f64) -> Vec<usize> {
+fn find_symmetry_plane_nodes(coords: &[f64], tolerance: f64) -> Vec<usize> {
     coords
         .iter()
         .enumerate()
@@ -1201,7 +1201,7 @@ fn copy_mirror_merge(
 
     // Step 1: Find nodes on the symmetry plane
     let axis_coords = get_axis_coords(&data.x, &data.y, &data.z, axis);
-    let symmetry_nodes: HashSet<usize> = find_symmetry_plane_nodes(axis_coords, axis, tolerance)
+    let symmetry_nodes: HashSet<usize> = find_symmetry_plane_nodes(axis_coords, tolerance)
         .into_iter()
         .collect();
 
@@ -1700,7 +1700,7 @@ mod tests {
         let coords = vec![0.0, 0.5, 1.0, 0.0, 0.5, 1.0, 0.001, -0.0005];
         let tolerance = 0.01;
 
-        let sym_nodes = find_symmetry_plane_nodes(&coords, Axis::X, tolerance);
+        let sym_nodes = find_symmetry_plane_nodes(&coords, tolerance);
 
         // Nodes at indices 0, 3, 6, 7 should be on symmetry plane
         assert!(sym_nodes.contains(&0)); // 0.0
