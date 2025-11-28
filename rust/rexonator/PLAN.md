@@ -18,7 +18,7 @@
 - [ ] Add parallel processing with rayon for large meshes [XFAIL TEST: `test_cmm_parallel_processing`]
 - [ ] Add benchmarks for performance-critical operations
 - [x] Add progress indicators for verbose mode on large operations [XFAIL TEST: `test_verbose_progress_indicators`]
-- [ ] Preserve 2D mesh dimensionality in CMM [XFAIL TEST: `test_cmm_preserves_2d_dimensionality`]
+- [x] Preserve 2D mesh dimensionality in CMM [XFAIL TEST: `test_cmm_preserves_2d_dimensionality`]
 
 ---
 
@@ -343,27 +343,18 @@ let rotation_type = sequence.chars().next()
     .unwrap_or("extrinsic");
 ```
 
-### 4. 2D Mesh Z-Coordinate Handling
+### 4. 2D Mesh Z-Coordinate Handling - VERIFIED
 
-**File:** `copy_mirror_merge.rs:155-160`
+**File:** `copy_mirror_merge.rs:1014-1018, 1339-1349`
 
-The code fills z with zeros for 2D meshes, but then writes 3D coordinates back:
-```rust
-let z = if coords.z.is_empty() {
-    vec![0.0; x.len()]
-} else {
-    coords.z
-};
-```
+**Status:** ✅ Verified - 2D mesh dimensionality is correctly preserved.
 
-**Concern:** This might change a 2D mesh to 3D unexpectedly. The write logic should respect the original `num_dim`.
+The code properly handles 2D meshes:
+1. **Reading**: For 2D meshes, z is filled with zeros for internal processing (line 1014-1018)
+2. **Preserving**: The original `num_dim` is preserved when creating mirrored mesh (line 1288)
+3. **Writing**: The write function checks `num_dim` and only writes z if `num_dim >= 3` (line 1344-1348)
 
-**Recommendation:** Track and preserve the original dimensionality:
-```rust
-// In write_mesh_data, respect original dimensions
-let y_opt = if data.params.num_dim >= 2 { Some(&data.y[..]) } else { None };
-let z_opt = if data.params.num_dim >= 3 { Some(&data.z[..]) } else { None };
-```
+This ensures 2D meshes remain 2D after copy-mirror-merge operations. The implementation was already correct; the test now verifies this behavior.
 
 ---
 

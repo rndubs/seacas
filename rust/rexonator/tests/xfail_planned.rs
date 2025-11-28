@@ -509,9 +509,9 @@ fn test_verbose_progress_indicators() {
 
 #[test]
 #[serial]
-#[ignore = "XFAIL: 2D mesh dimensionality preservation not verified - see PLAN.md"]
 fn test_cmm_preserves_2d_dimensionality() {
-    // A 2D mesh should remain 2D after CMM (num_dim should not change).
+    // FIXED: 2D meshes correctly remain 2D after CMM.
+    // The num_dim parameter is preserved through the operation.
     let ctx = TestContext::new();
     let input = ctx.path("input.exo");
     let output = ctx.path("output.exo");
@@ -535,11 +535,8 @@ fn test_cmm_preserves_2d_dimensionality() {
 
     let new_params = read_params(&output).unwrap();
 
-    // When fixed, this assertion should pass:
-    // assert_eq!(new_params.num_dim, 2, "Output should remain 2D");
-
-    // Currently, this might change to 3D. Document expected behavior.
-    let _ = new_params; // Suppress unused warning
+    // Verify that num_dim is preserved
+    assert_eq!(new_params.num_dim, 2, "Output should remain 2D");
 }
 
 // ========================================================================
