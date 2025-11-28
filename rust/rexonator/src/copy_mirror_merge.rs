@@ -1134,7 +1134,7 @@ fn read_mesh_data(file: &ExodusFile<mode::Read>, verbose: bool) -> Result<MeshDa
     let elem_read_total = (blocks.len() * elem_var_names.len() * num_time_steps) as u64;
     let pb_elem = create_progress_bar(verbose, elem_read_total, "Reading element variables");
 
-    for (block_idx, block) in blocks.iter().enumerate() {
+    for block in blocks.iter() {
         let mut block_vars: Vec<Vec<Vec<f64>>> = Vec::new(); // [var_idx][time_step][elem_idx]
 
         for var_idx in 0..elem_var_names.len() {
