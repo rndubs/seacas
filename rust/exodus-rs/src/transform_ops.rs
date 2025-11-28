@@ -232,7 +232,11 @@ impl ExodusFile<mode::Append> {
         let is_2d = coords.z.is_empty();
 
         for i in 0..num_nodes {
-            let y_val = if coords.y.is_empty() { 0.0 } else { coords.y[i] };
+            let y_val = if coords.y.is_empty() {
+                0.0
+            } else {
+                coords.y[i]
+            };
             let z_val = if is_2d { 0.0 } else { coords.z[i] };
             let point = [coords.x[i], y_val, z_val];
             let rotated = apply_rotation_to_vector(rotation_matrix, &point);
