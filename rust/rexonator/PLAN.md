@@ -9,7 +9,7 @@
 ### Medium Priority
 - [x] Fix vector component detection false positives
 - [x] Reduce excessive cloning in copy_mirror_merge
-- [ ] Complete side set side number mapping (TODO in code) [XFAIL TEST: TODO]
+- [x] Complete side set side number mapping
 - [ ] Consolidate test helpers with builder pattern
 
 ### Low Priority
@@ -60,7 +60,8 @@ When implementing a feature, remove the `#[ignore]` attribute and verify the tes
 | `test_vector_detection_should_not_match_max_x` | Vector component false positives | Medium | **FIXED** |
 | `test_vector_detection_should_not_match_index_x` | Vector component false positives | Medium | **FIXED** |
 | `test_vector_detection_velocity_x_is_negated` | Vector component detection | Medium | **FIXED** |
-| `test_cmm_side_numbers_properly_mapped` | Side set side number mapping | Medium | Pending |
+| `test_cmm_side_numbers_properly_mapped` | Side set side number mapping | Medium | **FIXED** |
+| `test_cmm_side_numbers_mapped_for_perpendicular_faces` | Side set side number mapping (perpendicular faces) | Medium | **FIXED** |
 | `test_cmm_warns_on_large_mesh` | Memory usage warnings | High | Pending |
 | `test_man_page_missing_returns_error` | Proper error handling in man.rs | Low | Pending |
 | `test_cmm_parallel_processing` | Parallel processing with rayon | Low | Pending |
@@ -259,17 +260,25 @@ let cli = TestCliBuilder::new()
     .build();
 ```
 
-### 3. Incomplete Feature with TODO (Medium Priority)
+### 3. Incomplete Feature with TODO (Medium Priority) - FIXED
 
-**File:** `copy_mirror_merge.rs:575-577`
-```rust
-// Side numbers need adjustment based on topology and axis
-// For now, keep same side numbers (this is a simplification)
-// TODO: Implement proper side number mapping for different topologies
-let mirror_sides = sides.clone();
-```
+**File:** `copy_mirror_merge.rs:378-497`
 
-**Recommendation:** Either implement proper side mapping or document this limitation clearly in the man page.
+**Status:** ✅ Fixed with proper side number mapping implementation:
+
+1. **New function `get_side_number_mapping()`:**
+   - Returns topology-specific side number mappings for each mirror axis
+   - Supports HEX8, TET4, WEDGE6, PYRAMID5, QUAD4, TRI3
+   - Handles face swaps for perpendicular faces (e.g., HEX8 X-axis: sides 2↔4)
+
+2. **Updated `create_mirrored_side_sets()`:**
+   - Builds element-to-block mapping for topology lookup
+   - Applies correct side mapping based on element topology and mirror axis
+   - Reports remapped side counts in verbose mode
+
+**Tests:** See `tests/xfail_planned.rs`:
+- `test_cmm_side_numbers_properly_mapped` - verifies sides parallel to mirror axis stay unchanged
+- `test_cmm_side_numbers_mapped_for_perpendicular_faces` - verifies perpendicular faces are remapped
 
 ### 4. Unused Function Parameter
 
@@ -441,7 +450,7 @@ TransformError::InvalidFormat(format!(
 | **High** | Add memory usage warnings | copy_mirror_merge.rs:17-108 | Low | Complete |
 | **Medium** | Vector component false positives | copy_mirror_merge.rs:17-160 | Low | Complete |
 | **Medium** | Excessive cloning | copy_mirror_merge.rs (refactored) | Medium | Complete |
-| **Medium** | Complete side set mapping TODO | copy_mirror_merge.rs:575-577 | High | Pending |
+| **Medium** | Complete side set mapping TODO | copy_mirror_merge.rs:378-497 | High | Complete |
 | **Medium** | Test helper consolidation | parsers.rs:353-410 | Low | Pending |
 | **Low** | Hard exit in man.rs | man.rs:27,35 | Low | Pending |
 | **Low** | Unused performance config fields | performance.rs:98-102 | Low | Pending |

@@ -12,7 +12,7 @@
 mod fixtures;
 use fixtures::{
     create_hex8_mesh, create_mesh_with_false_positive_vars, create_mesh_with_global_vars,
-    create_quad4_mesh, read_nodal_var, read_params, TestContext,
+    create_quad4_mesh, read_nodal_var, read_params, read_side_set, read_side_set_ids, TestContext,
 };
 
 use std::process::Command;
@@ -173,23 +173,31 @@ fn test_vector_detection_velocity_x_is_negated() {
 // PLAN.md: copy_mirror_merge.rs:575-577
 //
 // Side numbers need adjustment based on topology and axis when mirroring.
-// Currently, side numbers are copied unchanged (simplification).
+// IMPLEMENTED: Side numbers are now properly mapped based on topology and axis.
 // ========================================================================
 
 #[test]
-#[ignore = "XFAIL: Proper side set side number mapping not yet implemented - see PLAN.md"]
 fn test_cmm_side_numbers_properly_mapped() {
     // When mirroring elements, the side numbers may need to change
     // depending on the element topology and mirror axis.
     //
-    // For example, for HEX8 mirrored about X:
-    // - Side 4 (x+ face) might become Side 3 (x- face)
-    // - This depends on the exodus side numbering convention
+    // For HEX8 mirrored about X:
+    // - Side 2 (+X face) ↔ Side 4 (-X face) swap
+    // - Sides 1, 3, 5, 6 remain unchanged (not perpendicular to X)
     let ctx = TestContext::new();
     let input = ctx.path("input.exo");
     let output = ctx.path("output.exo");
 
     create_hex8_mesh(&input).expect("Failed to create mesh");
+
+    // Verify input side set (side 5 = bottom/-Z face for all elements)
+    let input_ss_ids = read_side_set_ids(&input).expect("Failed to read input side set IDs");
+    assert_eq!(input_ss_ids, vec![1], "Input should have 1 side set");
+
+    let (input_elems, input_sides, _) =
+        read_side_set(&input, 1).expect("Failed to read input side set");
+    assert_eq!(input_elems, vec![1, 2, 3, 4]);
+    assert_eq!(input_sides, vec![5, 5, 5, 5]); // Side 5 is -Z for HEX8
 
     let status = rexonator_cmd()
         .args([
@@ -203,10 +211,127 @@ fn test_cmm_side_numbers_properly_mapped() {
 
     assert!(status.success());
 
-    // When implemented, verify:
-    // 1. Read side set data from output
-    // 2. Check that mirrored side set has properly remapped side numbers
-    // 3. Side numbers should correspond to the correct faces after mirroring
+    // After CMM, we should have 2 side sets: original and mirrored
+    let output_ss_ids = read_side_set_ids(&output).expect("Failed to read output side set IDs");
+    assert_eq!(output_ss_ids.len(), 2, "Output should have 2 side sets");
+
+    // Original side set should be unchanged
+    let (orig_elems, orig_sides, _) =
+        read_side_set(&output, output_ss_ids[0]).expect("Failed to read original side set");
+    assert_eq!(orig_elems, vec![1, 2, 3, 4]);
+    assert_eq!(orig_sides, vec![5, 5, 5, 5]); // Original sides unchanged
+
+    // Mirrored side set should have elements offset by 4 (original element count)
+    let (mirror_elems, mirror_sides, _) =
+        read_side_set(&output, output_ss_ids[1]).expect("Failed to read mirrored side set");
+    assert_eq!(mirror_elems, vec![5, 6, 7, 8]); // Elements offset by 4
+
+    // For X-axis mirror with HEX8:
+    // - Side 5 (-Z) is not perpendicular to X, so it stays as side 5
+    assert_eq!(
+        mirror_sides,
+        vec![5, 5, 5, 5],
+        "Side 5 should remain side 5 for X-axis mirror (not perpendicular to X)"
+    );
+}
+
+#[test]
+fn test_cmm_side_numbers_mapped_for_perpendicular_faces() {
+    // Test that faces perpendicular to the mirror axis ARE remapped.
+    // We need to create a mesh with a side set on a face perpendicular to X.
+    use exodus_rs::{types::*, ExodusFile};
+
+    let ctx = TestContext::new();
+    let input = ctx.path("input.exo");
+    let output = ctx.path("output.exo");
+
+    // Create a HEX8 mesh with a side set on the +X face (side 2)
+    let x_coords: Vec<f64> = vec![
+        0.0, 1.0, 1.0, 0.0, // bottom layer
+        0.0, 1.0, 1.0, 0.0, // top layer
+    ];
+    let y_coords: Vec<f64> = vec![0.0, 0.0, 1.0, 1.0, 0.0, 0.0, 1.0, 1.0];
+    let z_coords: Vec<f64> = vec![0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0];
+
+    // Single HEX8 element
+    let connectivity: Vec<i64> = vec![1, 2, 3, 4, 5, 6, 7, 8];
+
+    let options = CreateOptions {
+        mode: CreateMode::Clobber,
+        ..Default::default()
+    };
+    let mut file = ExodusFile::create(&input, options).expect("Failed to create file");
+
+    let params = InitParams {
+        title: "Side mapping test".to_string(),
+        num_dim: 3,
+        num_nodes: 8,
+        num_elems: 1,
+        num_elem_blocks: 1,
+        num_node_sets: 0,
+        num_side_sets: 1,
+        ..Default::default()
+    };
+    file.init(&params).expect("Failed to init");
+    file.put_coords(&x_coords, Some(&y_coords), Some(&z_coords))
+        .expect("Failed to put coords");
+
+    let block = Block {
+        id: 1,
+        entity_type: EntityType::ElemBlock,
+        topology: "HEX8".to_string(),
+        num_entries: 1,
+        num_nodes_per_entry: 8,
+        num_edges_per_entry: 0,
+        num_faces_per_entry: 0,
+        num_attributes: 0,
+    };
+    file.put_block(&block).expect("Failed to put block");
+    file.put_connectivity(1, &connectivity)
+        .expect("Failed to put connectivity");
+
+    // Side set on +X face (side 2 for HEX8)
+    let side_elems: Vec<i64> = vec![1];
+    let side_nums: Vec<i64> = vec![2]; // +X face
+    file.put_side_set(1, &side_elems, &side_nums, None)
+        .expect("Failed to put side set");
+
+    file.sync().expect("Failed to sync");
+    drop(file);
+
+    // Run CMM about X axis
+    let status = rexonator_cmd()
+        .args([
+            input.to_str().unwrap(),
+            output.to_str().unwrap(),
+            "--copy-mirror-merge",
+            "x",
+        ])
+        .status()
+        .expect("Failed to run rexonator");
+
+    assert!(status.success());
+
+    // Read the mirrored side set
+    let output_ss_ids = read_side_set_ids(&output).expect("Failed to read output side set IDs");
+    assert_eq!(output_ss_ids.len(), 2);
+
+    // Original side set: element 1, side 2 (should be unchanged)
+    let (orig_elems, orig_sides, _) =
+        read_side_set(&output, output_ss_ids[0]).expect("Failed to read original side set");
+    assert_eq!(orig_elems, vec![1]);
+    assert_eq!(orig_sides, vec![2]); // Original side 2 (+X)
+
+    // Mirrored side set: element 2 (mirrored), side should be remapped
+    // For X-axis mirror: side 2 (+X) → side 4 (-X)
+    let (mirror_elems, mirror_sides, _) =
+        read_side_set(&output, output_ss_ids[1]).expect("Failed to read mirrored side set");
+    assert_eq!(mirror_elems, vec![2]);
+    assert_eq!(
+        mirror_sides,
+        vec![4],
+        "Side 2 (+X) should map to side 4 (-X) for X-axis mirror"
+    );
 }
 
 // ========================================================================

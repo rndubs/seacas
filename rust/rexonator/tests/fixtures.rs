@@ -855,6 +855,23 @@ pub fn read_block_ids(path: &PathBuf) -> Result<Vec<i64>, Box<dyn std::error::Er
     Ok(ids)
 }
 
+/// Read side set IDs
+pub fn read_side_set_ids(path: &PathBuf) -> Result<Vec<i64>, Box<dyn std::error::Error>> {
+    let file = ExodusFile::<exodus_rs::mode::Read>::open(path)?;
+    let ids = file.set_ids(EntityType::SideSet)?;
+    Ok(ids)
+}
+
+/// Read side set data (elements, sides, dist_factors)
+pub fn read_side_set(
+    path: &PathBuf,
+    set_id: i64,
+) -> Result<(Vec<i64>, Vec<i64>, Vec<f64>), Box<dyn std::error::Error>> {
+    let file = ExodusFile::<exodus_rs::mode::Read>::open(path)?;
+    let ss = file.side_set(set_id)?;
+    Ok((ss.elements, ss.sides, ss.dist_factors))
+}
+
 /// Create a mesh with variables that could be false positives for vector detection.
 /// This includes both real vector components and scalar fields that look like vectors.
 pub fn create_mesh_with_false_positive_vars(

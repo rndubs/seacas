@@ -375,6 +375,127 @@ fn get_mirror_permutation(topology: &str, axis: Axis) -> Option<Vec<usize>> {
     }
 }
 
+/// Get the side number mapping when mirroring an element about a given axis.
+///
+/// Returns a function that maps original side numbers to mirrored side numbers.
+/// When an element is mirrored, faces perpendicular to the mirror axis swap
+/// because the +axis face becomes the -axis face and vice versa.
+///
+/// # Arguments
+/// * `topology` - The element topology string (e.g., "HEX8", "TET4")
+/// * `axis` - The axis about which the element is being mirrored
+///
+/// # Returns
+/// A vector where index (side_number - 1) gives the new side number after mirroring.
+/// Returns None for unsupported topologies.
+fn get_side_number_mapping(topology: &str, axis: Axis) -> Option<Vec<i64>> {
+    let topo_upper = topology.to_uppercase();
+
+    match topo_upper.as_str() {
+        "HEX" | "HEX8" => {
+            // HEX8 face definitions (Exodus convention):
+            // Face 1: nodes 0,1,5,4 - front face (approximately -Y normal)
+            // Face 2: nodes 1,2,6,5 - right face (+X normal)
+            // Face 3: nodes 2,3,7,6 - back face (+Y normal)
+            // Face 4: nodes 0,4,7,3 - left face (-X normal)
+            // Face 5: nodes 0,3,2,1 - bottom face (-Z normal)
+            // Face 6: nodes 4,5,6,7 - top face (+Z normal)
+            //
+            // When mirroring, faces perpendicular to the mirror axis swap.
+            Some(match axis {
+                Axis::X => vec![1, 4, 3, 2, 5, 6], // 2↔4 swap (+X↔-X)
+                Axis::Y => vec![3, 2, 1, 4, 5, 6], // 1↔3 swap (-Y↔+Y)
+                Axis::Z => vec![1, 2, 3, 4, 6, 5], // 5↔6 swap (-Z↔+Z)
+            })
+        }
+        "TET" | "TET4" | "TETRA" | "TETRA4" => {
+            // TET4 face definitions (Exodus convention):
+            // Face 1: nodes 0,1,3
+            // Face 2: nodes 1,2,3
+            // Face 3: nodes 0,3,2
+            // Face 4: nodes 0,2,1 (base triangle)
+            //
+            // For tetrahedra, the face mapping depends on the specific geometry.
+            // The permutation we use (swap nodes 1,2) affects which faces are which.
+            // With permutation [0, 2, 1, 3]:
+            // - Original face using nodes {0,1,3} → mirrored face uses nodes {0,2,3} = face 3
+            // - Original face using nodes {1,2,3} → mirrored face uses nodes {2,1,3} = face 2
+            // - Original face using nodes {0,3,2} → mirrored face uses nodes {0,3,1} = face 1
+            // - Original face using nodes {0,2,1} → mirrored face uses nodes {0,1,2} = face 4
+            Some(vec![3, 2, 1, 4]) // 1↔3 swap, 2↔2, 4↔4
+        }
+        "WEDGE" | "WEDGE6" => {
+            // WEDGE6 face definitions (Exodus convention):
+            // Face 1: nodes 0,1,4,3 (quad)
+            // Face 2: nodes 1,2,5,4 (quad)
+            // Face 3: nodes 0,3,5,2 (quad)
+            // Face 4: nodes 0,2,1 (bottom triangle)
+            // Face 5: nodes 3,4,5 (top triangle)
+            //
+            // Wedge mirroring is axis-dependent
+            Some(match axis {
+                Axis::X => vec![1, 3, 2, 4, 5], // 2↔3 swap (faces on ±X)
+                Axis::Y => vec![2, 1, 3, 4, 5], // 1↔2 swap (faces on ±Y)
+                Axis::Z => vec![1, 2, 3, 5, 4], // 4↔5 swap (top/bottom triangles)
+            })
+        }
+        "PYRAMID" | "PYRAMID5" => {
+            // PYRAMID5 face definitions (Exodus convention):
+            // Face 1: nodes 0,1,4 (tri)
+            // Face 2: nodes 1,2,4 (tri)
+            // Face 3: nodes 2,3,4 (tri)
+            // Face 4: nodes 3,0,4 (tri)
+            // Face 5: nodes 0,3,2,1 (base quad)
+            //
+            // With permutation [3, 2, 1, 0, 4] (reverse base ordering):
+            // Triangular faces rotate/swap, base face stays as face 5
+            Some(match axis {
+                Axis::X => vec![4, 3, 2, 1, 5], // 1↔4, 2↔3 swap
+                Axis::Y => vec![2, 1, 4, 3, 5], // 1↔2, 3↔4 swap
+                Axis::Z => vec![1, 2, 3, 4, 5], // No swap (pyramid symmetric about Z)
+            })
+        }
+        "QUAD" | "QUAD4" | "SHELL" | "SHELL4" => {
+            // QUAD4 edge definitions (2D elements, "faces" are edges):
+            // Edge 1: nodes 0,1
+            // Edge 2: nodes 1,2
+            // Edge 3: nodes 2,3
+            // Edge 4: nodes 3,0
+            //
+            // With permutation [0, 3, 2, 1] (reverse winding):
+            Some(match axis {
+                Axis::X => vec![4, 3, 2, 1], // 1↔4, 2↔3 swap
+                Axis::Y => vec![2, 1, 4, 3], // 1↔2, 3↔4 swap
+                Axis::Z => vec![1, 2, 3, 4], // No change for 2D in Z
+            })
+        }
+        "TRI" | "TRI3" | "TRIANGLE" => {
+            // TRI3 edge definitions (2D elements, "faces" are edges):
+            // Edge 1: nodes 0,1
+            // Edge 2: nodes 1,2
+            // Edge 3: nodes 2,0
+            //
+            // With permutation [0, 2, 1] (reverse winding):
+            Some(match axis {
+                Axis::X => vec![3, 2, 1], // 1↔3 swap
+                Axis::Y => vec![2, 1, 3], // 1↔2 swap
+                Axis::Z => vec![1, 2, 3], // No change for 2D in Z
+            })
+        }
+        _ => None,
+    }
+}
+
+/// Map a side number from original element to mirrored element
+fn map_side_number(side: i64, mapping: &[i64]) -> i64 {
+    if side >= 1 && (side as usize) <= mapping.len() {
+        mapping[(side - 1) as usize]
+    } else {
+        // If side number is out of range, keep it unchanged
+        side
+    }
+}
+
 // ============================================================================
 // Mirrored Data Creation Functions
 // ============================================================================
@@ -625,8 +746,28 @@ struct MirroredSideSetsResult {
     side_set_names: Vec<String>,
 }
 
-/// Create mirrored side sets with _mirror suffix
-fn create_mirrored_side_sets(data: &MeshData, orig_num_elems: usize) -> MirroredSideSetsResult {
+/// Build a mapping from element ID (1-based) to block index for side number remapping
+fn build_element_to_block_map(blocks: &[Block]) -> HashMap<i64, usize> {
+    let mut elem_to_block: HashMap<i64, usize> = HashMap::new();
+    let mut next_elem_id = 1i64;
+
+    for (block_idx, block) in blocks.iter().enumerate() {
+        for _ in 0..block.num_entries {
+            elem_to_block.insert(next_elem_id, block_idx);
+            next_elem_id += 1;
+        }
+    }
+
+    elem_to_block
+}
+
+/// Create mirrored side sets with _mirror suffix and proper side number mapping
+fn create_mirrored_side_sets(
+    data: &MeshData,
+    axis: Axis,
+    orig_num_elems: usize,
+    verbose: bool,
+) -> MirroredSideSetsResult {
     let num_sets = data.side_sets.len();
     let mut new_side_sets = Vec::with_capacity(num_sets * 2);
     let mut new_side_set_names = Vec::with_capacity(num_sets * 2);
@@ -643,6 +784,16 @@ fn create_mirrored_side_sets(data: &MeshData, orig_num_elems: usize) -> Mirrored
         .unwrap_or(0);
     let mut next_ss_id = max_ss_id + 1;
 
+    // Build element-to-block mapping for side number remapping
+    let elem_to_block = build_element_to_block_map(&data.blocks);
+
+    // Pre-compute side mappings for each block topology
+    let side_mappings: Vec<Option<Vec<i64>>> = data
+        .blocks
+        .iter()
+        .map(|b| get_side_number_mapping(&b.topology, axis))
+        .collect();
+
     for (idx, (orig_id, elements, sides, dist_factors)) in data.side_sets.iter().enumerate() {
         // Mirrored elements have IDs offset by orig_num_elems
         let mirror_elements: Vec<i64> = elements
@@ -650,10 +801,24 @@ fn create_mirrored_side_sets(data: &MeshData, orig_num_elems: usize) -> Mirrored
             .map(|&e| e + orig_num_elems as i64)
             .collect();
 
-        // Side numbers need adjustment based on topology and axis
-        // For now, keep same side numbers (this is a simplification)
-        // TODO: Implement proper side number mapping for different topologies
-        let mirror_sides = sides.clone();
+        // Map side numbers based on element topology and mirror axis
+        let mirror_sides: Vec<i64> = elements
+            .iter()
+            .zip(sides.iter())
+            .map(|(&elem_id, &side)| {
+                // Find which block this element belongs to
+                if let Some(&block_idx) = elem_to_block.get(&elem_id) {
+                    // Apply the side mapping for this block's topology
+                    if let Some(ref mapping) = side_mappings[block_idx] {
+                        map_side_number(side, mapping)
+                    } else {
+                        side // No mapping available, keep unchanged
+                    }
+                } else {
+                    side // Element not found in any block, keep unchanged
+                }
+            })
+            .collect();
 
         let mirror_df = dist_factors.clone();
 
@@ -666,6 +831,23 @@ fn create_mirrored_side_sets(data: &MeshData, orig_num_elems: usize) -> Mirrored
             .map(|s| s.as_str())
             .unwrap_or(&default_name);
         new_side_set_names.push(format!("{}_mirror", orig_name));
+
+        if verbose && !sides.is_empty() {
+            let changed_count = sides
+                .iter()
+                .zip(mirror_sides.iter())
+                .filter(|(orig, mir)| orig != mir)
+                .count();
+            if changed_count > 0 {
+                println!(
+                    "  Side set {}: remapped {} of {} side numbers for {:?}-axis mirror",
+                    orig_id,
+                    changed_count,
+                    sides.len(),
+                    axis
+                );
+            }
+        }
 
         next_ss_id += 1;
     }
@@ -1065,7 +1247,7 @@ fn copy_mirror_merge(
     let node_sets_result = create_mirrored_node_sets(data, &node_mapping.mirror_node_map);
 
     // Step 6: Create mirrored side sets
-    let side_sets_result = create_mirrored_side_sets(data, orig_num_elems);
+    let side_sets_result = create_mirrored_side_sets(data, axis, orig_num_elems, verbose);
 
     // Step 7: Create mirrored nodal variables
     let new_nodal_var_values =
@@ -1534,5 +1716,120 @@ mod tests {
         assert_eq!(perm_x[5], 4);
         assert_eq!(perm_x[6], 7);
         assert_eq!(perm_x[7], 6);
+    }
+
+    // ========================================================================
+    // Side Number Mapping Tests
+    // ========================================================================
+
+    #[test]
+    fn test_side_number_mapping_hex8_x_axis() {
+        // HEX8 mirrored about X: sides 2 (+X) and 4 (-X) should swap
+        let mapping = get_side_number_mapping("HEX8", Axis::X).unwrap();
+
+        assert_eq!(map_side_number(1, &mapping), 1); // unchanged
+        assert_eq!(map_side_number(2, &mapping), 4); // +X → -X
+        assert_eq!(map_side_number(3, &mapping), 3); // unchanged
+        assert_eq!(map_side_number(4, &mapping), 2); // -X → +X
+        assert_eq!(map_side_number(5, &mapping), 5); // unchanged
+        assert_eq!(map_side_number(6, &mapping), 6); // unchanged
+    }
+
+    #[test]
+    fn test_side_number_mapping_hex8_y_axis() {
+        // HEX8 mirrored about Y: sides 1 (-Y) and 3 (+Y) should swap
+        let mapping = get_side_number_mapping("HEX8", Axis::Y).unwrap();
+
+        assert_eq!(map_side_number(1, &mapping), 3); // -Y → +Y
+        assert_eq!(map_side_number(2, &mapping), 2); // unchanged
+        assert_eq!(map_side_number(3, &mapping), 1); // +Y → -Y
+        assert_eq!(map_side_number(4, &mapping), 4); // unchanged
+        assert_eq!(map_side_number(5, &mapping), 5); // unchanged
+        assert_eq!(map_side_number(6, &mapping), 6); // unchanged
+    }
+
+    #[test]
+    fn test_side_number_mapping_hex8_z_axis() {
+        // HEX8 mirrored about Z: sides 5 (-Z) and 6 (+Z) should swap
+        let mapping = get_side_number_mapping("HEX8", Axis::Z).unwrap();
+
+        assert_eq!(map_side_number(1, &mapping), 1); // unchanged
+        assert_eq!(map_side_number(2, &mapping), 2); // unchanged
+        assert_eq!(map_side_number(3, &mapping), 3); // unchanged
+        assert_eq!(map_side_number(4, &mapping), 4); // unchanged
+        assert_eq!(map_side_number(5, &mapping), 6); // -Z → +Z
+        assert_eq!(map_side_number(6, &mapping), 5); // +Z → -Z
+    }
+
+    #[test]
+    fn test_side_number_mapping_tet4() {
+        // TET4 mirrored: sides 1 and 3 swap
+        let mapping = get_side_number_mapping("TET4", Axis::X).unwrap();
+
+        assert_eq!(map_side_number(1, &mapping), 3);
+        assert_eq!(map_side_number(2, &mapping), 2);
+        assert_eq!(map_side_number(3, &mapping), 1);
+        assert_eq!(map_side_number(4, &mapping), 4);
+    }
+
+    #[test]
+    fn test_side_number_mapping_wedge6() {
+        // Test WEDGE6 for each axis
+        let mapping_x = get_side_number_mapping("WEDGE6", Axis::X).unwrap();
+        assert_eq!(map_side_number(2, &mapping_x), 3); // 2↔3 swap
+        assert_eq!(map_side_number(3, &mapping_x), 2);
+
+        let mapping_z = get_side_number_mapping("WEDGE6", Axis::Z).unwrap();
+        assert_eq!(map_side_number(4, &mapping_z), 5); // 4↔5 swap (triangles)
+        assert_eq!(map_side_number(5, &mapping_z), 4);
+    }
+
+    #[test]
+    fn test_side_number_mapping_quad4() {
+        // QUAD4 (2D) mirrored about X: edges 1 and 4 swap, 2 and 3 swap
+        let mapping = get_side_number_mapping("QUAD4", Axis::X).unwrap();
+
+        assert_eq!(map_side_number(1, &mapping), 4);
+        assert_eq!(map_side_number(2, &mapping), 3);
+        assert_eq!(map_side_number(3, &mapping), 2);
+        assert_eq!(map_side_number(4, &mapping), 1);
+    }
+
+    #[test]
+    fn test_side_number_mapping_tri3() {
+        // TRI3 (2D) mirrored about X: edges 1 and 3 swap
+        let mapping = get_side_number_mapping("TRI3", Axis::X).unwrap();
+
+        assert_eq!(map_side_number(1, &mapping), 3);
+        assert_eq!(map_side_number(2, &mapping), 2);
+        assert_eq!(map_side_number(3, &mapping), 1);
+    }
+
+    #[test]
+    fn test_side_number_mapping_out_of_range() {
+        // Test that out-of-range side numbers are returned unchanged
+        let mapping = get_side_number_mapping("HEX8", Axis::X).unwrap();
+
+        assert_eq!(map_side_number(0, &mapping), 0); // Invalid (0)
+        assert_eq!(map_side_number(7, &mapping), 7); // Out of range
+        assert_eq!(map_side_number(-1, &mapping), -1); // Negative
+    }
+
+    #[test]
+    fn test_side_number_mapping_case_insensitive() {
+        // Topology should be case-insensitive
+        let mapping_lower = get_side_number_mapping("hex8", Axis::X).unwrap();
+        let mapping_upper = get_side_number_mapping("HEX8", Axis::X).unwrap();
+        let mapping_mixed = get_side_number_mapping("Hex8", Axis::X).unwrap();
+
+        assert_eq!(mapping_lower, mapping_upper);
+        assert_eq!(mapping_upper, mapping_mixed);
+    }
+
+    #[test]
+    fn test_side_number_mapping_unsupported_topology() {
+        // Unsupported topology should return None
+        assert!(get_side_number_mapping("HEX27", Axis::X).is_none());
+        assert!(get_side_number_mapping("UNKNOWN", Axis::X).is_none());
     }
 }
