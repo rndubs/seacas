@@ -38,10 +38,6 @@ env:
         RESULTS_DIR: $(MERLIN_WORKSPACE)/results
         PLOTS_DIR: $(MERLIN_WORKSPACE)/plots
 
-        # Input mesh path (DEPRECATED - each run_benchmark task now generates its own)
-        # Kept for backward compatibility only
-        INPUT_MESH: $(OUTPUT_PATH)/input_mesh.exo
-
         # Mesh generation parameters
         NUM_NODES: 75000
         NUM_TIMESTEPS: 18500
@@ -154,35 +150,11 @@ study:
           walltime: "00:15:00"
 
     ###########################################################################
-    # Step 2: Generate the benchmark mesh (DEPRECATED - kept for compatibility)
+    # Step 2: Run benchmark for each configuration (parameterized)
     ###########################################################################
-    # NOTE: This step is no longer used by the main workflow. Each run_benchmark
-    # task now generates its own input mesh with configuration-specific chunking
+    # Each task generates its own input mesh with configuration-specific chunking
     # parameters. This ensures that both READ and WRITE performance are tested
     # with the same chunking strategy.
-    #
-    # This step is kept for backward compatibility and manual testing only.
-    - name: generate_mesh
-      description: "[DEPRECATED] Generate shared benchmark mesh (not used by run_benchmark)"
-      run:
-          cmd: |
-              set -euo pipefail
-
-              echo "NOTE: This step is deprecated. Each run_benchmark task now"
-              echo "generates its own mesh with configuration-specific chunking."
-              echo ""
-              echo "This step is kept for manual testing and backward compatibility."
-              echo "Skipping mesh generation..."
-
-              exit 0
-          nodes: 1
-          procs: 1
-          walltime: "00:05:00"
-          depends: [setup]
-
-    ###########################################################################
-    # Step 3: Run benchmark for each configuration (parameterized)
-    ###########################################################################
     - name: run_benchmark
       description: Run mesh transformation benchmark with specific HDF5 config
       run:
@@ -409,7 +381,7 @@ study:
           depends: [setup]
 
     ###########################################################################
-    # Step 4: Collect and aggregate results
+    # Step 3: Collect and aggregate results
     ###########################################################################
     - name: collect_results
       description: Aggregate all benchmark results into single JSON file
@@ -438,7 +410,7 @@ study:
           depends: [run_benchmark_*]
 
     ###########################################################################
-    # Step 5: Generate plots and reports
+    # Step 4: Generate plots and reports
     ###########################################################################
     - name: generate_plots
       description: Generate matplotlib visualizations from results
