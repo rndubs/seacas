@@ -52,10 +52,18 @@ Based on the review of `src/lib.rs`, `src/file.rs`, `src/coord.rs`, `src/init.rs
         *   `map.rs`: ID map dimension names
     *   This change significantly improves maintainability by centralizing all NetCDF naming conventions and eliminating ~100+ string literal duplications across the codebase
 
-**4. Enhance `unsafe` Safety Comments (Medium Impact - Safety & Maintainability)**
+**4. Enhance `unsafe` Safety Comments (Medium Impact - Safety & Maintainability)** ✅ ADDRESSED
 
 *   **Problem:** The `unsafe` blocks in `src/file.rs` (e.g., for casting `self` to different `ExodusFile<mode::Read>` or `ExodusFile<mode::Write>` types) lack detailed `// SAFETY:` comments.
 *   **Recommendation:** Add explicit `// SAFETY:` comments above each `unsafe` block, clearly explaining why the operation is safe and what invariants are being upheld (e.g., "The `Append` mode guarantees both read and write access, making it safe to temporarily cast to `Read` or `Write` mode for internal method calls without violating memory safety").
+*   **Implementation Summary:**
+    *   Added comprehensive `// SAFETY:` comments to all 8 unsafe blocks in `src/file.rs`
+    *   Each comment explains:
+        *   Why the Append mode guarantees both read and write access (nc_file opened via netcdf::append)
+        *   What the cast does (temporary reinterpretation to Read or Write mode)
+        *   Why it's safe (immutable references for reads, exclusive mutable access for writes)
+        *   Memory safety guarantees (PhantomData is zero-sized, no aliasing violations)
+    *   All comments follow Rust's standard SAFETY comment conventions for documenting unsafe code
 
 **5. Optimize Metadata/Dimension Access (Medium Impact - Performance & Consistency)**
 
