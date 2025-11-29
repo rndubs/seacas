@@ -492,6 +492,7 @@ mod tests {
                 time_chunk: None,
                 show_perf_config: false,
                 man: false,
+                dry_run: false,
             }
         }
     }

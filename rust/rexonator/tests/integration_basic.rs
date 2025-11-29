@@ -22,6 +22,50 @@ fn rexonator_cmd() -> Command {
 }
 
 // ========================================================================
+// Dry Run Tests
+// ========================================================================
+
+#[test]
+#[serial]
+fn test_dry_run_mode() {
+    let ctx = TestContext::new();
+    let input = ctx.path("input.exo");
+    let output = ctx.path("output.exo");
+
+    create_simple_cube(&input).expect("Failed to create test mesh");
+
+    let result = rexonator_cmd()
+        .args([
+            input.to_str().unwrap(),
+            output.to_str().unwrap(),
+            "--translate",
+            "1,0,0",
+            "--dry-run",
+        ])
+        .output()
+        .expect("Failed to run rexonator in dry-run mode");
+
+    assert!(result.status.success());
+
+    let stdout = String::from_utf8_lossy(&result.stdout);
+
+    assert!(stdout.contains("Dry-Run Mode Enabled:"));
+    assert!(stdout.contains(&format!("Input:  {}", input.display())));
+    assert!(stdout.contains(&format!("Output: {}", output.display())));
+    assert!(stdout.contains("Operations to apply: 1"));
+    assert!(stdout.contains("  1: Translate([1.0, 0.0, 0.0])"));
+    assert!(stdout.contains("Input Mesh Statistics:"));
+    assert!(stdout.contains("Nodes:"));
+    assert!(stdout.contains("Elements:"));
+    assert!(stdout.contains("Dimensions:"));
+    assert!(stdout.contains("Time Steps:"));
+    assert!(stdout.contains("No output file will be written in dry-run mode."));
+
+    // Verify that the output file was NOT created
+    assert!(!output.exists(), "Output file should not exist in dry-run mode");
+}
+
+// ========================================================================
 // Translation Tests
 // ========================================================================
 

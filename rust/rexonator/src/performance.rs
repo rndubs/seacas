@@ -251,6 +251,7 @@ mod tests {
             time_chunk: None,
             show_perf_config: false,
             man: false,
+            dry_run: false,
         };
 
         let perf = PerformanceOptions::from_cli(&cli);
@@ -293,6 +294,7 @@ mod tests {
             time_chunk: Some(10),       // 10 time steps
             show_perf_config: false,
             man: false,
+            dry_run: false,
         };
 
         let perf = PerformanceOptions::from_cli(&cli);
@@ -328,6 +330,7 @@ mod tests {
             time_chunk: None,
             show_perf_config: false,
             man: false,
+            dry_run: false,
         };
 
         let perf = PerformanceOptions::from_cli(&cli);

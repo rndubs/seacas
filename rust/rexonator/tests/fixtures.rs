@@ -5,6 +5,14 @@
 //!
 //! All fixtures create small, simple meshes suitable for quick visual inspection
 //! and verification of CLI behavior.
+//!
+//! # Dead Code Warnings
+//! Functions in this module are often used by other integration test modules
+//! (e.g., `integration_basic.rs`, `integration_cmm.rs`). Since Rust's compiler
+//! checks for unused code within each compilation unit, these helper functions
+//! might appear as 'dead code' from `fixtures.rs`'s perspective. The `#[allow(dead_code)]`
+//! attribute is used on these functions to suppress these warnings, as they are
+//! indeed used elsewhere in the test suite.
 
 use exodus_rs::{types::*, ExodusFile};
 use std::path::PathBuf;
@@ -533,6 +541,9 @@ pub fn create_pyramid5_mesh(path: &PathBuf) -> Result<(), Box<dyn std::error::Er
 }
 
 /// Create a HEX8 mesh with element variables
+///
+/// #[allow(dead_code)] is used because this function is called from other integration tests.
+#[allow(dead_code)]
 pub fn create_hex8_with_elem_vars(path: &PathBuf) -> Result<(), Box<dyn std::error::Error>> {
     // Same geometry as create_hex8_mesh but with element variables
     let x_coords: Vec<f64> = vec![
@@ -677,6 +688,8 @@ pub fn create_mesh_with_time_steps(path: &PathBuf) -> Result<(), Box<dyn std::er
 }
 
 /// Create a simple mesh for basic transformation testing
+///
+/// #[allow(dead_code)] is used because this function is called from other integration tests.
 pub fn create_simple_cube(path: &PathBuf) -> Result<(), Box<dyn std::error::Error>> {
     // Single HEX8 element (unit cube)
     let x_coords: Vec<f64> = vec![0.0, 1.0, 1.0, 0.0, 0.0, 1.0, 1.0, 0.0];
@@ -724,6 +737,9 @@ pub fn create_simple_cube(path: &PathBuf) -> Result<(), Box<dyn std::error::Erro
 }
 
 /// Create mesh with global variables for testing
+///
+/// #[allow(dead_code)] is used because this function is called from other integration tests.
+#[allow(dead_code)]
 pub fn create_mesh_with_global_vars(path: &PathBuf) -> Result<(), Box<dyn std::error::Error>> {
     let x_coords: Vec<f64> = vec![0.0, 1.0, 0.0, 1.0];
     let y_coords: Vec<f64> = vec![0.0, 0.0, 1.0, 1.0];
@@ -802,6 +818,9 @@ pub fn read_coord_bounds(
 }
 
 /// Read all coordinates from a file
+///
+/// #[allow(dead_code)] is used because this function is called from other integration tests.
+#[allow(dead_code)]
 pub fn read_coords(
     path: &PathBuf,
 ) -> Result<(Vec<f64>, Vec<f64>, Vec<f64>), Box<dyn std::error::Error>> {
@@ -848,6 +867,9 @@ pub fn read_nodal_var_names(path: &PathBuf) -> Result<Vec<String>, Box<dyn std::
 }
 
 /// Read node set IDs
+///
+/// #[allow(dead_code)] is used because this function is called from other integration tests.
+#[allow(dead_code)]
 pub fn read_node_set_ids(path: &PathBuf) -> Result<Vec<i64>, Box<dyn std::error::Error>> {
     let file = ExodusFile::<exodus_rs::mode::Read>::open(path)?;
     let ids = file.set_ids(EntityType::NodeSet)?;
@@ -856,6 +878,9 @@ pub fn read_node_set_ids(path: &PathBuf) -> Result<Vec<i64>, Box<dyn std::error:
 }
 
 /// Read entity names
+///
+/// #[allow(dead_code)] is used because this function is called from other integration tests.
+#[allow(dead_code)]
 pub fn read_names(
     path: &PathBuf,
     entity_type: EntityType,
@@ -867,6 +892,9 @@ pub fn read_names(
 }
 
 /// Read element block IDs
+///
+/// #[allow(dead_code)] is used because this function is called from other integration tests.
+#[allow(dead_code)]
 pub fn read_block_ids(path: &PathBuf) -> Result<Vec<i64>, Box<dyn std::error::Error>> {
     let file = ExodusFile::<exodus_rs::mode::Read>::open(path)?;
     let ids = file.block_ids(EntityType::ElemBlock)?;
@@ -875,6 +903,9 @@ pub fn read_block_ids(path: &PathBuf) -> Result<Vec<i64>, Box<dyn std::error::Er
 }
 
 /// Read side set IDs
+///
+/// #[allow(dead_code)] is used because this function is called from other integration tests.
+#[allow(dead_code)]
 pub fn read_side_set_ids(path: &PathBuf) -> Result<Vec<i64>, Box<dyn std::error::Error>> {
     let file = ExodusFile::<exodus_rs::mode::Read>::open(path)?;
     let ids = file.set_ids(EntityType::SideSet)?;
@@ -883,6 +914,9 @@ pub fn read_side_set_ids(path: &PathBuf) -> Result<Vec<i64>, Box<dyn std::error:
 }
 
 /// Read side set data (elements, sides, dist_factors)
+///
+/// #[allow(dead_code)] is used because this function is called from other integration tests.
+#[allow(dead_code)]
 pub fn read_side_set(
     path: &PathBuf,
     set_id: i64,
@@ -895,6 +929,9 @@ pub fn read_side_set(
 
 /// Create a mesh with variables that could be false positives for vector detection.
 /// This includes both real vector components and scalar fields that look like vectors.
+///
+/// #[allow(dead_code)] is used because this function is called from other integration tests.
+#[allow(dead_code)]
 pub fn create_mesh_with_false_positive_vars(
     path: &PathBuf,
 ) -> Result<(), Box<dyn std::error::Error>> {

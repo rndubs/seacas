@@ -28,7 +28,7 @@ The `copy-mirror-merge` operation reads the entire mesh into memory. This is a d
 
 ---
 
-## 2. User Experience Issues & Documentation Misrepresentations
+## 2. User Experience Issues & Documentation Misrepresentations - IMPLEMENTATION COMPLETE
 
 ### Misleading "in-place" Description
 

@@ -150,6 +150,10 @@ pub struct Cli {
     /// Display the man page
     #[arg(long)]
     pub man: bool,
+
+    /// Enable dry-run mode: parse arguments, print operations, and report mesh statistics without writing output.
+    #[arg(long = "dry-run")]
+    pub dry_run: bool,
 }
 
 /// Represents a transformation operation
