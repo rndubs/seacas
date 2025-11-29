@@ -74,6 +74,9 @@ fn exodus(m: &Bound<'_, PyModule>) -> PyResult<()> {
     // Register builder API
     m.add_class::<MeshBuilder>()?;
     m.add_class::<BlockBuilder>()?;
+    m.add_class::<builder::NodeSetBuilder>()?;
+    m.add_class::<builder::SideSetBuilder>()?;
+    m.add_class::<builder::AppendBuilder>()?;
 
     // Register geometry functions
     geometry::register_geometry_functions(m)?;
