@@ -396,7 +396,6 @@ impl ExodusFile<mode::Write> {
     /// # Ok::<(), ExodusError>(())
     /// ```
     pub fn put_names(&mut self, entity_type: EntityType, names: &[impl AsRef<str>]) -> Result<()> {
-
         // Validate all names
         for name in names {
             let name = name.as_ref();

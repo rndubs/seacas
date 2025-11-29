@@ -42,7 +42,6 @@ impl ExodusFile<mode::Write> {
     /// # Ok::<(), ExodusError>(())
     /// ```
     pub fn put_blob(&mut self, blob: &Blob, data: &[u8]) -> Result<()> {
-
         if blob.name.len() > MAX_NAME_LENGTH {
             return Err(ExodusError::StringTooLong {
                 max: MAX_NAME_LENGTH,

@@ -43,7 +43,6 @@ impl ExodusFile<mode::Write> {
     /// # Ok::<(), ExodusError>(())
     /// ```
     pub fn put_assembly(&mut self, assembly: &Assembly) -> Result<()> {
-
         if assembly.name.len() > MAX_NAME_LENGTH {
             return Err(ExodusError::StringTooLong {
                 max: MAX_NAME_LENGTH,

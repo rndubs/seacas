@@ -487,7 +487,6 @@ impl ExodusFile<mode::Write> {
     /// # Ok::<(), exodus_rs::ExodusError>(())
     /// ```
     pub fn put_coord_names(&mut self, names: &[&str]) -> Result<()> {
-
         // Validate that file is initialized
         if !self.metadata.initialized {
             return Err(ExodusError::NotInitialized);
