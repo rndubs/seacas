@@ -692,7 +692,8 @@ impl AppendBuilder {
         nodeset_id: i64,
         sideset_name: String,
     ) -> PyRefMut<'_, Self> {
-        slf.nodeset_conversions.push((nodeset_id, Some(sideset_name)));
+        slf.nodeset_conversions
+            .push((nodeset_id, Some(sideset_name)));
         slf
     }
 
