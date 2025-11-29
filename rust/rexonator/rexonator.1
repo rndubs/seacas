@@ -31,8 +31,8 @@ Exodus II format file.
 .TP
 .I OUTPUT
 Path for the output Exodus II file. If this file exists, it will be overwritten.
-The output file is created by copying the input file and then applying
-transformations in-place.
+The input file is first copied to the output location, and then
+transformations are applied to the copy.
 .SH OPTIONS
 .SS Transformation Options
 .TP
@@ -141,8 +141,6 @@ about the YZ plane from a half-model where x >= 0.
 \fBLimitations:\fR
 .RS
 .IP \(bu 2
-Only one element block is currently supported
-.IP \(bu 2
 Supported topologies: HEX8, TET4, WEDGE6, PYRAMID5, QUAD4, TRI3
 .RE
 .TP
@@ -215,8 +213,9 @@ I/O performance with large mesh files.
 (\fB\-\-node\-chunk\fR, \fB\-\-element\-chunk\fR, \fB\-\-time\-chunk\fR) only
 affect \fBnew file creation\fR, which currently only occurs during
 \fB\-\-copy\-mirror\-merge\fR operations. For simple transformations (translate,
-rotate, scale, mirror), the input file is copied and modified in-place,
-preserving the original chunk layout.
+rotate, scale, mirror), the input file is copied to the output location
+and then transformations are applied to the copy, preserving the original
+chunk layout.
 .TP
 .BI \-\-cache\-size " MB"
 Set the HDF5 chunk cache size in megabytes. Larger cache sizes improve I/O

@@ -111,6 +111,30 @@ fn main() -> Result<()> {
     // Extract operations in command-line order
     let operations = extract_ordered_operations(&cli, cli.verbose)?;
 
+    // Handle --dry-run
+    if cli.dry_run {
+        println!("Dry-Run Mode Enabled:");
+        println!("Input:  {}", input.display());
+        println!("Output: {}", output.display());
+        println!("Operations to apply: {}", operations.len());
+        for (i, op) in operations.iter().enumerate() {
+            println!("  {}: {:?}", i + 1, op);
+        }
+        println!();
+
+        // Read input file stats
+        let file = ExodusFile::open(input)?;
+        let params = file.init_params()?;
+        println!("Input Mesh Statistics:");
+        println!("  Nodes:     {}", params.num_nodes);
+        println!("  Elements:  {}", params.num_elems);
+        println!("  Dimensions: {}", params.num_dim);
+        println!("  Time Steps: {}", file.num_time_steps()?);
+        println!();
+        println!("No output file will be written in dry-run mode.");
+        return Ok(());
+    }
+
     if cli.verbose {
         println!("Input:  {}", input.display());
         println!("Output: {}", output.display());
@@ -124,7 +148,6 @@ fn main() -> Result<()> {
         println!("{}", perf_config);
         println!();
     }
-
     // Check if any CopyMirrorMerge operations are present
     let has_cmm = operations
         .iter()
