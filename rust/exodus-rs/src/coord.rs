@@ -650,10 +650,20 @@ impl ExodusFile<mode::Read> {
     /// ```
     #[cfg(feature = "ndarray")]
     pub fn coords_array(&self) -> Result<ndarray::Array2<f64>> {
-        use ndarray::Array2;
+        use ndarray::{Array2, Zip};
 
-        let coords = self.coords::<f64>()?;
-        let num_nodes = coords.x.len();
+        // Get dimensions directly from NetCDF to avoid intermediate allocations
+        let num_nodes = self
+            .nc_file
+            .dimension("num_nodes")
+            .map(|d| d.len())
+            .unwrap_or(0);
+
+        let num_dim = self
+            .nc_file
+            .dimension("num_dim")
+            .ok_or_else(|| ExodusError::Other("num_dim dimension not found".to_string()))?
+            .len();
 
         // If no nodes, return empty array
         if num_nodes == 0 {
@@ -663,21 +673,29 @@ impl ExodusFile<mode::Read> {
         // Create array with shape (num_nodes, 3)
         let mut arr = Array2::zeros((num_nodes, 3));
 
-        // Fill columns
-        for (i, &x) in coords.x.iter().enumerate() {
-            arr[[i, 0]] = x;
+        // Read and copy coordinate data directly, avoiding the intermediate Coordinates struct.
+        // Using Zip for efficient bulk copying into array columns.
+
+        // X coordinates (always present)
+        let x_data: Vec<f64> = self.get_coord_x()?;
+        Zip::from(arr.column_mut(0))
+            .and(&ndarray::ArrayView1::from(&x_data))
+            .for_each(|dest, &src| *dest = src);
+
+        // Y coordinates (if num_dim >= 2)
+        if num_dim >= 2 {
+            let y_data: Vec<f64> = self.get_coord_y()?;
+            Zip::from(arr.column_mut(1))
+                .and(&ndarray::ArrayView1::from(&y_data))
+                .for_each(|dest, &src| *dest = src);
         }
 
-        if coords.num_dim >= 2 {
-            for (i, &y) in coords.y.iter().enumerate() {
-                arr[[i, 1]] = y;
-            }
-        }
-
-        if coords.num_dim == 3 {
-            for (i, &z) in coords.z.iter().enumerate() {
-                arr[[i, 2]] = z;
-            }
+        // Z coordinates (if num_dim == 3)
+        if num_dim == 3 {
+            let z_data: Vec<f64> = self.get_coord_z()?;
+            Zip::from(arr.column_mut(2))
+                .and(&ndarray::ArrayView1::from(&z_data))
+                .for_each(|dest, &src| *dest = src);
         }
 
         Ok(arr)

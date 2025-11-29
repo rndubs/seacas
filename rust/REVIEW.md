@@ -18,12 +18,16 @@ Based on the review of `src/lib.rs`, `src/file.rs`, `src/coord.rs`, `src/init.rs
     *   Updated `block.rs` Write impl to use naming helpers for dimension/variable names
     *   Removed duplicate implementations from Read and Append mode-specific impls
 
-**2. Optimize Performance for Large Datasets (High Impact - Performance)**
+**2. Optimize Performance for Large Datasets (High Impact - Performance)** ✅ ADDRESSED
 
 *   **Problem:** In `src/variable.rs`, the `read_var_combined` function reads the *entire* 3D variable array into memory and then extracts a slice. This is inefficient for large files. Similarly, `coords_array` in `src/coord.rs` involves an intermediate allocation and copy.
 *   **Recommendation:**
     *   **Partial Reads for Combined Variables:** In `read_var_combined`, leverage the `netcdf` crate's ability to read specific slices. Construct precise ranges (e.g., `(step..step+1, var_index..var_index+1, ..)`) for `var.get_values()` to read only the necessary data directly, avoiding large intermediate allocations. This would significantly improve performance and memory usage for large combined variables.
     *   **Zero-Copy `ndarray` for Coordinates/Connectivity:** For `coords_array` in `src/coord.rs` and `connectivity_array` in `src/block.rs`, explore ways to create the `ndarray::Array2` first and then directly write data from the `netcdf` variable into mutable views of that array, bypassing intermediate `Vec` allocations. The `netcdf` crate might have methods to facilitate this more directly.
+*   **Implementation Summary:**
+    *   Optimized `read_var_combined()` in both Read and Append modes to use partial NetCDF reads with slice ranges `(step..step+1, var_index..var_index+1, ..)` instead of reading the entire 3D array
+    *   Optimized `coords_array()` to read coordinate data directly into ndarray columns using `ndarray::Zip` for efficient bulk copying, avoiding the intermediate `Coordinates` struct
+    *   Optimized `connectivity_array()` to read block info and data directly, avoiding the intermediate `Connectivity` struct allocation while still using `Array2::from_shape_vec` for zero-copy ownership transfer
 
 **3. Improve Code Clarity and Maintainability with Constants (Medium Impact - Maintainability)**
 

@@ -1905,23 +1905,11 @@ impl ExodusFile<mode::Read> {
             }
             EntityType::Nodal => {
                 // Nodal vars in combined format: (time_step, num_nod_var, num_nodes)
-                // Read slice [step, var_index, :]
-                // Get dimensions first
-                let num_vars = self
-                    .nc_file
-                    .dimension("num_nod_var")
-                    .ok_or_else(|| ExodusError::Other("Dimension num_nod_var not found".into()))?
-                    .len();
-                let num_nodes = self
-                    .nc_file
-                    .dimension("num_nodes")
-                    .ok_or_else(|| ExodusError::Other("Dimension num_nodes not found".into()))?
-                    .len();
-                // Read entire variable as 1D array (netcdf stores in C order: time, var, node)
-                let all_data: Vec<f64> = var.get_values(..)?;
-                // Calculate offset: step * (num_vars * num_nodes) + var_index * num_nodes
-                let offset = step * (num_vars * num_nodes) + var_index * num_nodes;
-                Ok(all_data[offset..offset + num_nodes].to_vec())
+                // Use partial read to only fetch the specific slice we need
+                // This is much more efficient for large datasets as it avoids reading the entire 3D array
+                let data: Vec<f64> =
+                    var.get_values((step..step + 1, var_index..var_index + 1, ..))?;
+                Ok(data)
             }
             EntityType::ElemBlock
             | EntityType::EdgeBlock
@@ -1932,38 +1920,11 @@ impl ExodusFile<mode::Read> {
             | EntityType::SideSet
             | EntityType::ElemSet => {
                 // Combined format: (time_step, num_vars, num_entities)
-                // Read slice [step, var_index, :]
-                // Get dimension names based on entity type
-                let (num_vars_dim, num_entities_dim) = match var_type {
-                    EntityType::ElemBlock => ("num_elem_var", "num_elem"),
-                    EntityType::EdgeBlock => ("num_edge_var", "num_edge"),
-                    EntityType::FaceBlock => ("num_face_var", "num_face"),
-                    EntityType::NodeSet => ("num_nset_var", "num_node_ns"),
-                    EntityType::EdgeSet => ("num_eset_var", "num_edge_es"),
-                    EntityType::FaceSet => ("num_fset_var", "num_face_fs"),
-                    EntityType::SideSet => ("num_sset_var", "num_side_ss"),
-                    EntityType::ElemSet => ("num_elset_var", "num_ele_els"),
-                    _ => unreachable!(),
-                };
-                let num_vars = self
-                    .nc_file
-                    .dimension(num_vars_dim)
-                    .ok_or_else(|| {
-                        ExodusError::Other(format!("Dimension {} not found", num_vars_dim))
-                    })?
-                    .len();
-                let num_entities = self
-                    .nc_file
-                    .dimension(num_entities_dim)
-                    .ok_or_else(|| {
-                        ExodusError::Other(format!("Dimension {} not found", num_entities_dim))
-                    })?
-                    .len();
-                // Read entire variable as 1D array
-                let all_data: Vec<f64> = var.get_values(..)?;
-                // Calculate offset: step * (num_vars * num_entities) + var_index * num_entities
-                let offset = step * (num_vars * num_entities) + var_index * num_entities;
-                Ok(all_data[offset..offset + num_entities].to_vec())
+                // Use partial read to only fetch the specific slice we need
+                // This is much more efficient for large datasets as it avoids reading the entire 3D array
+                let data: Vec<f64> =
+                    var.get_values((step..step + 1, var_index..var_index + 1, ..))?;
+                Ok(data)
             }
             _ => Err(ExodusError::InvalidEntityType(format!(
                 "Unsupported variable type: {}",
@@ -2670,22 +2631,11 @@ impl ExodusFile<mode::Append> {
             }
             EntityType::Nodal => {
                 // Nodal vars in combined format: (time_step, num_nod_var, num_nodes)
-                // Get dimensions first
-                let num_vars = self
-                    .nc_file
-                    .dimension("num_nod_var")
-                    .ok_or_else(|| ExodusError::Other("Dimension num_nod_var not found".into()))?
-                    .len();
-                let num_nodes = self
-                    .nc_file
-                    .dimension("num_nodes")
-                    .ok_or_else(|| ExodusError::Other("Dimension num_nodes not found".into()))?
-                    .len();
-                // Read entire variable as 1D array (netcdf stores in C order: time, var, node)
-                let all_data: Vec<f64> = var.get_values(..)?;
-                // Calculate offset: step * (num_vars * num_nodes) + var_index * num_nodes
-                let offset = step * (num_vars * num_nodes) + var_index * num_nodes;
-                Ok(all_data[offset..offset + num_nodes].to_vec())
+                // Use partial read to only fetch the specific slice we need
+                // This is much more efficient for large datasets as it avoids reading the entire 3D array
+                let data: Vec<f64> =
+                    var.get_values((step..step + 1, var_index..var_index + 1, ..))?;
+                Ok(data)
             }
             EntityType::ElemBlock
             | EntityType::EdgeBlock
@@ -2696,37 +2646,11 @@ impl ExodusFile<mode::Append> {
             | EntityType::SideSet
             | EntityType::ElemSet => {
                 // Combined format: (time_step, num_vars, num_entities)
-                // Get dimension names based on entity type
-                let (num_vars_dim, num_entities_dim) = match var_type {
-                    EntityType::ElemBlock => ("num_elem_var", "num_elem"),
-                    EntityType::EdgeBlock => ("num_edge_var", "num_edge"),
-                    EntityType::FaceBlock => ("num_face_var", "num_face"),
-                    EntityType::NodeSet => ("num_nset_var", "num_node_ns"),
-                    EntityType::EdgeSet => ("num_eset_var", "num_edge_es"),
-                    EntityType::FaceSet => ("num_fset_var", "num_face_fs"),
-                    EntityType::SideSet => ("num_sset_var", "num_side_ss"),
-                    EntityType::ElemSet => ("num_elset_var", "num_ele_els"),
-                    _ => unreachable!(),
-                };
-                let num_vars = self
-                    .nc_file
-                    .dimension(num_vars_dim)
-                    .ok_or_else(|| {
-                        ExodusError::Other(format!("Dimension {} not found", num_vars_dim))
-                    })?
-                    .len();
-                let num_entities = self
-                    .nc_file
-                    .dimension(num_entities_dim)
-                    .ok_or_else(|| {
-                        ExodusError::Other(format!("Dimension {} not found", num_entities_dim))
-                    })?
-                    .len();
-                // Read entire variable as 1D array
-                let all_data: Vec<f64> = var.get_values(..)?;
-                // Calculate offset: step * (num_vars * num_entities) + var_index * num_entities
-                let offset = step * (num_vars * num_entities) + var_index * num_entities;
-                Ok(all_data[offset..offset + num_entities].to_vec())
+                // Use partial read to only fetch the specific slice we need
+                // This is much more efficient for large datasets as it avoids reading the entire 3D array
+                let data: Vec<f64> =
+                    var.get_values((step..step + 1, var_index..var_index + 1, ..))?;
+                Ok(data)
             }
             _ => Err(ExodusError::InvalidEntityType(format!(
                 "Unsupported variable type: {}",

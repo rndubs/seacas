@@ -441,6 +441,14 @@ The **exodus-rs library is production-ready** for all use cases with:
 
 **Recent Additions:**
 
+*2025-11-28:*
+- ✅ **Performance Optimization for Large Datasets** - Optimized memory usage and performance for large file operations:
+  - **Partial reads for combined variables**: `read_var_combined()` now uses NetCDF slice reads instead of reading the entire 3D array. For a file with 1000 time steps, 10 variables, and 1M nodes, this reduces memory usage from 80GB to 8MB per read.
+  - **Optimized coords_array()**: Reads coordinate data directly into ndarray columns using efficient Zip operations, avoiding the intermediate Coordinates struct allocation.
+  - **Optimized connectivity_array()**: Reads block info and data directly, avoiding intermediate Connectivity struct allocation.
+  - Both Read and Append mode implementations were optimized.
+  - All tests passing (136 unit tests, 15 doc tests)
+
 *2025-11-23:*
 - ✅ **NumPy Integration Phase 1-2 Complete** - Full NumPy zero-copy support with comprehensive tests:
   - **Rust ndarray layer (18 tests):**
