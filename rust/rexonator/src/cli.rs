@@ -38,8 +38,8 @@ pub struct Cli {
     #[arg(value_name = "INPUT", required_unless_present_any = ["man", "show_perf_config"])]
     pub input: Option<PathBuf>,
 
-    /// Output Exodus file
-    #[arg(value_name = "OUTPUT", required_unless_present_any = ["man", "show_perf_config"])]
+    /// Output Exodus file (optional with --in-place)
+    #[arg(value_name = "OUTPUT", required_unless_present_any = ["man", "show_perf_config", "in_place"])]
     pub output: Option<PathBuf>,
 
     /// Scale mesh coordinates uniformly by a factor
@@ -107,6 +107,11 @@ pub struct Cli {
     /// Normalize time values so the first time step is zero
     #[arg(short = 'z', long = "zero-time")]
     pub zero_time: bool,
+
+    /// Modify the input file in-place (OUTPUT argument becomes optional).
+    /// WARNING: This modifies the original file. Consider making a backup first.
+    #[arg(short = 'i', long = "in-place")]
+    pub in_place: bool,
 
     /// Print verbose output
     #[arg(short, long)]

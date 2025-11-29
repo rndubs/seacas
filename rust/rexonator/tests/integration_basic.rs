@@ -1160,3 +1160,235 @@ fn test_preserves_variable_names() {
 
     assert_eq!(orig_names, new_names);
 }
+
+// ========================================================================
+// In-Place Mode Tests
+// ========================================================================
+
+#[test]
+#[serial]
+fn test_in_place_translate() {
+    let ctx = TestContext::new();
+    let input = ctx.path("input.exo");
+
+    create_simple_cube(&input).expect("Failed to create test mesh");
+
+    // Record original bounds
+    let (orig_x, _, _) = read_coord_bounds(&input).expect("Failed to read original bounds");
+
+    let status = rexonator_cmd()
+        .args([
+            input.to_str().unwrap(),
+            "--in-place",
+            "--translate",
+            "10,0,0",
+        ])
+        .status()
+        .expect("Failed to run rexonator");
+
+    assert!(status.success());
+
+    // Read bounds from the modified input file
+    let (x_bounds, y_bounds, z_bounds) = read_coord_bounds(&input).expect("Failed to read output");
+
+    // Original: [0,1] x [0,1] x [0,1]
+    // After translate by (10,0,0): [10,11] x [0,1] x [0,1]
+    assert!((x_bounds[0] - 10.0).abs() < TOLERANCE, "x_min should be 10");
+    assert!((x_bounds[1] - 11.0).abs() < TOLERANCE, "x_max should be 11");
+    assert!((y_bounds[0] - 0.0).abs() < TOLERANCE, "y unchanged");
+    assert!((y_bounds[1] - 1.0).abs() < TOLERANCE, "y unchanged");
+    assert!((z_bounds[0] - 0.0).abs() < TOLERANCE, "z unchanged");
+    assert!((z_bounds[1] - 1.0).abs() < TOLERANCE, "z unchanged");
+}
+
+#[test]
+#[serial]
+fn test_in_place_with_short_flag() {
+    let ctx = TestContext::new();
+    let input = ctx.path("input.exo");
+
+    create_simple_cube(&input).expect("Failed to create test mesh");
+
+    let status = rexonator_cmd()
+        .args([input.to_str().unwrap(), "-i", "--scale-len", "2"])
+        .status()
+        .expect("Failed to run rexonator");
+
+    assert!(status.success());
+
+    let (x_bounds, _, _) = read_coord_bounds(&input).unwrap();
+
+    // Original: [0,1] -> scaled by 2 -> [0,2]
+    assert!((x_bounds[0] - 0.0).abs() < TOLERANCE);
+    assert!((x_bounds[1] - 2.0).abs() < TOLERANCE);
+}
+
+#[test]
+#[serial]
+fn test_in_place_with_explicit_output() {
+    let ctx = TestContext::new();
+    let input = ctx.path("input.exo");
+    let output = ctx.path("output.exo");
+
+    create_simple_cube(&input).expect("Failed to create test mesh");
+
+    // Copy input to output first (to test in-place on output)
+    std::fs::copy(&input, &output).expect("Failed to copy file");
+
+    let status = rexonator_cmd()
+        .args([
+            output.to_str().unwrap(),
+            output.to_str().unwrap(),
+            "--in-place",
+            "--translate",
+            "5,0,0",
+        ])
+        .status()
+        .expect("Failed to run rexonator");
+
+    assert!(status.success());
+
+    let (x_bounds, _, _) = read_coord_bounds(&output).unwrap();
+
+    assert!((x_bounds[0] - 5.0).abs() < TOLERANCE);
+    assert!((x_bounds[1] - 6.0).abs() < TOLERANCE);
+}
+
+#[test]
+#[serial]
+fn test_in_place_same_result_as_copy() {
+    let ctx = TestContext::new();
+    let input1 = ctx.path("input1.exo");
+    let input2 = ctx.path("input2.exo");
+    let output = ctx.path("output.exo");
+
+    // Create two identical meshes
+    create_simple_cube(&input1).expect("Failed to create test mesh 1");
+    create_simple_cube(&input2).expect("Failed to create test mesh 2");
+
+    // Apply transformation with copy mode
+    let status1 = rexonator_cmd()
+        .args([
+            input1.to_str().unwrap(),
+            output.to_str().unwrap(),
+            "--translate",
+            "10,20,30",
+            "--rotate",
+            "Z,45",
+        ])
+        .status()
+        .expect("Failed to run rexonator (copy mode)");
+    assert!(status1.success());
+
+    // Apply same transformation with in-place mode
+    let status2 = rexonator_cmd()
+        .args([
+            input2.to_str().unwrap(),
+            "--in-place",
+            "--translate",
+            "10,20,30",
+            "--rotate",
+            "Z,45",
+        ])
+        .status()
+        .expect("Failed to run rexonator (in-place mode)");
+    assert!(status2.success());
+
+    // Compare results
+    let (x1, y1, z1) = read_coord_bounds(&output).unwrap();
+    let (x2, y2, z2) = read_coord_bounds(&input2).unwrap();
+
+    assert!((x1[0] - x2[0]).abs() < TOLERANCE, "x_min mismatch");
+    assert!((x1[1] - x2[1]).abs() < TOLERANCE, "x_max mismatch");
+    assert!((y1[0] - y2[0]).abs() < TOLERANCE, "y_min mismatch");
+    assert!((y1[1] - y2[1]).abs() < TOLERANCE, "y_max mismatch");
+    assert!((z1[0] - z2[0]).abs() < TOLERANCE, "z_min mismatch");
+    assert!((z1[1] - z2[1]).abs() < TOLERANCE, "z_max mismatch");
+}
+
+#[test]
+#[serial]
+fn test_in_place_verbose_output() {
+    let ctx = TestContext::new();
+    let input = ctx.path("input.exo");
+
+    create_simple_cube(&input).expect("Failed to create test mesh");
+
+    let result = rexonator_cmd()
+        .args([input.to_str().unwrap(), "-i", "--translate", "1,0,0", "-v"])
+        .output()
+        .expect("Failed to run rexonator");
+
+    assert!(result.status.success());
+
+    let stdout = String::from_utf8_lossy(&result.stdout);
+    assert!(
+        stdout.contains("In-place") || stdout.contains("in-place"),
+        "Should mention in-place mode in verbose output"
+    );
+    assert!(
+        stdout.contains("no copy") || stdout.contains("no file copy"),
+        "Should mention no copy needed"
+    );
+}
+
+#[test]
+#[serial]
+fn test_in_place_with_zero_time() {
+    let ctx = TestContext::new();
+    let input = ctx.path("input.exo");
+
+    create_mesh_with_time_steps(&input).expect("Failed to create test mesh");
+
+    let orig_times = read_times(&input).expect("Failed to read original times");
+    assert!((orig_times[0] - 10.0).abs() < TOLERANCE); // Verify starting time
+
+    let status = rexonator_cmd()
+        .args([input.to_str().unwrap(), "-i", "--zero-time"])
+        .status()
+        .expect("Failed to run rexonator");
+
+    assert!(status.success());
+
+    let new_times = read_times(&input).expect("Failed to read new times");
+
+    // Times should now start at 0
+    assert!(
+        (new_times[0] - 0.0).abs() < TOLERANCE,
+        "First time should be 0"
+    );
+}
+
+#[test]
+#[serial]
+fn test_auto_in_place_same_paths() {
+    // Test that when input == output, in-place mode is automatically enabled
+    let ctx = TestContext::new();
+    let input = ctx.path("input.exo");
+
+    create_simple_cube(&input).expect("Failed to create test mesh");
+
+    // Use the same path for input and output (without --in-place flag)
+    let result = rexonator_cmd()
+        .args([
+            input.to_str().unwrap(),
+            input.to_str().unwrap(), // Same as input
+            "--translate",
+            "10,0,0",
+            "-v",
+        ])
+        .output()
+        .expect("Failed to run rexonator");
+
+    assert!(result.status.success());
+
+    let stdout = String::from_utf8_lossy(&result.stdout);
+    // Should automatically detect same file and use in-place mode
+    assert!(
+        stdout.contains("In-place") || stdout.contains("in-place"),
+        "Should automatically enable in-place mode when paths are same"
+    );
+
+    let (x_bounds, _, _) = read_coord_bounds(&input).unwrap();
+    assert!((x_bounds[0] - 10.0).abs() < TOLERANCE);
+}
