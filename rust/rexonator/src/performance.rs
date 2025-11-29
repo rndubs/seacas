@@ -243,6 +243,7 @@ mod tests {
             scalar_fields: None,
             no_auto_vector_detection: false,
             zero_time: false,
+            in_place: false,
             verbose: false,
             cache_size: None,
             preemption: None,
@@ -285,6 +286,7 @@ mod tests {
             scalar_fields: None,
             no_auto_vector_detection: false,
             zero_time: false,
+            in_place: false,
             verbose: false,
             cache_size: Some(256),      // 256 MB
             preemption: Some(0.5),      // Balanced write/read
@@ -320,6 +322,7 @@ mod tests {
             scalar_fields: None,
             no_auto_vector_detection: false,
             zero_time: false,
+            in_place: false,
             verbose: false,
             cache_size: None,
             preemption: Some(1.5), // Out of range (should clamp to 1.0)
