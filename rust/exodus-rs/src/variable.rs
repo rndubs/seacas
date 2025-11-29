@@ -5,6 +5,7 @@
 
 use crate::error::{EntityId, ExodusError, Result};
 use crate::types::{EntityType, TruthTable, VarStorageMode};
+use crate::utils::constants::*;
 use crate::{mode, ExodusFile, FileMode};
 use netcdf::types::{NcTypeDescriptor, NcVariableType};
 
@@ -43,11 +44,11 @@ impl<M: FileMode> ExodusFile<M> {
     /// Returns an error if NetCDF read fails
     pub fn variable_names(&self, var_type: EntityType) -> Result<Vec<String>> {
         let var_name_var = match var_type {
-            EntityType::Global => "name_glo_var",
-            EntityType::Nodal => "name_nod_var",
-            EntityType::ElemBlock => "name_elem_var",
-            EntityType::EdgeBlock => "name_edge_var",
-            EntityType::FaceBlock => "name_face_var",
+            EntityType::Global => VAR_NAME_GLO_VAR,
+            EntityType::Nodal => VAR_NAME_NOD_VAR,
+            EntityType::ElemBlock => VAR_NAME_ELEM_VAR,
+            EntityType::EdgeBlock => VAR_NAME_EDGE_VAR,
+            EntityType::FaceBlock => VAR_NAME_FACE_VAR,
             EntityType::NodeSet => "name_nset_var",
             EntityType::EdgeSet => "name_eset_var",
             EntityType::FaceSet => "name_fset_var",
@@ -96,7 +97,7 @@ impl<M: FileMode> ExodusFile<M> {
                 // Get len_string for fixed-length names
                 let len_string = self
                     .nc_file
-                    .dimension("len_string")
+                    .dimension(DIM_LEN_STRING)
                     .ok_or_else(|| {
                         ExodusError::Other(
                             "len_string dimension not found when reading variable names"
@@ -135,7 +136,7 @@ impl<M: FileMode> ExodusFile<M> {
     pub fn num_time_steps(&self) -> Result<usize> {
         Ok(self
             .nc_file
-            .dimension("time_step")
+            .dimension(DIM_TIME_STEP)
             .map(|d| d.len())
             .unwrap_or(0))
     }
@@ -159,7 +160,7 @@ impl<M: FileMode> ExodusFile<M> {
     /// Returns an error if NetCDF read fails
     pub fn reduction_variable_names(&self, var_type: EntityType) -> Result<Vec<String>> {
         let var_name_var = match var_type {
-            EntityType::Global => "name_glo_var",
+            EntityType::Global => VAR_NAME_GLO_VAR,
             EntityType::ElemBlock => "name_ele_red_var",
             EntityType::EdgeBlock => "name_edg_red_var",
             EntityType::FaceBlock => "name_fac_red_var",
@@ -206,7 +207,7 @@ impl<M: FileMode> ExodusFile<M> {
 
                 let len_string = self
                     .nc_file
-                    .dimension("len_string")
+                    .dimension(DIM_LEN_STRING)
                     .ok_or_else(|| {
                         ExodusError::Other(
                             "len_string dimension not found when reading reduction variable names"
@@ -258,7 +259,7 @@ impl<M: FileMode> ExodusFile<M> {
         entity_id: EntityId,
     ) -> Result<Vec<f64>> {
         let var_name = match var_type {
-            EntityType::Global => "vals_glo_var".to_string(),
+            EntityType::Global => VAR_VALS_GLO_VAR.to_string(),
             EntityType::Assembly => format!("vals_assembly_red{}", entity_id),
             EntityType::Blob => format!("vals_blob_red{}", entity_id),
             EntityType::ElemBlock => {
@@ -411,11 +412,11 @@ impl ExodusFile<mode::Write> {
 
         // Create dimension for number of variables
         let (num_var_dim, var_name_var) = match var_type {
-            EntityType::Global => ("num_glo_var", "name_glo_var"),
-            EntityType::Nodal => ("num_nod_var", "name_nod_var"),
-            EntityType::ElemBlock => ("num_elem_var", "name_elem_var"),
-            EntityType::EdgeBlock => ("num_edge_var", "name_edge_var"),
-            EntityType::FaceBlock => ("num_face_var", "name_face_var"),
+            EntityType::Global => (DIM_NUM_GLO_VAR, VAR_NAME_GLO_VAR),
+            EntityType::Nodal => (DIM_NUM_NOD_VAR, VAR_NAME_NOD_VAR),
+            EntityType::ElemBlock => (DIM_NUM_ELEM_VAR, VAR_NAME_ELEM_VAR),
+            EntityType::EdgeBlock => (DIM_NUM_EDGE_VAR, VAR_NAME_EDGE_VAR),
+            EntityType::FaceBlock => (DIM_NUM_FACE_VAR, VAR_NAME_FACE_VAR),
             EntityType::NodeSet => ("num_nset_var", "name_nset_var"),
             EntityType::EdgeSet => ("num_eset_var", "name_eset_var"),
             EntityType::FaceSet => ("num_fset_var", "name_fset_var"),
@@ -437,20 +438,20 @@ impl ExodusFile<mode::Write> {
         const STANDARD_NAME_LEN: usize = 32;
 
         // Use existing len_string if it exists, otherwise use 32
-        let len_string = if let Some(dim) = self.nc_file.dimension("len_string") {
+        let len_string = if let Some(dim) = self.nc_file.dimension(DIM_LEN_STRING) {
             dim.len()
         } else {
             STANDARD_NAME_LEN
         };
 
         // Create len_string dimension if it doesn't exist
-        if self.nc_file.dimension("len_string").is_none() {
-            self.nc_file.add_dimension("len_string", len_string)?;
+        if self.nc_file.dimension(DIM_LEN_STRING).is_none() {
+            self.nc_file.add_dimension(DIM_LEN_STRING, len_string)?;
         }
 
         // Create time_step dimension if it doesn't exist (needed for all variables)
-        if self.nc_file.dimension("time_step").is_none() {
-            self.nc_file.add_unlimited_dimension("time_step")?;
+        if self.nc_file.dimension(DIM_TIME_STEP).is_none() {
+            self.nc_file.add_unlimited_dimension(DIM_TIME_STEP)?;
         }
 
         // Create the variable name storage variable
@@ -460,7 +461,7 @@ impl ExodusFile<mode::Write> {
         if !var_name_exists {
             self.nc_file.add_variable_with_type(
                 var_name_var,
-                &[num_var_dim, "len_string"],
+                &[num_var_dim, DIM_LEN_STRING],
                 &NcVariableType::Char,
             )?;
         }
@@ -483,7 +484,7 @@ impl ExodusFile<mode::Write> {
         let num_nodes = self
             .metadata
             .dim_cache
-            .get("num_nodes")
+            .get(DIM_NUM_NODES)
             .copied()
             .unwrap_or(0);
 
@@ -491,10 +492,10 @@ impl ExodusFile<mode::Write> {
         match var_type {
             EntityType::Global => {
                 // Global vars: vals_glo_var(time_step, num_glo_var)
-                if self.nc_file.variable("vals_glo_var").is_none() {
+                if self.nc_file.variable(VAR_VALS_GLO_VAR).is_none() {
                     let mut var = self
                         .nc_file
-                        .add_variable::<f64>("vals_glo_var", &["time_step", num_var_dim])?;
+                        .add_variable::<f64>(VAR_VALS_GLO_VAR, &[DIM_TIME_STEP, num_var_dim])?;
 
                     // Apply chunking for global variables (clamp to actual size)
                     // Chunk on time if configured (typically small variable count)
@@ -518,7 +519,7 @@ impl ExodusFile<mode::Write> {
                     if self.nc_file.variable(&var_name).is_none() {
                         let mut var = self
                             .nc_file
-                            .add_variable::<f64>(&var_name, &["time_step", "num_nodes"])?;
+                            .add_variable::<f64>(&var_name, &[DIM_TIME_STEP, DIM_NUM_NODES])?;
 
                         // Apply chunking for nodal variables
                         // Chunk on nodes (spatial dimension), optionally on time
@@ -580,25 +581,25 @@ impl ExodusFile<mode::Write> {
     /// Returns an error if NetCDF write fails
     pub fn put_time(&mut self, step: usize, time: f64) -> Result<()> {
         // Ensure time_step dimension exists (may be created earlier by define_variables)
-        if self.nc_file.dimension("time_step").is_none() {
+        if self.nc_file.dimension(DIM_TIME_STEP).is_none() {
             self.ensure_define_mode()?;
-            self.nc_file.add_unlimited_dimension("time_step")?;
+            self.nc_file.add_unlimited_dimension(DIM_TIME_STEP)?;
         }
 
         // Ensure time_whole variable exists
-        if self.nc_file.variable("time_whole").is_none() {
+        if self.nc_file.variable(VAR_TIME_WHOLE).is_none() {
             self.ensure_define_mode()?;
             let mut var = self
                 .nc_file
-                .add_variable::<f64>("time_whole", &["time_step"])?;
-            var.put_attribute("name", "time_whole")?;
+                .add_variable::<f64>(VAR_TIME_WHOLE, &[DIM_TIME_STEP])?;
+            var.put_attribute("name", VAR_TIME_WHOLE)?;
         }
 
         // Ensure we're in data mode for writing time values
         self.ensure_data_mode()?;
 
         // Write the time value
-        if let Some(mut var) = self.nc_file.variable_mut("time_whole") {
+        if let Some(mut var) = self.nc_file.variable_mut(VAR_TIME_WHOLE) {
             var.put_value(time, step..step + 1)?;
         }
 
@@ -700,9 +701,9 @@ impl ExodusFile<mode::Write> {
     /// - NetCDF write fails
     pub fn put_truth_table(&mut self, var_type: EntityType, table: &TruthTable) -> Result<()> {
         let var_name = match var_type {
-            EntityType::ElemBlock => "elem_var_tab",
-            EntityType::EdgeBlock => "edge_var_tab",
-            EntityType::FaceBlock => "face_var_tab",
+            EntityType::ElemBlock => VAR_ELEM_VAR_TAB,
+            EntityType::EdgeBlock => VAR_EDGE_VAR_TAB,
+            EntityType::FaceBlock => VAR_FACE_VAR_TAB,
             _ => {
                 return Err(ExodusError::InvalidEntityType(format!(
                     "Truth tables only supported for block types, got {}",
@@ -751,9 +752,9 @@ impl ExodusFile<mode::Write> {
         }
 
         let (num_blocks_dim, num_vars_dim) = match var_type {
-            EntityType::ElemBlock => ("num_el_blk", "num_elem_var"),
-            EntityType::EdgeBlock => ("num_ed_blk", "num_edge_var"),
-            EntityType::FaceBlock => ("num_fa_blk", "num_face_var"),
+            EntityType::ElemBlock => ("num_el_blk", DIM_NUM_ELEM_VAR),
+            EntityType::EdgeBlock => ("num_ed_blk", DIM_NUM_EDGE_VAR),
+            EntityType::FaceBlock => ("num_fa_blk", DIM_NUM_FACE_VAR),
             _ => unreachable!(),
         };
 
@@ -812,7 +813,7 @@ impl ExodusFile<mode::Write> {
         let num_nodes = self
             .metadata
             .dim_cache
-            .get("num_nodes")
+            .get(DIM_NUM_NODES)
             .copied()
             .unwrap_or(0);
 
@@ -828,17 +829,17 @@ impl ExodusFile<mode::Write> {
         match var_type {
             EntityType::Global => {
                 // Global vars: vals_glo_var(time_step, num_glo_var)
-                if self.nc_file.variable("vals_glo_var").is_none() {
+                if self.nc_file.variable(VAR_VALS_GLO_VAR).is_none() {
                     // Get dimension length before creating variable to avoid borrow conflict
                     let num_glo_var = self
                         .nc_file
-                        .dimension("num_glo_var")
+                        .dimension(DIM_NUM_GLO_VAR)
                         .map(|d| d.len())
                         .unwrap_or(1);
 
                     let mut var = self
                         .nc_file
-                        .add_variable::<f64>("vals_glo_var", &["time_step", "num_glo_var"])?;
+                        .add_variable::<f64>(VAR_VALS_GLO_VAR, &[DIM_TIME_STEP, DIM_NUM_GLO_VAR])?;
 
                     // Apply chunking for global variables (clamp to dimension size)
                     if time_chunk_req > 0 && num_glo_var > 0 {
@@ -850,7 +851,7 @@ impl ExodusFile<mode::Write> {
                 // Nodal var{i}: vals_nod_var{i}(time_step, num_nodes)
                 let mut var = self
                     .nc_file
-                    .add_variable::<f64>(&var_name, &["time_step", "num_nodes"])?;
+                    .add_variable::<f64>(&var_name, &[DIM_TIME_STEP, DIM_NUM_NODES])?;
 
                 // Apply chunking for nodal variables (clamp to num_nodes)
                 let node_chunk = clamp_chunk(node_chunk_req, num_nodes);
@@ -884,7 +885,7 @@ impl ExodusFile<mode::Write> {
 
                 let mut var = self
                     .nc_file
-                    .add_variable::<f64>(&var_name, &["time_step", &dim_name])?;
+                    .add_variable::<f64>(&var_name, &[DIM_TIME_STEP, &dim_name])?;
 
                 // Apply chunking for element variables (clamp to block size)
                 let elem_chunk = clamp_chunk(elem_chunk_req, block_dim_size);
@@ -917,7 +918,7 @@ impl ExodusFile<mode::Write> {
 
                 let mut var = self
                     .nc_file
-                    .add_variable::<f64>(&var_name, &["time_step", &dim_name])?;
+                    .add_variable::<f64>(&var_name, &[DIM_TIME_STEP, &dim_name])?;
 
                 // Apply chunking for edge variables (clamp to block size)
                 let elem_chunk = clamp_chunk(elem_chunk_req, block_dim_size);
@@ -950,7 +951,7 @@ impl ExodusFile<mode::Write> {
 
                 let mut var = self
                     .nc_file
-                    .add_variable::<f64>(&var_name, &["time_step", &dim_name])?;
+                    .add_variable::<f64>(&var_name, &[DIM_TIME_STEP, &dim_name])?;
 
                 // Apply chunking for face variables (clamp to block size)
                 let elem_chunk = clamp_chunk(elem_chunk_req, block_dim_size);
@@ -976,7 +977,7 @@ impl ExodusFile<mode::Write> {
 
                 let dim_name = format!("num_nod_ns{}", set_index + 1);
                 self.nc_file
-                    .add_variable::<f64>(&var_name, &["time_step", &dim_name])?;
+                    .add_variable::<f64>(&var_name, &[DIM_TIME_STEP, &dim_name])?;
             }
             EntityType::EdgeSet => {
                 let set_ids = self.set_ids(EntityType::EdgeSet)?;
@@ -991,7 +992,7 @@ impl ExodusFile<mode::Write> {
 
                 let dim_name = format!("num_edge_es{}", set_index + 1);
                 self.nc_file
-                    .add_variable::<f64>(&var_name, &["time_step", &dim_name])?;
+                    .add_variable::<f64>(&var_name, &[DIM_TIME_STEP, &dim_name])?;
             }
             EntityType::FaceSet => {
                 let set_ids = self.set_ids(EntityType::FaceSet)?;
@@ -1006,7 +1007,7 @@ impl ExodusFile<mode::Write> {
 
                 let dim_name = format!("num_face_fs{}", set_index + 1);
                 self.nc_file
-                    .add_variable::<f64>(&var_name, &["time_step", &dim_name])?;
+                    .add_variable::<f64>(&var_name, &[DIM_TIME_STEP, &dim_name])?;
             }
             EntityType::SideSet => {
                 let set_ids = self.set_ids(EntityType::SideSet)?;
@@ -1021,7 +1022,7 @@ impl ExodusFile<mode::Write> {
 
                 let dim_name = format!("num_side_ss{}", set_index + 1);
                 self.nc_file
-                    .add_variable::<f64>(&var_name, &["time_step", &dim_name])?;
+                    .add_variable::<f64>(&var_name, &[DIM_TIME_STEP, &dim_name])?;
             }
             EntityType::ElemSet => {
                 let set_ids = self.set_ids(EntityType::ElemSet)?;
@@ -1036,7 +1037,7 @@ impl ExodusFile<mode::Write> {
 
                 let dim_name = format!("num_ele_els{}", set_index + 1);
                 self.nc_file
-                    .add_variable::<f64>(&var_name, &["time_step", &dim_name])?;
+                    .add_variable::<f64>(&var_name, &[DIM_TIME_STEP, &dim_name])?;
             }
             _ => {
                 return Err(ExodusError::InvalidEntityType(format!(
@@ -1087,7 +1088,7 @@ impl ExodusFile<mode::Write> {
                 // Nodal vars: values should be [num_nodes * num_vars]
                 let num_nodes = self
                     .nc_file
-                    .dimension("num_nodes")
+                    .dimension(DIM_NUM_NODES)
                     .map(|d| d.len())
                     .unwrap_or(0);
 
@@ -1188,7 +1189,7 @@ impl ExodusFile<mode::Write> {
             EntityType::Nodal => {
                 let num_nodes = self
                     .nc_file
-                    .dimension("num_nodes")
+                    .dimension(DIM_NUM_NODES)
                     .map(|d| d.len())
                     .unwrap_or(0);
                 num_steps * num_nodes
@@ -1274,7 +1275,7 @@ impl ExodusFile<mode::Write> {
         var_index: usize,
     ) -> Result<String> {
         Ok(match var_type {
-            EntityType::Global => "vals_glo_var".to_string(),
+            EntityType::Global => VAR_VALS_GLO_VAR.to_string(),
             EntityType::Nodal => format!("vals_nod_var{}", var_index + 1),
             EntityType::ElemBlock => {
                 let block_ids = self.block_ids(EntityType::ElemBlock)?;
@@ -1425,7 +1426,7 @@ impl ExodusFile<mode::Write> {
 
         // Get the dimension and variable names based on entity type
         let (num_var_dim, var_name_var) = match var_type {
-            EntityType::Global => ("num_glo_var", "name_glo_var"),
+            EntityType::Global => (DIM_NUM_GLO_VAR, VAR_NAME_GLO_VAR),
             EntityType::ElemBlock => ("num_ele_red_var", "name_ele_red_var"),
             EntityType::EdgeBlock => ("num_edg_red_var", "name_edg_red_var"),
             EntityType::FaceBlock => ("num_fac_red_var", "name_fac_red_var"),
@@ -1449,19 +1450,19 @@ impl ExodusFile<mode::Write> {
 
         // Ensure len_string dimension exists
         const STANDARD_NAME_LEN: usize = 32;
-        let len_string = if let Some(dim) = self.nc_file.dimension("len_string") {
+        let len_string = if let Some(dim) = self.nc_file.dimension(DIM_LEN_STRING) {
             dim.len()
         } else {
             STANDARD_NAME_LEN
         };
 
-        if self.nc_file.dimension("len_string").is_none() {
-            self.nc_file.add_dimension("len_string", len_string)?;
+        if self.nc_file.dimension(DIM_LEN_STRING).is_none() {
+            self.nc_file.add_dimension(DIM_LEN_STRING, len_string)?;
         }
 
         // Ensure time_step dimension exists
-        if self.nc_file.dimension("time_step").is_none() {
-            self.nc_file.add_unlimited_dimension("time_step")?;
+        if self.nc_file.dimension(DIM_TIME_STEP).is_none() {
+            self.nc_file.add_unlimited_dimension(DIM_TIME_STEP)?;
         }
 
         // Create the variable name storage variable
@@ -1470,16 +1471,16 @@ impl ExodusFile<mode::Write> {
         if self.nc_file.variable(var_name_var).is_none() {
             self.nc_file.add_variable_with_type(
                 var_name_var,
-                &[num_var_dim, "len_string"],
+                &[num_var_dim, DIM_LEN_STRING],
                 &NcVariableType::Char,
             )?;
         }
 
         // For global reduction variables, create the storage variable now
         // For other types, storage is created per-entity in put_reduction_vars()
-        if var_type == EntityType::Global && self.nc_file.variable("vals_glo_var").is_none() {
+        if var_type == EntityType::Global && self.nc_file.variable(VAR_VALS_GLO_VAR).is_none() {
             self.nc_file
-                .add_variable::<f64>("vals_glo_var", &["time_step", num_var_dim])?;
+                .add_variable::<f64>(VAR_VALS_GLO_VAR, &[DIM_TIME_STEP, num_var_dim])?;
         }
 
         // Write the variable names using NC_CHAR (2D character array)
@@ -1565,7 +1566,7 @@ impl ExodusFile<mode::Write> {
     /// Helper: Get reduction variable name for storage
     fn get_reduction_var_name(&self, var_type: EntityType, entity_id: EntityId) -> Result<String> {
         Ok(match var_type {
-            EntityType::Global => "vals_glo_var".to_string(),
+            EntityType::Global => VAR_VALS_GLO_VAR.to_string(),
             EntityType::Assembly => {
                 // For assemblies, use entity_id directly as the index
                 format!("vals_assembly_red{}", entity_id)
@@ -1687,7 +1688,7 @@ impl ExodusFile<mode::Write> {
 
         // Get the dimension name for the number of reduction variables
         let num_var_dim = match var_type {
-            EntityType::Global => "num_glo_var",
+            EntityType::Global => DIM_NUM_GLO_VAR,
             EntityType::ElemBlock => "num_ele_red_var",
             EntityType::EdgeBlock => "num_edg_red_var",
             EntityType::FaceBlock => "num_fac_red_var",
@@ -1709,7 +1710,7 @@ impl ExodusFile<mode::Write> {
         // Create the storage variable: var_name(time_step, num_*_red_var)
         if self.nc_file.variable(&var_name).is_none() {
             self.nc_file
-                .add_variable::<f64>(&var_name, &["time_step", num_var_dim])?;
+                .add_variable::<f64>(&var_name, &[DIM_TIME_STEP, num_var_dim])?;
         }
 
         Ok(())
@@ -1731,7 +1732,7 @@ impl ExodusFile<mode::Read> {
     ///
     /// Returns an error if NetCDF read fails
     pub fn times(&self) -> Result<Vec<f64>> {
-        match self.nc_file.variable("time_whole") {
+        match self.nc_file.variable(VAR_TIME_WHOLE) {
             Some(var) => Ok(var.get_values(..)?),
             None => Ok(Vec::new()),
         }
@@ -1874,7 +1875,7 @@ impl ExodusFile<mode::Read> {
         var_index: usize,
     ) -> Result<Vec<f64>> {
         let var_name = match var_type {
-            EntityType::Global => "vals_glo_var",
+            EntityType::Global => VAR_VALS_GLO_VAR,
             EntityType::Nodal => "vals_nod_var",
             EntityType::ElemBlock => "vals_elem_var",
             EntityType::EdgeBlock => "vals_edge_var",
@@ -1951,9 +1952,9 @@ impl ExodusFile<mode::Read> {
     /// - NetCDF read fails
     pub fn truth_table(&self, var_type: EntityType) -> Result<TruthTable> {
         let var_name = match var_type {
-            EntityType::ElemBlock => "elem_var_tab",
-            EntityType::EdgeBlock => "edge_var_tab",
-            EntityType::FaceBlock => "face_var_tab",
+            EntityType::ElemBlock => VAR_ELEM_VAR_TAB,
+            EntityType::EdgeBlock => VAR_EDGE_VAR_TAB,
+            EntityType::FaceBlock => VAR_FACE_VAR_TAB,
             _ => {
                 return Err(ExodusError::InvalidEntityType(format!(
                     "Truth tables only supported for block types, got {}",
@@ -2283,7 +2284,7 @@ impl ExodusFile<mode::Read> {
         var_index: usize,
     ) -> Result<String> {
         Ok(match var_type {
-            EntityType::Global => "vals_glo_var".to_string(),
+            EntityType::Global => VAR_VALS_GLO_VAR.to_string(),
             EntityType::Nodal => format!("vals_nod_var{}", var_index + 1),
             EntityType::ElemBlock => {
                 let block_ids = self.block_ids(EntityType::ElemBlock)?;
@@ -2403,7 +2404,7 @@ impl ExodusFile<mode::Append> {
     ///
     /// Returns an error if NetCDF read fails
     pub fn times(&self) -> Result<Vec<f64>> {
-        match self.nc_file.variable("time_whole") {
+        match self.nc_file.variable(VAR_TIME_WHOLE) {
             Some(var) => Ok(var.get_values(..)?),
             None => Ok(Vec::new()),
         }
@@ -2449,7 +2450,7 @@ impl ExodusFile<mode::Append> {
         self.ensure_data_mode()?;
 
         // Write the time value - the variable should already exist for append mode
-        if let Some(mut var) = self.nc_file.variable_mut("time_whole") {
+        if let Some(mut var) = self.nc_file.variable_mut(VAR_TIME_WHOLE) {
             var.put_value(time, step..step + 1)?;
             Ok(())
         } else {
@@ -2511,7 +2512,7 @@ impl ExodusFile<mode::Append> {
     ) -> Result<Vec<f64>> {
         // Simplified variable name construction (same logic as Read mode)
         let var_name = match var_type {
-            EntityType::Global => "vals_glo_var".to_string(),
+            EntityType::Global => VAR_VALS_GLO_VAR.to_string(),
             EntityType::Nodal => format!("vals_nod_var{}", var_index + 1),
             EntityType::ElemBlock => {
                 let block_ids = self.block_ids(EntityType::ElemBlock)?;
@@ -2600,7 +2601,7 @@ impl ExodusFile<mode::Append> {
         var_index: usize,
     ) -> Result<Vec<f64>> {
         let var_name = match var_type {
-            EntityType::Global => "vals_glo_var",
+            EntityType::Global => VAR_VALS_GLO_VAR,
             EntityType::Nodal => "vals_nod_var",
             EntityType::ElemBlock => "vals_elem_var",
             EntityType::EdgeBlock => "vals_edge_var",
@@ -2671,7 +2672,7 @@ impl ExodusFile<mode::Append> {
     ) -> Result<()> {
         // Simplified variable name construction (same as var method)
         let var_name = match var_type {
-            EntityType::Global => "vals_glo_var".to_string(),
+            EntityType::Global => VAR_VALS_GLO_VAR.to_string(),
             EntityType::Nodal => format!("vals_nod_var{}", var_index + 1),
             EntityType::ElemBlock => {
                 let block_ids = self.block_ids(EntityType::ElemBlock)?;
@@ -2753,9 +2754,9 @@ impl ExodusFile<mode::Append> {
     pub fn truth_table(&self, var_type: EntityType) -> Result<TruthTable> {
         // Get the dimension name for the number of variables
         let num_var_dim = match var_type {
-            EntityType::ElemBlock => "num_elem_var",
-            EntityType::EdgeBlock => "num_edge_var",
-            EntityType::FaceBlock => "num_face_var",
+            EntityType::ElemBlock => DIM_NUM_ELEM_VAR,
+            EntityType::EdgeBlock => DIM_NUM_EDGE_VAR,
+            EntityType::FaceBlock => DIM_NUM_FACE_VAR,
             _ => {
                 return Err(ExodusError::Other(format!(
                     "Truth tables only supported for block types, got: {:?}",
@@ -2785,9 +2786,9 @@ impl ExodusFile<mode::Append> {
 
         // Try to read the truth table variable
         let truth_var_name = match var_type {
-            EntityType::ElemBlock => "elem_var_tab",
-            EntityType::EdgeBlock => "edge_var_tab",
-            EntityType::FaceBlock => "face_var_tab",
+            EntityType::ElemBlock => VAR_ELEM_VAR_TAB,
+            EntityType::EdgeBlock => VAR_EDGE_VAR_TAB,
+            EntityType::FaceBlock => VAR_FACE_VAR_TAB,
             _ => unreachable!(),
         };
 

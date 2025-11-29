@@ -484,6 +484,7 @@ mod tests {
                 scalar_fields: self.scalar_fields,
                 no_auto_vector_detection: self.no_auto_vector_detection,
                 zero_time: self.zero_time,
+                in_place: false,
                 verbose: self.verbose,
                 cache_size: None,
                 preemption: None,

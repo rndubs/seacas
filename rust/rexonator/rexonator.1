@@ -267,6 +267,30 @@ Print the current performance configuration and exit without processing
 any files. Useful for debugging and verifying settings.
 .SS General Options
 .TP
+.BR \-i ", " \-\-in\-place
+Modify the input file in-place instead of creating a copy. When this option
+is used, the OUTPUT argument becomes optional (defaults to INPUT).
+.IP
+\fBWARNING:\fR This modifies the original file. Consider making a backup first
+if the data is critical.
+.IP
+This option significantly improves performance for simple transformations
+(translate, rotate, scale, mirror, scale-field, zero-time) as it eliminates
+the need to copy the entire file before applying transformations. The
+performance benefit is most noticeable with large mesh files.
+.IP
+\fBNote:\fR If the input and output paths resolve to the same file (even if
+specified differently, e.g., relative vs absolute paths), in-place mode is
+automatically enabled even without this flag.
+.IP
+Examples:
+.RS
+.IP \(bu 2
+\fBrexonator mesh.exo \-i \-\-translate "10,0,0"\fR \- Modify mesh.exo in-place
+.IP \(bu 2
+\fBrexonator mesh.exo output.exo \-i \-\-scale\-len 2.0\fR \- Write to output.exo in-place mode
+.RE
+.TP
 .BR \-v ", " \-\-verbose
 Enable verbose output. When enabled, the program prints:
 .RS
@@ -465,6 +489,15 @@ rexonator large_mesh.exo output.exo \\
 This uses a 256 MB cache with balanced preemption for optimal I/O when
 processing large mesh files.
 .TP
+\fBIn-place transformation (no file copy):\fR
+.nf
+rexonator large_mesh.exo \-i \-\-translate "100,0,0" \-v
+.fi
+.IP
+This modifies the input file directly without copying, providing significant
+performance improvements for large mesh files. Use with caution \- the original
+file will be modified.
+.TP
 \fBCheck performance configuration:\fR
 .nf
 rexonator dummy.exo dummy.exo \-\-show\-perf\-config
@@ -491,10 +524,15 @@ Will be created as a copy of INPUT with transformations applied.
 Exodus II documentation: https://sandialabs.github.io/seacas-docs/
 .SH NOTES
 .PP
-The input file is copied to the output location before any transformations
-are applied. This ensures the original file is never modified and preserves
-all mesh data (connectivity, variables, sets, etc.) that is not affected
-by coordinate transformations.
+By default, the input file is copied to the output location before any
+transformations are applied. This ensures the original file is never modified
+and preserves all mesh data (connectivity, variables, sets, etc.) that is not
+affected by coordinate transformations.
+.PP
+When using \fB\-\-in\-place\fR mode or when input and output paths resolve to
+the same file, the file is modified directly without copying. This provides
+significant performance improvements for large files but modifies the original
+data. Always make backups of important data before using in-place mode.
 .PP
 Time normalization (\fB\-\-zero\-time\fR) only works on files that already
 contain time step data. It will report "No time steps to normalize" for

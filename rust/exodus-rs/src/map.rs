@@ -8,6 +8,7 @@
 
 use crate::error::{ExodusError, Result};
 use crate::types::EntityType;
+use crate::utils::constants::*;
 use crate::{mode, ExodusFile, FileMode};
 
 // ============================================================================
@@ -33,10 +34,10 @@ impl<M: FileMode> ExodusFile<M> {
     /// Get the NetCDF dimension name for an entity ID map
     fn id_map_dim_name(entity_type: EntityType) -> Result<&'static str> {
         match entity_type {
-            EntityType::NodeMap | EntityType::Nodal => Ok("num_nodes"),
-            EntityType::ElemMap | EntityType::ElemBlock => Ok("num_elem"),
-            EntityType::EdgeMap => Ok("num_edge"),
-            EntityType::FaceMap => Ok("num_face"),
+            EntityType::NodeMap | EntityType::Nodal => Ok(DIM_NUM_NODES),
+            EntityType::ElemMap | EntityType::ElemBlock => Ok(DIM_NUM_ELEM),
+            EntityType::EdgeMap => Ok(DIM_NUM_EDGE),
+            EntityType::FaceMap => Ok(DIM_NUM_FACE),
             _ => Err(ExodusError::InvalidEntityType(format!(
                 "Entity type {:?} does not support ID maps",
                 entity_type
@@ -334,7 +335,6 @@ impl ExodusFile<mode::Write> {
         name: impl AsRef<str>,
     ) -> Result<()> {
         let name = name.as_ref();
-        const MAX_NAME_LENGTH: usize = 32;
 
         if name.len() > MAX_NAME_LENGTH {
             return Err(ExodusError::StringTooLong {
@@ -396,8 +396,6 @@ impl ExodusFile<mode::Write> {
     /// # Ok::<(), ExodusError>(())
     /// ```
     pub fn put_names(&mut self, entity_type: EntityType, names: &[impl AsRef<str>]) -> Result<()> {
-        const MAX_NAME_LENGTH: usize = 32;
-
         // Validate all names
         for name in names {
             let name = name.as_ref();
@@ -427,9 +425,9 @@ impl ExodusFile<mode::Write> {
         }
 
         // Create dimensions if they don't exist
-        if self.nc_file.dimension("len_name").is_none() {
+        if self.nc_file.dimension(DIM_LEN_NAME).is_none() {
             self.nc_file
-                .add_dimension("len_name", MAX_NAME_LENGTH + 1)
+                .add_dimension(DIM_LEN_NAME, MAX_NAME_LENGTH + 1)
                 .map_err(ExodusError::NetCdf)?;
         }
 
@@ -440,11 +438,11 @@ impl ExodusFile<mode::Write> {
                 .dimension(dim_name)
                 .ok_or_else(|| ExodusError::Other(format!("Dimension {} not found", dim_name)))?;
             self.nc_file
-                .dimension("len_name")
+                .dimension(DIM_LEN_NAME)
                 .ok_or_else(|| ExodusError::Other("Dimension len_name not found".to_string()))?;
 
             self.nc_file
-                .add_variable::<u8>(&var_name, &[dim_name, "len_name"])
+                .add_variable::<u8>(&var_name, &[dim_name, DIM_LEN_NAME])
                 .map_err(ExodusError::NetCdf)?;
         }
 
@@ -495,7 +493,6 @@ impl ExodusFile<mode::Write> {
         }
 
         // Otherwise, expect 2D [num_names, len_name] of NC_CHAR
-        const MAX_NAME_LENGTH: usize = 32;
         let num_names = dims.first().map(|d| d.len()).unwrap_or(0);
         let len_name = dims.get(1).map(|d| d.len()).unwrap_or(MAX_NAME_LENGTH + 1);
 
@@ -599,7 +596,6 @@ impl ExodusFile<mode::Read> {
         }
 
         // Otherwise, expect 2D [num_names, len_name] of NC_CHAR
-        const MAX_NAME_LENGTH: usize = 32;
         let num_names = dims.first().map(|d| d.len()).unwrap_or(0);
         let len_name = dims.get(1).map(|d| d.len()).unwrap_or(MAX_NAME_LENGTH + 1);
 

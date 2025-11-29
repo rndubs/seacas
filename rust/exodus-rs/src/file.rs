@@ -7,6 +7,7 @@ use crate::error::Result;
 use crate::types::{
     CreateMode, CreateOptions, FileFormat, FileStorageFormat, FloatSize, Int64Mode, VarStorageMode,
 };
+use crate::utils::constants::*;
 use crate::{mode, FileMode, WritableMode};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -217,10 +218,10 @@ impl ExodusFile<mode::Write> {
         options: &CreateOptions,
     ) -> Result<()> {
         // API version
-        nc_file.add_attribute("api_version", 9.04_f32)?;
+        nc_file.add_attribute(ATTR_API_VERSION, API_VERSION)?;
 
         // File format version
-        nc_file.add_attribute("version", 2.0_f32)?;
+        nc_file.add_attribute(ATTR_VERSION, FILE_VERSION)?;
 
         // Floating point word size (4 or 8 bytes)
         let fp_word_size = match options.float_size {
@@ -438,10 +439,10 @@ impl ExodusFile<mode::Append> {
             metadata.num_dim = Some(dim.len());
 
             // Load dimension cache
-            if let Some(nodes_dim) = nc_file.dimension("num_nodes") {
+            if let Some(nodes_dim) = nc_file.dimension(DIM_NUM_NODES) {
                 metadata
                     .dim_cache
-                    .insert("num_nodes".to_string(), nodes_dim.len());
+                    .insert(DIM_NUM_NODES.to_string(), nodes_dim.len());
             }
         }
 
@@ -494,8 +495,13 @@ impl ExodusFile<mode::Append> {
         // with the generic mode.
 
         // Read and convert the nodeset (uses read operations)
+        // SAFETY: The Append mode guarantees both read and write access to the file.
+        // The underlying nc_file is opened in read-write mode (via netcdf::append).
+        // This cast temporarily reinterprets self as ExodusFile<mode::Read> to access
+        // read-only methods. Since we only use an immutable reference and don't mutate
+        // any state, this preserves all safety invariants. The PhantomData marker is
+        // zero-sized and doesn't affect memory layout or aliasing rules.
         let sideset = crate::sideset_utils::convert_nodeset_to_sideset(
-            // Safe cast since Append mode supports reads
             unsafe { &*(self as *const _ as *const ExodusFile<mode::Read>) },
             nodeset_id,
             new_sideset_id,
@@ -509,7 +515,12 @@ impl ExodusFile<mode::Append> {
             num_dist_factors: 0,
         };
 
-        // Safe cast since Append mode supports writes
+        // SAFETY: The Append mode guarantees both read and write access to the file.
+        // The underlying nc_file is opened in read-write mode (via netcdf::append).
+        // This cast temporarily reinterprets self as ExodusFile<mode::Write> to access
+        // write methods. We have exclusive mutable access to self (&mut self), ensuring
+        // no aliasing violations. The PhantomData marker is zero-sized and doesn't affect
+        // memory layout or safety.
         let writer = unsafe { &mut *(self as *mut _ as *mut ExodusFile<mode::Write>) };
         writer.put_set(&set)?;
         writer.put_side_set(new_sideset_id, &sideset.elements, &sideset.sides, None)?;
@@ -542,6 +553,10 @@ impl ExodusFile<mode::Append> {
     /// ```
     pub fn create_sideset_from_nodeset_auto(&mut self, nodeset_id: i64) -> Result<i64> {
         // Get the next available sideset ID
+        // SAFETY: The Append mode guarantees both read and write access to the file.
+        // This cast temporarily reinterprets self as ExodusFile<mode::Read> to query
+        // existing sideset IDs. We only use an immutable reference for reading metadata,
+        // which is safe since Append mode supports all read operations.
         let reader = unsafe { &*(self as *const _ as *const ExodusFile<mode::Read>) };
         let existing_ids = reader.set_ids(crate::EntityType::SideSet)?;
         let new_id = existing_ids.iter().max().map(|&id| id + 1).unwrap_or(1);
@@ -585,6 +600,10 @@ impl ExodusFile<mode::Append> {
     /// ```
     pub fn create_sideset_from_nodeset_by_name(&mut self, nodeset_name: &str) -> Result<i64> {
         // Find the nodeset ID by name
+        // SAFETY: The Append mode guarantees both read and write access to the file.
+        // This cast temporarily reinterprets self as ExodusFile<mode::Read> to query
+        // nodeset names and IDs. We only use an immutable reference for reading metadata,
+        // which is safe since Append mode supports all read operations.
         let reader = unsafe { &*(self as *const _ as *const ExodusFile<mode::Read>) };
         let names = reader.names(crate::EntityType::NodeSet)?;
         let ids = reader.set_ids(crate::EntityType::NodeSet)?;
@@ -644,11 +663,18 @@ impl ExodusFile<mode::Append> {
         let sideset_id = self.create_sideset_from_nodeset_auto(nodeset_id)?;
 
         // Find the index of the new sideset (it's the last one)
+        // SAFETY: The Append mode guarantees both read and write access to the file.
+        // This cast temporarily reinterprets self as ExodusFile<mode::Read> to query
+        // sideset IDs for determining the index of the newly created sideset.
         let reader = unsafe { &*(self as *const _ as *const ExodusFile<mode::Read>) };
         let ss_ids = reader.set_ids(crate::EntityType::SideSet)?;
         let ss_index = ss_ids.len().saturating_sub(1);
 
         // Set the name
+        // SAFETY: The Append mode guarantees both read and write access to the file.
+        // This cast temporarily reinterprets self as ExodusFile<mode::Write> to write
+        // the sideset name. We have exclusive mutable access to self (&mut self),
+        // ensuring no aliasing violations.
         let writer = unsafe { &mut *(self as *mut _ as *mut ExodusFile<mode::Write>) };
         writer.put_name(crate::EntityType::SideSet, ss_index, sideset_name)?;
 
@@ -663,6 +689,9 @@ impl ExodusFile<mode::Append> {
         name: &str,
     ) -> Result<()> {
         // Find the index of the sideset
+        // SAFETY: The Append mode guarantees both read and write access to the file.
+        // This cast temporarily reinterprets self as ExodusFile<mode::Read> to query
+        // sideset IDs for finding the index of the target sideset.
         let reader = unsafe { &*(self as *const _ as *const ExodusFile<mode::Read>) };
         let ss_ids = reader.set_ids(crate::EntityType::SideSet)?;
         let ss_index = ss_ids
@@ -673,6 +702,10 @@ impl ExodusFile<mode::Append> {
             })?;
 
         // Set the name
+        // SAFETY: The Append mode guarantees both read and write access to the file.
+        // This cast temporarily reinterprets self as ExodusFile<mode::Write> to write
+        // the sideset name. We have exclusive mutable access to self (&mut self),
+        // ensuring no aliasing violations.
         let writer = unsafe { &mut *(self as *mut _ as *mut ExodusFile<mode::Write>) };
         writer.put_name(crate::EntityType::SideSet, ss_index, name)?;
 
@@ -689,6 +722,60 @@ impl<M: FileMode> ExodusFile<M> {
     /// The path to the Exodus file
     pub fn path(&self) -> &Path {
         &self.path
+    }
+
+    /// Get dimension length, prioritizing cached values for efficiency.
+    ///
+    /// This method first checks the metadata cache for the dimension length.
+    /// If not found in the cache, it falls back to querying the NetCDF file
+    /// directly. Returns 0 if the dimension doesn't exist.
+    ///
+    /// # Arguments
+    ///
+    /// * `dim_name` - Name of the dimension to look up
+    ///
+    /// # Returns
+    ///
+    /// The length of the dimension, or 0 if not found
+    pub(crate) fn get_dimension_len(&self, dim_name: &str) -> usize {
+        // First check the cache for better performance
+        if let Some(&len) = self.metadata.dim_cache.get(dim_name) {
+            return len;
+        }
+        // Fall back to querying the NetCDF file
+        self.nc_file
+            .dimension(dim_name)
+            .map(|d| d.len())
+            .unwrap_or(0)
+    }
+
+    /// Get dimension length, returning an error if the dimension is required.
+    ///
+    /// This method first checks the metadata cache for the dimension length.
+    /// If not found in the cache, it falls back to querying the NetCDF file
+    /// directly. Returns an error if the dimension doesn't exist.
+    ///
+    /// # Arguments
+    ///
+    /// * `dim_name` - Name of the dimension to look up
+    ///
+    /// # Returns
+    ///
+    /// The length of the dimension, or an error if not found
+    ///
+    /// # Errors
+    ///
+    /// Returns `ExodusError::VariableNotDefined` if the dimension doesn't exist
+    pub(crate) fn get_dimension_len_required(&self, dim_name: &str) -> crate::error::Result<usize> {
+        // First check the cache for better performance
+        if let Some(&len) = self.metadata.dim_cache.get(dim_name) {
+            return Ok(len);
+        }
+        // Fall back to querying the NetCDF file
+        self.nc_file
+            .dimension(dim_name)
+            .map(|d| d.len())
+            .ok_or_else(|| crate::error::ExodusError::VariableNotDefined(dim_name.to_string()))
     }
 
     /// Get the NetCDF file format
@@ -721,7 +808,7 @@ impl<M: FileMode> ExodusFile<M> {
     /// Returns an error if the version attribute cannot be read
     pub fn version(&self) -> Result<(u32, u32)> {
         // Read the version attribute
-        match self.nc_file.attribute("version") {
+        match self.nc_file.attribute(ATTR_VERSION) {
             Some(attr) => {
                 use netcdf::AttributeValue;
                 match attr.value()? {

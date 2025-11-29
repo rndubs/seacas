@@ -4,11 +4,12 @@
 
 use crate::error::{ExodusError, Result};
 use crate::types::QaRecord;
+use crate::utils::constants::*;
 use crate::{mode, ExodusFile};
 
-// Maximum string lengths as defined by Exodus II format
-const MAX_STR_LENGTH: usize = 32; // Maximum length for QA record fields
-const MAX_LINE_LENGTH: usize = 80; // Maximum length for info record lines
+// Import MAX_STR_LENGTH and MAX_LINE_LENGTH from constants
+const MAX_STR_LENGTH: usize = MAX_QA_STRING_LENGTH;
+const MAX_LINE_LENGTH: usize = MAX_INFO_STRING_LENGTH;
 
 #[cfg(feature = "netcdf4")]
 impl ExodusFile<mode::Write> {
@@ -77,22 +78,24 @@ impl ExodusFile<mode::Write> {
         }
 
         // Create dimension for number of QA records
-        self.nc_file.add_dimension("num_qa_rec", num_qa)?;
+        self.nc_file.add_dimension(DIM_NUM_QA_REC, num_qa)?;
 
         // Create dimension for 4 fields (code_name, code_version, date, time)
-        self.nc_file.add_dimension("num_qa_dim", 4)?;
+        self.nc_file.add_dimension(DIM_NUM_QA_DIM, 4)?;
 
         // Create or get len_string dimension
-        if self.nc_file.dimension("len_string").is_none() {
-            self.nc_file.add_dimension("len_string", MAX_STR_LENGTH)?;
+        if self.nc_file.dimension(DIM_LEN_STRING).is_none() {
+            self.nc_file.add_dimension(DIM_LEN_STRING, MAX_STR_LENGTH)?;
         }
 
         // Create QA records variable: qa_records(num_qa_rec, num_qa_dim, len_string)
-        self.nc_file
-            .add_variable::<u8>("qa_records", &["num_qa_rec", "num_qa_dim", "len_string"])?;
+        self.nc_file.add_variable::<u8>(
+            VAR_QA_RECORDS,
+            &[DIM_NUM_QA_REC, DIM_NUM_QA_DIM, DIM_LEN_STRING],
+        )?;
 
         // Write each QA record
-        if let Some(mut var) = self.nc_file.variable_mut("qa_records") {
+        if let Some(mut var) = self.nc_file.variable_mut(VAR_QA_RECORDS) {
             for (qa_idx, qa) in qa_records.iter().enumerate() {
                 // Write each of the 4 fields
                 let fields = [&qa.code_name, &qa.code_version, &qa.date, &qa.time];
@@ -155,19 +158,19 @@ impl ExodusFile<mode::Write> {
         }
 
         // Create dimension for number of info records
-        self.nc_file.add_dimension("num_info", num_info)?;
+        self.nc_file.add_dimension(DIM_NUM_INFO, num_info)?;
 
         // Create dimension for line length
-        if self.nc_file.dimension("len_line").is_none() {
-            self.nc_file.add_dimension("len_line", MAX_LINE_LENGTH)?;
+        if self.nc_file.dimension(DIM_LEN_LINE).is_none() {
+            self.nc_file.add_dimension(DIM_LEN_LINE, MAX_LINE_LENGTH)?;
         }
 
         // Create info records variable: info(num_info, len_line)
         self.nc_file
-            .add_variable::<u8>("info_records", &["num_info", "len_line"])?;
+            .add_variable::<u8>(VAR_INFO_RECORDS, &[DIM_NUM_INFO, DIM_LEN_LINE])?;
 
         // Write each info record
-        if let Some(mut var) = self.nc_file.variable_mut("info_records") {
+        if let Some(mut var) = self.nc_file.variable_mut(VAR_INFO_RECORDS) {
             for (i, line) in info_records.iter().enumerate() {
                 let mut buf = vec![0u8; MAX_LINE_LENGTH];
                 let bytes = line.as_bytes();
@@ -206,7 +209,7 @@ impl ExodusFile<mode::Read> {
     /// ```
     pub fn qa_records(&self) -> Result<Vec<QaRecord>> {
         // Check if qa_records variable exists
-        match self.nc_file.variable("qa_records") {
+        match self.nc_file.variable(VAR_QA_RECORDS) {
             Some(var) => {
                 let num_qa = self
                     .nc_file
@@ -221,7 +224,7 @@ impl ExodusFile<mode::Read> {
                 // Get the len_string dimension for field length
                 let len_string = self
                     .nc_file
-                    .dimension("len_string")
+                    .dimension(DIM_LEN_STRING)
                     .map(|d| d.len())
                     .unwrap_or(MAX_STR_LENGTH);
 
@@ -285,7 +288,7 @@ impl ExodusFile<mode::Read> {
     /// ```
     pub fn info_records(&self) -> Result<Vec<String>> {
         // Check if info_records variable exists
-        match self.nc_file.variable("info_records") {
+        match self.nc_file.variable(VAR_INFO_RECORDS) {
             Some(var) => {
                 let num_info = self
                     .nc_file
