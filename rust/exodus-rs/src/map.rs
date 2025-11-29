@@ -335,7 +335,6 @@ impl ExodusFile<mode::Write> {
         name: impl AsRef<str>,
     ) -> Result<()> {
         let name = name.as_ref();
-        const MAX_NAME_LENGTH: usize = 32;
 
         if name.len() > MAX_NAME_LENGTH {
             return Err(ExodusError::StringTooLong {
@@ -397,7 +396,6 @@ impl ExodusFile<mode::Write> {
     /// # Ok::<(), ExodusError>(())
     /// ```
     pub fn put_names(&mut self, entity_type: EntityType, names: &[impl AsRef<str>]) -> Result<()> {
-        const MAX_NAME_LENGTH: usize = 32;
 
         // Validate all names
         for name in names {
@@ -496,7 +494,6 @@ impl ExodusFile<mode::Write> {
         }
 
         // Otherwise, expect 2D [num_names, len_name] of NC_CHAR
-        const MAX_NAME_LENGTH: usize = 32;
         let num_names = dims.first().map(|d| d.len()).unwrap_or(0);
         let len_name = dims.get(1).map(|d| d.len()).unwrap_or(MAX_NAME_LENGTH + 1);
 
@@ -600,7 +597,6 @@ impl ExodusFile<mode::Read> {
         }
 
         // Otherwise, expect 2D [num_names, len_name] of NC_CHAR
-        const MAX_NAME_LENGTH: usize = 32;
         let num_names = dims.first().map(|d| d.len()).unwrap_or(0);
         let len_name = dims.get(1).map(|d| d.len()).unwrap_or(MAX_NAME_LENGTH + 1);
 
