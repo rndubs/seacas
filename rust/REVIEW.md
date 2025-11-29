@@ -65,10 +65,16 @@ Based on the review of `src/lib.rs`, `src/file.rs`, `src/coord.rs`, `src/init.rs
         *   Memory safety guarantees (PhantomData is zero-sized, no aliasing violations)
     *   All comments follow Rust's standard SAFETY comment conventions for documenting unsafe code
 
-**5. Optimize Metadata/Dimension Access (Medium Impact - Performance & Consistency)**
+**5. Optimize Metadata/Dimension Access (Medium Impact - Performance & Consistency)** ✅ ADDRESSED
 
 *   **Problem:** In `src/init.rs` (`init_params` in `Read` and `Append` modes), dimension lengths are re-queried from the `netcdf::FileMut` using `nc_file.dimension(...).map(|d| d.len()).unwrap_or(0)`. While robust, this could be slightly less efficient than retrieving from the already populated `FileMetadata` cache, especially after `init()` has been called.
 *   **Recommendation:** After `init()` is called, ensure `FileMetadata` is fully populated with all dimension lengths. For subsequent reads in `init_params`, prioritize retrieving values from `self.metadata.dim_cache`. Only fall back to querying the `nc_file` if the cache is empty (e.g., for files opened in `Read` mode that were not created by this library).
+*   **Implementation Summary:**
+    *   Added `get_dimension_len()` helper method in `src/file.rs` that prioritizes the metadata cache over re-querying the NetCDF file
+    *   Added `get_dimension_len_required()` helper for required dimensions that returns an error if not found
+    *   Updated `init_params()` in `src/init.rs` to use these cache-aware helpers instead of directly querying `nc_file.dimension()`
+    *   Replaced all hardcoded dimension name strings with constants from `src/utils/constants.rs` for consistency
+    *   This optimization benefits files opened in any mode by avoiding redundant NetCDF queries when dimension lengths are already cached
 
 **6. Review Unused Variables (Minor Impact - Cleanliness)**
 

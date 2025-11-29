@@ -611,121 +611,29 @@ impl<M: crate::FileMode> ExodusFile<M> {
             }
         }
 
-        // Read num_dim (required)
-        params.num_dim = self
-            .nc_file
-            .dimension(DIM_NUM_DIM)
-            .ok_or_else(|| ExodusError::VariableNotDefined(DIM_NUM_DIM.to_string()))?
-            .len();
+        // Read num_dim (required) - use cache-aware helper
+        params.num_dim = self.get_dimension_len_required(DIM_NUM_DIM)?;
 
-        // Read optional dimensions
-        params.num_nodes = self
-            .nc_file
-            .dimension(DIM_NUM_NODES)
-            .map(|d| d.len())
-            .unwrap_or(0);
-
-        params.num_elems = self
-            .nc_file
-            .dimension("num_elem")
-            .map(|d| d.len())
-            .unwrap_or(0);
-
-        params.num_elem_blocks = self
-            .nc_file
-            .dimension("num_el_blk")
-            .map(|d| d.len())
-            .unwrap_or(0);
-
-        params.num_edges = self
-            .nc_file
-            .dimension("num_edge")
-            .map(|d| d.len())
-            .unwrap_or(0);
-
-        params.num_edge_blocks = self
-            .nc_file
-            .dimension("num_ed_blk")
-            .map(|d| d.len())
-            .unwrap_or(0);
-
-        params.num_faces = self
-            .nc_file
-            .dimension("num_face")
-            .map(|d| d.len())
-            .unwrap_or(0);
-
-        params.num_face_blocks = self
-            .nc_file
-            .dimension("num_fa_blk")
-            .map(|d| d.len())
-            .unwrap_or(0);
-
-        params.num_node_sets = self
-            .nc_file
-            .dimension("num_node_sets")
-            .map(|d| d.len())
-            .unwrap_or(0);
-
-        params.num_side_sets = self
-            .nc_file
-            .dimension("num_side_sets")
-            .map(|d| d.len())
-            .unwrap_or(0);
-
-        params.num_edge_sets = self
-            .nc_file
-            .dimension("num_edge_sets")
-            .map(|d| d.len())
-            .unwrap_or(0);
-
-        params.num_face_sets = self
-            .nc_file
-            .dimension("num_face_sets")
-            .map(|d| d.len())
-            .unwrap_or(0);
-
-        params.num_elem_sets = self
-            .nc_file
-            .dimension("num_elem_sets")
-            .map(|d| d.len())
-            .unwrap_or(0);
-
-        params.num_node_maps = self
-            .nc_file
-            .dimension("num_node_maps")
-            .map(|d| d.len())
-            .unwrap_or(0);
-
-        params.num_elem_maps = self
-            .nc_file
-            .dimension("num_elem_maps")
-            .map(|d| d.len())
-            .unwrap_or(0);
-
-        params.num_edge_maps = self
-            .nc_file
-            .dimension("num_edge_maps")
-            .map(|d| d.len())
-            .unwrap_or(0);
-
-        params.num_face_maps = self
-            .nc_file
-            .dimension("num_face_maps")
-            .map(|d| d.len())
-            .unwrap_or(0);
-
-        params.num_assemblies = self
-            .nc_file
-            .dimension("num_assembly")
-            .map(|d| d.len())
-            .unwrap_or(0);
-
-        params.num_blobs = self
-            .nc_file
-            .dimension("num_blob")
-            .map(|d| d.len())
-            .unwrap_or(0);
+        // Read optional dimensions using cache-aware helper for efficiency
+        // This prioritizes the metadata cache over re-querying the NetCDF file
+        params.num_nodes = self.get_dimension_len(DIM_NUM_NODES);
+        params.num_elems = self.get_dimension_len(DIM_NUM_ELEM);
+        params.num_elem_blocks = self.get_dimension_len(DIM_NUM_EL_BLK);
+        params.num_edges = self.get_dimension_len(DIM_NUM_EDGE);
+        params.num_edge_blocks = self.get_dimension_len(DIM_NUM_ED_BLK);
+        params.num_faces = self.get_dimension_len(DIM_NUM_FACE);
+        params.num_face_blocks = self.get_dimension_len(DIM_NUM_FA_BLK);
+        params.num_node_sets = self.get_dimension_len(DIM_NUM_NODE_SETS);
+        params.num_side_sets = self.get_dimension_len(DIM_NUM_SIDE_SETS);
+        params.num_edge_sets = self.get_dimension_len(DIM_NUM_EDGE_SETS);
+        params.num_face_sets = self.get_dimension_len(DIM_NUM_FACE_SETS);
+        params.num_elem_sets = self.get_dimension_len(DIM_NUM_ELEM_SETS);
+        params.num_node_maps = self.get_dimension_len(DIM_NUM_NODE_MAPS);
+        params.num_elem_maps = self.get_dimension_len(DIM_NUM_ELEM_MAPS);
+        params.num_edge_maps = self.get_dimension_len(DIM_NUM_EDGE_MAPS);
+        params.num_face_maps = self.get_dimension_len(DIM_NUM_FACE_MAPS);
+        params.num_assemblies = self.get_dimension_len(DIM_NUM_ASSEMBLY);
+        params.num_blobs = self.get_dimension_len(DIM_NUM_BLOB);
 
         Ok(params)
     }

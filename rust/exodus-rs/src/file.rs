@@ -724,6 +724,60 @@ impl<M: FileMode> ExodusFile<M> {
         &self.path
     }
 
+    /// Get dimension length, prioritizing cached values for efficiency.
+    ///
+    /// This method first checks the metadata cache for the dimension length.
+    /// If not found in the cache, it falls back to querying the NetCDF file
+    /// directly. Returns 0 if the dimension doesn't exist.
+    ///
+    /// # Arguments
+    ///
+    /// * `dim_name` - Name of the dimension to look up
+    ///
+    /// # Returns
+    ///
+    /// The length of the dimension, or 0 if not found
+    pub(crate) fn get_dimension_len(&self, dim_name: &str) -> usize {
+        // First check the cache for better performance
+        if let Some(&len) = self.metadata.dim_cache.get(dim_name) {
+            return len;
+        }
+        // Fall back to querying the NetCDF file
+        self.nc_file
+            .dimension(dim_name)
+            .map(|d| d.len())
+            .unwrap_or(0)
+    }
+
+    /// Get dimension length, returning an error if the dimension is required.
+    ///
+    /// This method first checks the metadata cache for the dimension length.
+    /// If not found in the cache, it falls back to querying the NetCDF file
+    /// directly. Returns an error if the dimension doesn't exist.
+    ///
+    /// # Arguments
+    ///
+    /// * `dim_name` - Name of the dimension to look up
+    ///
+    /// # Returns
+    ///
+    /// The length of the dimension, or an error if not found
+    ///
+    /// # Errors
+    ///
+    /// Returns `ExodusError::VariableNotDefined` if the dimension doesn't exist
+    pub(crate) fn get_dimension_len_required(&self, dim_name: &str) -> crate::error::Result<usize> {
+        // First check the cache for better performance
+        if let Some(&len) = self.metadata.dim_cache.get(dim_name) {
+            return Ok(len);
+        }
+        // Fall back to querying the NetCDF file
+        self.nc_file
+            .dimension(dim_name)
+            .map(|d| d.len())
+            .ok_or_else(|| crate::error::ExodusError::VariableNotDefined(dim_name.to_string()))
+    }
+
     /// Get the NetCDF file format
     ///
     /// # Returns
