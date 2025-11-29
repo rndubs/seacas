@@ -7,6 +7,7 @@ use crate::error::Result;
 use crate::types::{
     CreateMode, CreateOptions, FileFormat, FileStorageFormat, FloatSize, Int64Mode, VarStorageMode,
 };
+use crate::utils::constants::{API_VERSION, ATTR_API_VERSION, ATTR_VERSION, FILE_VERSION};
 use crate::{mode, FileMode, WritableMode};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -217,10 +218,10 @@ impl ExodusFile<mode::Write> {
         options: &CreateOptions,
     ) -> Result<()> {
         // API version
-        nc_file.add_attribute("api_version", 9.04_f32)?;
+        nc_file.add_attribute(ATTR_API_VERSION, API_VERSION)?;
 
         // File format version
-        nc_file.add_attribute("version", 2.0_f32)?;
+        nc_file.add_attribute(ATTR_VERSION, FILE_VERSION)?;
 
         // Floating point word size (4 or 8 bytes)
         let fp_word_size = match options.float_size {
@@ -438,10 +439,10 @@ impl ExodusFile<mode::Append> {
             metadata.num_dim = Some(dim.len());
 
             // Load dimension cache
-            if let Some(nodes_dim) = nc_file.dimension("num_nodes") {
+            if let Some(nodes_dim) = nc_file.dimension(DIM_NUM_NODES) {
                 metadata
                     .dim_cache
-                    .insert("num_nodes".to_string(), nodes_dim.len());
+                    .insert(DIM_NUM_NODES.to_string(), nodes_dim.len());
             }
         }
 
@@ -721,7 +722,7 @@ impl<M: FileMode> ExodusFile<M> {
     /// Returns an error if the version attribute cannot be read
     pub fn version(&self) -> Result<(u32, u32)> {
         // Read the version attribute
-        match self.nc_file.attribute("version") {
+        match self.nc_file.attribute(ATTR_VERSION) {
             Some(attr) => {
                 use netcdf::AttributeValue;
                 match attr.value()? {
