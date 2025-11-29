@@ -8,6 +8,7 @@
 
 use crate::error::{ExodusError, Result};
 use crate::types::{AttributeType, EntityType};
+use crate::utils::constants::MAX_NAME_LENGTH;
 use crate::{mode, ExodusFile};
 
 #[cfg(feature = "netcdf4")]
@@ -100,7 +101,6 @@ impl ExodusFile<mode::Write> {
         _attr_type: AttributeType,
         data: AttributeData,
     ) -> Result<()> {
-        const MAX_NAME_LENGTH: usize = 32;
         let name = name.as_ref();
 
         if name.len() > MAX_NAME_LENGTH {

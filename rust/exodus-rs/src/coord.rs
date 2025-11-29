@@ -4,6 +4,7 @@
 //! in Exodus files. Coordinates can be stored as either f32 or f64 values.
 
 use crate::error::{ExodusError, Result};
+use crate::utils::constants::*;
 use crate::{mode, ExodusFile};
 
 /// Trait for coordinate value types
@@ -40,6 +41,19 @@ impl CoordValue for f64 {
     }
     fn to_f64(self) -> f64 {
         self
+    }
+}
+
+/// Get the NetCDF variable name for a coordinate dimension
+fn coord_var_name(dim: usize) -> Result<&'static str> {
+    match dim {
+        0 => Ok(VAR_COORD_X),
+        1 => Ok(VAR_COORD_Y),
+        2 => Ok(VAR_COORD_Z),
+        _ => Err(ExodusError::InvalidDimension {
+            expected: "0, 1, or 2".to_string(),
+            actual: dim,
+        }),
     }
 }
 
@@ -193,12 +207,13 @@ impl ExodusFile<mode::Write> {
         let num_nodes = self
             .metadata
             .dim_cache
-            .get("num_nodes")
+            .get(DIM_NUM_NODES)
             .copied()
             .unwrap_or(0);
-        let num_dim = self.metadata.num_dim.ok_or(ExodusError::Other(
-            "num_dim not set in metadata".to_string(),
-        ))?;
+        let num_dim = self.metadata.num_dim.ok_or(ExodusError::Other(format!(
+            "{} not set in metadata",
+            DIM_NUM_DIM
+        )))?;
 
         // If num_nodes is 0, just return Ok if coordinate arrays are empty
         if num_nodes == 0 {
@@ -302,17 +317,7 @@ impl ExodusFile<mode::Write> {
 
     /// Write coordinates for a specific dimension
     fn put_coord_dim<T: CoordValue>(&mut self, dim: usize, coords: &[T]) -> Result<()> {
-        let var_name = match dim {
-            0 => "coordx",
-            1 => "coordy",
-            2 => "coordz",
-            _ => {
-                return Err(ExodusError::InvalidDimension {
-                    expected: "0, 1, or 2".to_string(),
-                    actual: dim,
-                })
-            }
-        };
+        let var_name = coord_var_name(dim)?;
 
         // Get or create the variable
         let mut var = if let Some(var) = self.nc_file.variable_mut(var_name) {
@@ -365,14 +370,16 @@ impl ExodusFile<mode::Write> {
         let num_nodes =
             self.metadata
                 .dim_cache
-                .get("num_nodes")
+                .get(DIM_NUM_NODES)
                 .copied()
-                .ok_or(ExodusError::Other(
-                    "num_nodes dimension not found".to_string(),
-                ))?;
-        let num_dim = self.metadata.num_dim.ok_or(ExodusError::Other(
-            "num_dim not set in metadata".to_string(),
-        ))?;
+                .ok_or(ExodusError::Other(format!(
+                    "{} dimension not found",
+                    DIM_NUM_NODES
+                )))?;
+        let num_dim = self.metadata.num_dim.ok_or(ExodusError::Other(format!(
+            "{} not set in metadata",
+            DIM_NUM_DIM
+        )))?;
 
         // Validate range
         if start + count > num_nodes {
@@ -437,17 +444,7 @@ impl ExodusFile<mode::Write> {
         start: usize,
         coords: &[T],
     ) -> Result<()> {
-        let var_name = match dim {
-            0 => "coordx",
-            1 => "coordy",
-            2 => "coordz",
-            _ => {
-                return Err(ExodusError::InvalidDimension {
-                    expected: "0, 1, or 2".to_string(),
-                    actual: dim,
-                })
-            }
-        };
+        let var_name = coord_var_name(dim)?;
 
         let mut var = self
             .nc_file
@@ -490,16 +487,15 @@ impl ExodusFile<mode::Write> {
     /// # Ok::<(), exodus_rs::ExodusError>(())
     /// ```
     pub fn put_coord_names(&mut self, names: &[&str]) -> Result<()> {
-        const MAX_NAME_LENGTH: usize = 32;
-
         // Validate that file is initialized
         if !self.metadata.initialized {
             return Err(ExodusError::NotInitialized);
         }
 
-        let num_dim = self.metadata.num_dim.ok_or(ExodusError::Other(
-            "num_dim not set in metadata".to_string(),
-        ))?;
+        let num_dim = self.metadata.num_dim.ok_or(ExodusError::Other(format!(
+            "{} not set in metadata",
+            DIM_NUM_DIM
+        )))?;
 
         // Validate array length
         if names.len() != num_dim {
@@ -520,18 +516,18 @@ impl ExodusFile<mode::Write> {
         }
 
         // Create or get len_name dimension
-        if self.nc_file.dimension("len_name").is_none() {
-            self.nc_file.add_dimension("len_name", MAX_NAME_LENGTH)?;
+        if self.nc_file.dimension(DIM_LEN_NAME).is_none() {
+            self.nc_file.add_dimension(DIM_LEN_NAME, MAX_NAME_LENGTH)?;
         }
 
         // Create coordinate names variable: coor_names(num_dim, len_name)
-        if self.nc_file.variable("coor_names").is_none() {
+        if self.nc_file.variable(VAR_COOR_NAMES).is_none() {
             self.nc_file
-                .add_variable::<u8>("coor_names", &["num_dim", "len_name"])?;
+                .add_variable::<u8>(VAR_COOR_NAMES, &[DIM_NUM_DIM, DIM_LEN_NAME])?;
         }
 
         // Write each coordinate name
-        if let Some(mut var) = self.nc_file.variable_mut("coor_names") {
+        if let Some(mut var) = self.nc_file.variable_mut(VAR_COOR_NAMES) {
             for (i, name) in names.iter().enumerate() {
                 let mut buf = vec![0u8; MAX_NAME_LENGTH];
                 let bytes = name.as_bytes();
@@ -576,7 +572,7 @@ impl ExodusFile<mode::Read> {
         // Handle the case where num_nodes is 0 (dimension may not exist)
         let num_nodes = self
             .nc_file
-            .dimension("num_nodes")
+            .dimension(DIM_NUM_NODES)
             .map(|d| d.len())
             .unwrap_or(0);
 
@@ -655,7 +651,7 @@ impl ExodusFile<mode::Read> {
         // Get dimensions directly from NetCDF to avoid intermediate allocations
         let num_nodes = self
             .nc_file
-            .dimension("num_nodes")
+            .dimension(DIM_NUM_NODES)
             .map(|d| d.len())
             .unwrap_or(0);
 
@@ -721,14 +717,14 @@ impl ExodusFile<mode::Read> {
         // Get num_nodes and num_dim
         let num_nodes = self
             .nc_file
-            .dimension("num_nodes")
-            .ok_or_else(|| ExodusError::Other("num_nodes dimension not found".to_string()))?
+            .dimension(DIM_NUM_NODES)
+            .ok_or_else(|| ExodusError::Other(format!("{} dimension not found", DIM_NUM_NODES)))?
             .len();
 
         let num_dim = self
             .nc_file
-            .dimension("num_dim")
-            .ok_or_else(|| ExodusError::Other("num_dim dimension not found".to_string()))?
+            .dimension(DIM_NUM_DIM)
+            .ok_or_else(|| ExodusError::Other(format!("{} dimension not found", DIM_NUM_DIM)))?
             .len();
 
         // Validate buffer sizes
@@ -811,17 +807,7 @@ impl ExodusFile<mode::Read> {
 
     /// Read coordinates for a specific dimension
     fn get_coord_dim<T: CoordValue>(&self, dim: usize) -> Result<Vec<T>> {
-        let var_name = match dim {
-            0 => "coordx",
-            1 => "coordy",
-            2 => "coordz",
-            _ => {
-                return Err(ExodusError::InvalidDimension {
-                    expected: "0, 1, or 2".to_string(),
-                    actual: dim,
-                })
-            }
-        };
+        let var_name = coord_var_name(dim)?;
 
         let var = self
             .nc_file
@@ -858,7 +844,7 @@ impl ExodusFile<mode::Read> {
 
         let num_nodes = self
             .nc_file
-            .dimension("num_nodes")
+            .dimension(DIM_NUM_NODES)
             .ok_or_else(|| ExodusError::Other("num_nodes dimension not found".to_string()))?
             .len();
 
@@ -897,17 +883,7 @@ impl ExodusFile<mode::Read> {
         start: usize,
         count: usize,
     ) -> Result<Vec<T>> {
-        let var_name = match dim {
-            0 => "coordx",
-            1 => "coordy",
-            2 => "coordz",
-            _ => {
-                return Err(ExodusError::InvalidDimension {
-                    expected: "0, 1, or 2".to_string(),
-                    actual: dim,
-                })
-            }
-        };
+        let var_name = coord_var_name(dim)?;
 
         let var = self
             .nc_file
@@ -944,7 +920,7 @@ impl ExodusFile<mode::Read> {
     /// ```
     pub fn coord_names(&self) -> Result<Vec<String>> {
         // Check if coor_names variable exists
-        match self.nc_file.variable("coor_names") {
+        match self.nc_file.variable(VAR_COOR_NAMES) {
             Some(var) => {
                 let num_dim = self.metadata.num_dim.unwrap_or(3);
 
@@ -1011,14 +987,16 @@ impl ExodusFile<mode::Append> {
         let num_nodes =
             self.metadata
                 .dim_cache
-                .get("num_nodes")
+                .get(DIM_NUM_NODES)
                 .copied()
-                .ok_or(ExodusError::Other(
-                    "num_nodes dimension not found".to_string(),
-                ))?;
-        let num_dim = self.metadata.num_dim.ok_or(ExodusError::Other(
-            "num_dim not set in metadata".to_string(),
-        ))?;
+                .ok_or(ExodusError::Other(format!(
+                    "{} dimension not found",
+                    DIM_NUM_NODES
+                )))?;
+        let num_dim = self.metadata.num_dim.ok_or(ExodusError::Other(format!(
+            "{} not set in metadata",
+            DIM_NUM_DIM
+        )))?;
 
         if x.len() != num_nodes {
             return Err(ExodusError::InvalidArrayLength {
@@ -1081,17 +1059,7 @@ impl ExodusFile<mode::Append> {
 
     /// Write coordinates for a specific dimension
     fn put_coord_dim<T: CoordValue>(&mut self, dim: usize, coords: &[T]) -> Result<()> {
-        let var_name = match dim {
-            0 => "coordx",
-            1 => "coordy",
-            2 => "coordz",
-            _ => {
-                return Err(ExodusError::InvalidDimension {
-                    expected: "0, 1, or 2".to_string(),
-                    actual: dim,
-                })
-            }
-        };
+        let var_name = coord_var_name(dim)?;
 
         let mut var = self
             .nc_file
@@ -1109,7 +1077,7 @@ impl ExodusFile<mode::Append> {
         // Handle the case where num_nodes is 0 (dimension may not exist)
         let num_nodes = self
             .nc_file
-            .dimension("num_nodes")
+            .dimension(DIM_NUM_NODES)
             .map(|d| d.len())
             .unwrap_or(0);
 
@@ -1161,17 +1129,7 @@ impl ExodusFile<mode::Append> {
 
     /// Read coordinates for a specific dimension
     fn get_coord_dim<T: CoordValue>(&self, dim: usize) -> Result<Vec<T>> {
-        let var_name = match dim {
-            0 => "coordx",
-            1 => "coordy",
-            2 => "coordz",
-            _ => {
-                return Err(ExodusError::InvalidDimension {
-                    expected: "0, 1, or 2".to_string(),
-                    actual: dim,
-                })
-            }
-        };
+        let var_name = coord_var_name(dim)?;
 
         let var = self
             .nc_file

@@ -5,6 +5,7 @@
 
 use crate::error::{ExodusError, Result};
 use crate::types::InitParams;
+use crate::utils::constants::*;
 use crate::{mode, ExodusFile};
 
 #[cfg(feature = "netcdf4")]
@@ -228,7 +229,8 @@ impl ExodusFile<mode::Write> {
 
         // Write title as global attribute
         if !params.title.is_empty() {
-            self.nc_file.add_attribute("title", params.title.as_str())?;
+            self.nc_file
+                .add_attribute(ATTR_TITLE, params.title.as_str())?;
         }
 
         // Create dimensions
@@ -264,9 +266,9 @@ impl ExodusFile<mode::Write> {
     /// Validate initialization parameters
     fn validate_init_params(&self, params: &InitParams) -> Result<()> {
         // Check title length
-        if params.title.len() > 80 {
+        if params.title.len() > MAX_TITLE_LENGTH {
             return Err(ExodusError::StringTooLong {
-                max: 80,
+                max: MAX_TITLE_LENGTH,
                 actual: params.title.len(),
             });
         }
@@ -286,184 +288,184 @@ impl ExodusFile<mode::Write> {
     fn write_dimensions(&mut self, params: &InitParams) -> Result<()> {
         // Always create num_dim dimension
         self.nc_file
-            .add_dimension("num_dim", params.num_dim)
+            .add_dimension(DIM_NUM_DIM, params.num_dim)
             .map_err(ExodusError::NetCdf)?;
         self.metadata
             .dim_cache
-            .insert("num_dim".to_string(), params.num_dim);
+            .insert(DIM_NUM_DIM.to_string(), params.num_dim);
 
         // Create time dimension (unlimited)
         self.nc_file
-            .add_unlimited_dimension("time_step")
+            .add_unlimited_dimension(DIM_TIME_STEP)
             .map_err(ExodusError::NetCdf)?;
 
         // Create node-related dimensions
         if params.num_nodes > 0 {
             self.nc_file
-                .add_dimension("num_nodes", params.num_nodes)
+                .add_dimension(DIM_NUM_NODES, params.num_nodes)
                 .map_err(ExodusError::NetCdf)?;
             self.metadata
                 .dim_cache
-                .insert("num_nodes".to_string(), params.num_nodes);
+                .insert(DIM_NUM_NODES.to_string(), params.num_nodes);
         }
 
         // Create element-related dimensions
         if params.num_elems > 0 {
             self.nc_file
-                .add_dimension("num_elem", params.num_elems)
+                .add_dimension(DIM_NUM_ELEM, params.num_elems)
                 .map_err(ExodusError::NetCdf)?;
             self.metadata
                 .dim_cache
-                .insert("num_elem".to_string(), params.num_elems);
+                .insert(DIM_NUM_ELEM.to_string(), params.num_elems);
         }
 
         if params.num_elem_blocks > 0 {
             self.nc_file
-                .add_dimension("num_el_blk", params.num_elem_blocks)
+                .add_dimension(DIM_NUM_EL_BLK, params.num_elem_blocks)
                 .map_err(ExodusError::NetCdf)?;
             self.metadata
                 .dim_cache
-                .insert("num_el_blk".to_string(), params.num_elem_blocks);
+                .insert(DIM_NUM_EL_BLK.to_string(), params.num_elem_blocks);
         }
 
         // Create edge-related dimensions
         if params.num_edges > 0 {
             self.nc_file
-                .add_dimension("num_edge", params.num_edges)
+                .add_dimension(DIM_NUM_EDGE, params.num_edges)
                 .map_err(ExodusError::NetCdf)?;
             self.metadata
                 .dim_cache
-                .insert("num_edge".to_string(), params.num_edges);
+                .insert(DIM_NUM_EDGE.to_string(), params.num_edges);
         }
 
         if params.num_edge_blocks > 0 {
             self.nc_file
-                .add_dimension("num_ed_blk", params.num_edge_blocks)
+                .add_dimension(DIM_NUM_ED_BLK, params.num_edge_blocks)
                 .map_err(ExodusError::NetCdf)?;
             self.metadata
                 .dim_cache
-                .insert("num_ed_blk".to_string(), params.num_edge_blocks);
+                .insert(DIM_NUM_ED_BLK.to_string(), params.num_edge_blocks);
         }
 
         // Create face-related dimensions
         if params.num_faces > 0 {
             self.nc_file
-                .add_dimension("num_face", params.num_faces)
+                .add_dimension(DIM_NUM_FACE, params.num_faces)
                 .map_err(ExodusError::NetCdf)?;
             self.metadata
                 .dim_cache
-                .insert("num_face".to_string(), params.num_faces);
+                .insert(DIM_NUM_FACE.to_string(), params.num_faces);
         }
 
         if params.num_face_blocks > 0 {
             self.nc_file
-                .add_dimension("num_fa_blk", params.num_face_blocks)
+                .add_dimension(DIM_NUM_FA_BLK, params.num_face_blocks)
                 .map_err(ExodusError::NetCdf)?;
             self.metadata
                 .dim_cache
-                .insert("num_fa_blk".to_string(), params.num_face_blocks);
+                .insert(DIM_NUM_FA_BLK.to_string(), params.num_face_blocks);
         }
 
         // Create set-related dimensions
         if params.num_node_sets > 0 {
             self.nc_file
-                .add_dimension("num_node_sets", params.num_node_sets)
+                .add_dimension(DIM_NUM_NODE_SETS, params.num_node_sets)
                 .map_err(ExodusError::NetCdf)?;
             self.metadata
                 .dim_cache
-                .insert("num_node_sets".to_string(), params.num_node_sets);
+                .insert(DIM_NUM_NODE_SETS.to_string(), params.num_node_sets);
         }
 
         if params.num_side_sets > 0 {
             self.nc_file
-                .add_dimension("num_side_sets", params.num_side_sets)
+                .add_dimension(DIM_NUM_SIDE_SETS, params.num_side_sets)
                 .map_err(ExodusError::NetCdf)?;
             self.metadata
                 .dim_cache
-                .insert("num_side_sets".to_string(), params.num_side_sets);
+                .insert(DIM_NUM_SIDE_SETS.to_string(), params.num_side_sets);
         }
 
         if params.num_edge_sets > 0 {
             self.nc_file
-                .add_dimension("num_edge_sets", params.num_edge_sets)
+                .add_dimension(DIM_NUM_EDGE_SETS, params.num_edge_sets)
                 .map_err(ExodusError::NetCdf)?;
             self.metadata
                 .dim_cache
-                .insert("num_edge_sets".to_string(), params.num_edge_sets);
+                .insert(DIM_NUM_EDGE_SETS.to_string(), params.num_edge_sets);
         }
 
         if params.num_face_sets > 0 {
             self.nc_file
-                .add_dimension("num_face_sets", params.num_face_sets)
+                .add_dimension(DIM_NUM_FACE_SETS, params.num_face_sets)
                 .map_err(ExodusError::NetCdf)?;
             self.metadata
                 .dim_cache
-                .insert("num_face_sets".to_string(), params.num_face_sets);
+                .insert(DIM_NUM_FACE_SETS.to_string(), params.num_face_sets);
         }
 
         if params.num_elem_sets > 0 {
             self.nc_file
-                .add_dimension("num_elem_sets", params.num_elem_sets)
+                .add_dimension(DIM_NUM_ELEM_SETS, params.num_elem_sets)
                 .map_err(ExodusError::NetCdf)?;
             self.metadata
                 .dim_cache
-                .insert("num_elem_sets".to_string(), params.num_elem_sets);
+                .insert(DIM_NUM_ELEM_SETS.to_string(), params.num_elem_sets);
         }
 
         // Create map-related dimensions
         if params.num_node_maps > 0 {
             self.nc_file
-                .add_dimension("num_node_maps", params.num_node_maps)
+                .add_dimension(DIM_NUM_NODE_MAPS, params.num_node_maps)
                 .map_err(ExodusError::NetCdf)?;
             self.metadata
                 .dim_cache
-                .insert("num_node_maps".to_string(), params.num_node_maps);
+                .insert(DIM_NUM_NODE_MAPS.to_string(), params.num_node_maps);
         }
 
         if params.num_elem_maps > 0 {
             self.nc_file
-                .add_dimension("num_elem_maps", params.num_elem_maps)
+                .add_dimension(DIM_NUM_ELEM_MAPS, params.num_elem_maps)
                 .map_err(ExodusError::NetCdf)?;
             self.metadata
                 .dim_cache
-                .insert("num_elem_maps".to_string(), params.num_elem_maps);
+                .insert(DIM_NUM_ELEM_MAPS.to_string(), params.num_elem_maps);
         }
 
         if params.num_edge_maps > 0 {
             self.nc_file
-                .add_dimension("num_edge_maps", params.num_edge_maps)
+                .add_dimension(DIM_NUM_EDGE_MAPS, params.num_edge_maps)
                 .map_err(ExodusError::NetCdf)?;
             self.metadata
                 .dim_cache
-                .insert("num_edge_maps".to_string(), params.num_edge_maps);
+                .insert(DIM_NUM_EDGE_MAPS.to_string(), params.num_edge_maps);
         }
 
         if params.num_face_maps > 0 {
             self.nc_file
-                .add_dimension("num_face_maps", params.num_face_maps)
+                .add_dimension(DIM_NUM_FACE_MAPS, params.num_face_maps)
                 .map_err(ExodusError::NetCdf)?;
             self.metadata
                 .dim_cache
-                .insert("num_face_maps".to_string(), params.num_face_maps);
+                .insert(DIM_NUM_FACE_MAPS.to_string(), params.num_face_maps);
         }
 
         // Create assembly and blob dimensions
         if params.num_assemblies > 0 {
             self.nc_file
-                .add_dimension("num_assembly", params.num_assemblies)
+                .add_dimension(DIM_NUM_ASSEMBLY, params.num_assemblies)
                 .map_err(ExodusError::NetCdf)?;
             self.metadata
                 .dim_cache
-                .insert("num_assembly".to_string(), params.num_assemblies);
+                .insert(DIM_NUM_ASSEMBLY.to_string(), params.num_assemblies);
         }
 
         if params.num_blobs > 0 {
             self.nc_file
-                .add_dimension("num_blob", params.num_blobs)
+                .add_dimension(DIM_NUM_BLOB, params.num_blobs)
                 .map_err(ExodusError::NetCdf)?;
             self.metadata
                 .dim_cache
-                .insert("num_blob".to_string(), params.num_blobs);
+                .insert(DIM_NUM_BLOB.to_string(), params.num_blobs);
         }
 
         // Create coordinate variables if we have nodes
@@ -473,13 +475,13 @@ impl ExodusFile<mode::Write> {
 
         // Create block ID property variables
         if params.num_elem_blocks > 0 {
-            self.create_block_id_variable("eb_prop1", "num_el_blk")?;
+            self.create_block_id_variable("eb_prop1", DIM_NUM_EL_BLK)?;
         }
         if params.num_edge_blocks > 0 {
-            self.create_block_id_variable("ed_prop1", "num_ed_blk")?;
+            self.create_block_id_variable("ed_prop1", DIM_NUM_ED_BLK)?;
         }
         if params.num_face_blocks > 0 {
-            self.create_block_id_variable("fa_prop1", "num_fa_blk")?;
+            self.create_block_id_variable("fa_prop1", DIM_NUM_FA_BLK)?;
         }
 
         Ok(())
@@ -499,7 +501,7 @@ impl ExodusFile<mode::Write> {
         let num_nodes = self
             .metadata
             .dim_cache
-            .get("num_nodes")
+            .get(DIM_NUM_NODES)
             .copied()
             .unwrap_or(0);
 
@@ -514,7 +516,7 @@ impl ExodusFile<mode::Write> {
         // Create coordx variable
         let mut var_x = self
             .nc_file
-            .add_variable::<f64>("coordx", &["num_nodes"])
+            .add_variable::<f64>(VAR_COORD_X, &[DIM_NUM_NODES])
             .map_err(ExodusError::NetCdf)?;
 
         // Apply chunking if specified and valid
@@ -527,7 +529,7 @@ impl ExodusFile<mode::Write> {
         // Create coordy variable
         let mut var_y = self
             .nc_file
-            .add_variable::<f64>("coordy", &["num_nodes"])
+            .add_variable::<f64>(VAR_COORD_Y, &[DIM_NUM_NODES])
             .map_err(ExodusError::NetCdf)?;
 
         if chunk_size > 0 {
@@ -539,7 +541,7 @@ impl ExodusFile<mode::Write> {
         // Create coordz variable
         let mut var_z = self
             .nc_file
-            .add_variable::<f64>("coordz", &["num_nodes"])
+            .add_variable::<f64>(VAR_COORD_Z, &[DIM_NUM_NODES])
             .map_err(ExodusError::NetCdf)?;
 
         if chunk_size > 0 {
@@ -603,7 +605,7 @@ impl<M: crate::FileMode> ExodusFile<M> {
         let mut params = InitParams::default();
 
         // Read title from global attribute
-        if let Some(attr) = self.nc_file.attribute("title") {
+        if let Some(attr) = self.nc_file.attribute(ATTR_TITLE) {
             if let Ok(netcdf::AttributeValue::Str(s)) = attr.value() {
                 params.title = s;
             }
@@ -612,14 +614,14 @@ impl<M: crate::FileMode> ExodusFile<M> {
         // Read num_dim (required)
         params.num_dim = self
             .nc_file
-            .dimension("num_dim")
-            .ok_or_else(|| ExodusError::VariableNotDefined("num_dim".to_string()))?
+            .dimension(DIM_NUM_DIM)
+            .ok_or_else(|| ExodusError::VariableNotDefined(DIM_NUM_DIM.to_string()))?
             .len();
 
         // Read optional dimensions
         params.num_nodes = self
             .nc_file
-            .dimension("num_nodes")
+            .dimension(DIM_NUM_NODES)
             .map(|d| d.len())
             .unwrap_or(0);
 

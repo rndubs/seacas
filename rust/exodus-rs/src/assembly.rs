@@ -5,6 +5,7 @@
 
 use crate::error::{ExodusError, Result};
 use crate::types::{Assembly, EntityType};
+use crate::utils::constants::MAX_NAME_LENGTH;
 use crate::{mode, ExodusFile};
 
 #[cfg(feature = "netcdf4")]
@@ -42,8 +43,6 @@ impl ExodusFile<mode::Write> {
     /// # Ok::<(), ExodusError>(())
     /// ```
     pub fn put_assembly(&mut self, assembly: &Assembly) -> Result<()> {
-        const MAX_NAME_LENGTH: usize = 32;
-
         if assembly.name.len() > MAX_NAME_LENGTH {
             return Err(ExodusError::StringTooLong {
                 max: MAX_NAME_LENGTH,

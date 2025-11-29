@@ -5,6 +5,7 @@
 
 use crate::error::{ExodusError, Result};
 use crate::types::Blob;
+use crate::utils::constants::MAX_NAME_LENGTH;
 use crate::{mode, ExodusFile};
 
 #[cfg(feature = "netcdf4")]
@@ -41,8 +42,6 @@ impl ExodusFile<mode::Write> {
     /// # Ok::<(), ExodusError>(())
     /// ```
     pub fn put_blob(&mut self, blob: &Blob, data: &[u8]) -> Result<()> {
-        const MAX_NAME_LENGTH: usize = 32;
-
         if blob.name.len() > MAX_NAME_LENGTH {
             return Err(ExodusError::StringTooLong {
                 max: MAX_NAME_LENGTH,
