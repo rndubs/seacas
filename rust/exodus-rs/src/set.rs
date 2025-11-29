@@ -534,7 +534,7 @@ impl ExodusFile<mode::Read> {
     /// - The set is not found
     /// - NetCDF read fails
     pub fn node_set(&self, set_id: EntityId) -> Result<NodeSet> {
-        // Find the set index
+        // Find the set index (also validates that the set exists)
         let ids = self.set_ids(EntityType::NodeSet)?;
         let index =
             ids.iter()
@@ -543,9 +543,6 @@ impl ExodusFile<mode::Read> {
                     entity_type: EntityType::NodeSet.to_string(),
                     id: set_id,
                 })?;
-
-        // Get the set parameters
-        let _set = self.set(EntityType::NodeSet, set_id)?;
 
         // Read node IDs (empty if variable doesn't exist for empty sets)
         let node_var_name = format!("node_ns{}", index + 1);
@@ -584,7 +581,7 @@ impl ExodusFile<mode::Read> {
     /// - The set is not found
     /// - NetCDF read fails
     pub fn side_set(&self, set_id: EntityId) -> Result<SideSet> {
-        // Find the set index
+        // Find the set index (also validates that the set exists)
         let ids = self.set_ids(EntityType::SideSet)?;
         let index =
             ids.iter()
@@ -593,9 +590,6 @@ impl ExodusFile<mode::Read> {
                     entity_type: EntityType::SideSet.to_string(),
                     id: set_id,
                 })?;
-
-        // Get the set parameters
-        let _set = self.set(EntityType::SideSet, set_id)?;
 
         // Read element IDs (empty if variable doesn't exist for empty sets)
         let elem_var_name = format!("elem_ss{}", index + 1);

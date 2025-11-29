@@ -76,12 +76,29 @@ Based on the review of `src/lib.rs`, `src/file.rs`, `src/coord.rs`, `src/init.rs
     *   Replaced all hardcoded dimension name strings with constants from `src/utils/constants.rs` for consistency
     *   This optimization benefits files opened in any mode by avoiding redundant NetCDF queries when dimension lengths are already cached
 
-**6. Review Unused Variables (Minor Impact - Cleanliness)**
+**6. Review Unused Variables (Minor Impact - Cleanliness)** ✅ ADDRESSED
 
 *   **Problem:** The `_set` variable in `node_set` and `side_set` functions (in `src/set.rs`) is marked as unused. While an underscore indicates intent, if the information retrieved is truly not needed, the call to `self.set()` could be removed for minor efficiency gains.
 *   **Recommendation:** Re-evaluate if the `_set` variable's data is genuinely used for any implicit validation or future logic. If not, consider removing the call that populates it.
+*   **Implementation Summary:**
+    *   Removed the redundant `_set = self.set()` calls from both `node_set()` and `side_set()` functions in `src/set.rs`
+    *   The existence validation is already performed by the preceding `set_ids()` call and index lookup, making the `self.set()` call unnecessary
+    *   Updated comments to clarify that the index lookup also validates set existence
+    *   This minor optimization removes redundant NetCDF queries when reading node/side set data
 
-**7. Builder Pattern Extension (Minor Impact - Ergonomics)**
+**7. Builder Pattern Extension (Minor Impact - Ergonomics)** ✅ ADDRESSED
 
 *   **Problem:** The builder pattern is only available for `ExodusFile<mode::Write>`.
 *   **Recommendation:** Consider extending the `InitBuilder` or creating similar builders for `ExodusFile<mode::Append>` for operations like adding new blocks, sets, or variables in a more fluent manner. This would be a more advanced feature, but could further improve the API ergonomics.
+*   **Implementation Summary:**
+    *   Added `AppendBuilder` in `src/builder.rs` for fluent append operations on existing files
+    *   Added `NodeSetBuilder` for constructing node sets with optional names and distribution factors
+    *   Added `SideSetBuilder` for constructing side sets with element-side pairs or separate arrays
+    *   The `AppendBuilder` supports:
+        *   `add_node_set()` - Add node sets with fluent configuration
+        *   `add_side_set()` - Add side sets with fluent configuration
+        *   `convert_nodeset_to_sideset()` - Convert node sets to side sets with explicit name
+        *   `convert_nodeset_to_sideset_auto()` - Convert with auto-assigned ID
+        *   `apply()` - Write all pending changes and return the modified file
+    *   All new types are re-exported from the crate root for convenient access
+    *   Added comprehensive unit tests for all new builder types
