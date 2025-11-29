@@ -5,9 +5,9 @@
 //! are merged, and all mesh entities (elements, node sets, side sets, variables)
 //! are properly duplicated and transformed.
 
-use crate::cli::{Axis, Result, TransformError};
+use crate::cli::{Axis, Operation, Result, TransformError};
 use crate::progress::{create_progress_bar, finish_progress};
-use exodus_rs::{mode, types::*, ExodusFile};
+use exodus_rs::{mode, transformations::rotation_matrix_from_euler, types::*, ExodusFile};
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 
@@ -230,7 +230,7 @@ fn format_bytes(bytes: usize) -> String {
 }
 
 /// Print memory usage warnings if estimated usage exceeds threshold
-fn warn_memory_usage(data: &MeshData, verbose: bool) {
+pub fn warn_memory_usage(data: &MeshData, verbose: bool) {
     let estimated_bytes = estimate_memory_usage(data);
     let threshold_bytes = MEMORY_WARNING_THRESHOLD_GB * 1_000_000_000;
 
@@ -272,7 +272,7 @@ type SideSetData = (i64, Vec<i64>, Vec<i64>, Vec<f64>);
 
 /// Data structure to hold all mesh data for copy-mirror-merge operation
 #[derive(Debug)]
-struct MeshData {
+pub struct MeshData {
     // Initialization parameters
     params: InitParams,
     // Coordinates
@@ -302,6 +302,225 @@ struct MeshData {
     node_set_names: Vec<String>,
     side_set_names: Vec<String>,
 }
+
+// ============================================================================
+// In-Memory Mesh Transformations
+// ============================================================================
+
+// These functions apply transformations directly to in-memory MeshData,
+// using the same math as the ExodusFile transformation methods but without
+// file I/O overhead. This enables efficient batched transformations when
+// combined with copy-mirror-merge operations.
+
+use exodus_rs::transformations::apply_rotation_to_vector;
+
+/// Apply an operation to mesh data in memory
+///
+/// This function applies geometric transformations directly to in-memory mesh data,
+/// reusing the math utilities from exodus_rs::transformations.
+pub fn apply_operation_to_mesh_data(
+    data: &mut MeshData,
+    op: &Operation,
+    verbose: bool,
+) -> Result<()> {
+    match op {
+        Operation::ScaleLen(factor) => {
+            if verbose {
+                println!("  Scaling coordinates by factor {}", factor);
+            }
+            // Same logic as ExodusFile::scale_uniform
+            for x in &mut data.x {
+                *x *= factor;
+            }
+            for y in &mut data.y {
+                *y *= factor;
+            }
+            for z in &mut data.z {
+                *z *= factor;
+            }
+        }
+        Operation::Mirror(axis) => {
+            if verbose {
+                println!("  Mirroring about {:?} axis", axis);
+            }
+            // Same logic as ExodusFile::scale with negative factor
+            match axis {
+                Axis::X => {
+                    for x in &mut data.x {
+                        *x = -*x;
+                    }
+                }
+                Axis::Y => {
+                    for y in &mut data.y {
+                        *y = -*y;
+                    }
+                }
+                Axis::Z => {
+                    for z in &mut data.z {
+                        *z = -*z;
+                    }
+                }
+            }
+        }
+        Operation::Translate(offset) => {
+            if verbose {
+                println!(
+                    "  Translating by [{}, {}, {}]",
+                    offset[0], offset[1], offset[2]
+                );
+            }
+            // Same logic as ExodusFile::translate
+            for x in &mut data.x {
+                *x += offset[0];
+            }
+            for y in &mut data.y {
+                *y += offset[1];
+            }
+            for z in &mut data.z {
+                *z += offset[2];
+            }
+        }
+        Operation::Rotate(sequence, angles) => {
+            if verbose {
+                let rotation_type = if sequence.chars().next().unwrap().is_uppercase() {
+                    "extrinsic"
+                } else {
+                    "intrinsic"
+                };
+                println!(
+                    "  Rotating {} '{}' by {:?} degrees",
+                    rotation_type, sequence, angles
+                );
+            }
+            // Use exodus_rs rotation matrix utilities
+            let matrix = rotation_matrix_from_euler(sequence, angles, true)?;
+            // Same logic as ExodusFile::apply_rotation
+            let num_nodes = data.x.len();
+            for i in 0..num_nodes {
+                let y_val = if i < data.y.len() { data.y[i] } else { 0.0 };
+                let z_val = if i < data.z.len() { data.z[i] } else { 0.0 };
+                let point = [data.x[i], y_val, z_val];
+                let rotated = apply_rotation_to_vector(&matrix, &point);
+                data.x[i] = rotated[0];
+                if i < data.y.len() {
+                    data.y[i] = rotated[1];
+                }
+                if i < data.z.len() {
+                    data.z[i] = rotated[2];
+                }
+            }
+        }
+        Operation::ScaleField(field_name, scale_factor) => {
+            if verbose {
+                println!(
+                    "  Scaling field variable '{}' by factor {}",
+                    field_name, scale_factor
+                );
+            }
+            // Similar logic to ExodusFile::scale_field_variable but on in-memory data
+            let field_lower = field_name.to_lowercase();
+            let mut found = false;
+
+            // Scale nodal variables
+            for (var_idx, var_name) in data.nodal_var_names.iter().enumerate() {
+                if var_name.to_lowercase() == field_lower {
+                    found = true;
+                    if verbose {
+                        println!(
+                            "    Scaling nodal variable '{}' by {}",
+                            var_name, scale_factor
+                        );
+                    }
+                    for time_values in &mut data.nodal_var_values[var_idx] {
+                        for val in time_values {
+                            *val *= scale_factor;
+                        }
+                    }
+                }
+            }
+
+            // Scale element variables
+            for (var_idx, var_name) in data.elem_var_names.iter().enumerate() {
+                if var_name.to_lowercase() == field_lower {
+                    found = true;
+                    if verbose {
+                        println!(
+                            "    Scaling element variable '{}' by {}",
+                            var_name, scale_factor
+                        );
+                    }
+                    for block_vars in &mut data.elem_var_values {
+                        if let Some(var_time_series) = block_vars.get_mut(var_idx) {
+                            for time_values in var_time_series {
+                                for val in time_values {
+                                    *val *= scale_factor;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Scale global variables
+            for (var_idx, var_name) in data.global_var_names.iter().enumerate() {
+                if var_name.to_lowercase() == field_lower {
+                    found = true;
+                    if verbose {
+                        println!(
+                            "    Scaling global variable '{}' by {}",
+                            var_name, scale_factor
+                        );
+                    }
+                    for time_values in &mut data.global_var_values {
+                        if let Some(val) = time_values.get_mut(var_idx) {
+                            *val *= scale_factor;
+                        }
+                    }
+                }
+            }
+
+            if !found {
+                return Err(TransformError::InvalidFormat(format!(
+                    "Field variable '{}' not found in mesh",
+                    field_name
+                )));
+            }
+        }
+        Operation::CopyMirrorMerge(_, _) => {
+            return Err(TransformError::InvalidFormat(
+                "CopyMirrorMerge cannot be applied via apply_operation_to_mesh_data".to_string(),
+            ));
+        }
+    }
+    Ok(())
+}
+
+/// Normalize time values by subtracting the first time step from all time steps
+pub fn normalize_time_mesh_data(data: &mut MeshData, verbose: bool) {
+    if data.times.is_empty() {
+        if verbose {
+            println!("  No time steps to normalize");
+        }
+        return;
+    }
+
+    let first_time = data.times[0];
+    if verbose {
+        println!(
+            "  Normalizing time: subtracting {} from all {} time steps",
+            first_time,
+            data.times.len()
+        );
+    }
+
+    for time in &mut data.times {
+        *time -= first_time;
+    }
+}
+
+// ============================================================================
+// Symmetry Plane Detection
+// ============================================================================
 
 /// Find nodes on the symmetry plane
 fn find_symmetry_plane_nodes(coords: &[f64], tolerance: f64) -> Vec<usize> {
@@ -999,7 +1218,7 @@ fn create_mirrored_elem_vars(
 // ============================================================================
 
 /// Read all mesh data from a file
-fn read_mesh_data(file: &ExodusFile<mode::Read>, verbose: bool) -> Result<MeshData> {
+pub fn read_mesh_data(file: &ExodusFile<mode::Read>, verbose: bool) -> Result<MeshData> {
     let params = file.init_params()?;
 
     if verbose {
@@ -1212,7 +1431,7 @@ fn read_mesh_data(file: &ExodusFile<mode::Read>, verbose: bool) -> Result<MeshDa
     })
 }
 
-/// Perform the copy-mirror-merge operation
+/// Perform the copy-mirror-merge operation on in-memory mesh data
 ///
 /// This function creates a full model from a half-symmetry model by:
 /// 1. Identifying nodes on the symmetry plane (for merging)
@@ -1220,7 +1439,7 @@ fn read_mesh_data(file: &ExodusFile<mode::Read>, verbose: bool) -> Result<MeshDa
 /// 3. Creating mirrored element blocks with adjusted connectivity
 /// 4. Creating mirrored node sets and side sets
 /// 5. Creating mirrored variable values (with vector component negation)
-fn copy_mirror_merge(
+pub fn copy_mirror_merge(
     data: &MeshData,
     axis: Axis,
     tolerance: f64,
@@ -1322,7 +1541,7 @@ fn copy_mirror_merge(
 }
 
 /// Write mesh data to a new file
-fn write_mesh_data(
+pub fn write_mesh_data(
     path: &PathBuf,
     data: &MeshData,
     perf_config: Option<exodus_rs::PerformanceConfig>,
@@ -1535,6 +1754,11 @@ fn write_mesh_data(
 }
 
 /// Apply copy-mirror-merge operation (requires reading entire mesh and creating new file)
+///
+/// This is a convenience function that handles the full workflow for simple use cases.
+/// For more control (e.g., combining with other operations), use the lower-level functions:
+/// `read_mesh_data`, `copy_mirror_merge`, and `write_mesh_data`.
+#[allow(dead_code)]
 pub fn apply_copy_mirror_merge(
     input_path: &PathBuf,
     output_path: &PathBuf,

@@ -13,7 +13,7 @@ mod performance;
 mod progress;
 
 use clap::Parser;
-use exodus_rs::ExodusFile;
+use exodus_rs::{mode, ExodusFile};
 use std::path::{Path, PathBuf};
 
 use cli::{Axis, Cli, Operation, Result, TransformError};
@@ -71,7 +71,10 @@ fn determine_output_mode(
 
     Ok((output.clone(), same_file))
 }
-use copy_mirror_merge::{apply_copy_mirror_merge, VectorDetectionConfig};
+use copy_mirror_merge::{
+    apply_operation_to_mesh_data, copy_mirror_merge, normalize_time_mesh_data, read_mesh_data,
+    warn_memory_usage, write_mesh_data, VectorDetectionConfig,
+};
 use man::show_man_page;
 use operations::{apply_simple_operation, normalize_time};
 use parsers::extract_ordered_operations;
@@ -154,7 +157,18 @@ fn main() -> Result<()> {
         .any(|op| matches!(op, Operation::CopyMirrorMerge(_, _)));
 
     if has_cmm {
-        // Complex path: handle CopyMirrorMerge with pre/post operations
+        // Optimized CMM path: all operations done in-memory with single read/write
+        //
+        // Instead of:
+        //   file copy → open append → pre-CMM ops → close → open read → read mesh →
+        //   close → CMM in memory → write → open append → post-CMM ops → close
+        //
+        // We do:
+        //   open read → read mesh → close → pre-CMM in memory → CMM in memory →
+        //   post-CMM in memory → write once
+        //
+        // This eliminates unnecessary file copies and multiple open/close cycles.
+
         // Split operations into groups: before CMM, CMM itself, after CMM
         let mut pre_cmm_ops = Vec::new();
         let mut cmm_op: Option<(Axis, f64)> = None;
@@ -187,88 +201,67 @@ fn main() -> Result<()> {
             cli.no_auto_vector_detection,
         );
 
-        // Step 1: Apply pre-CMM operations (if any)
+        // Step 1: Read input mesh into memory
+        if cli.verbose {
+            println!("Reading input mesh into memory...");
+        }
+        let input_file = ExodusFile::<mode::Read>::open(input)?;
+        let mut mesh_data = read_mesh_data(&input_file, cli.verbose)?;
+        drop(input_file);
+
+        // Check memory usage and warn if needed
+        warn_memory_usage(&mesh_data, cli.verbose);
+
+        // Step 2: Apply pre-CMM operations in memory
         if !pre_cmm_ops.is_empty() {
-            // Determine the target path for pre-CMM operations
-            let pre_cmm_target = if in_place_mode {
-                if cli.verbose {
-                    println!("Applying pre-merge transformations in-place (no copy needed)...");
-                }
-                input.to_path_buf()
-            } else {
-                if cli.verbose {
-                    println!("Copying input file to output location...");
-                }
-                std::fs::copy(input, &output)?;
-                output.clone()
-            };
-
-            let mut file = ExodusFile::append(&pre_cmm_target)?;
             if cli.verbose {
-                let params = file.init_params()?;
-                println!(
-                    "Mesh: {} nodes, {} elements, {} dimensions",
-                    params.num_nodes, params.num_elems, params.num_dim
-                );
-                println!("Applying pre-merge transformations:");
+                println!("Applying pre-merge transformations in memory:");
             }
-
             for op in &pre_cmm_ops {
-                apply_simple_operation(&mut file, op, cli.verbose)?;
+                apply_operation_to_mesh_data(&mut mesh_data, op, cli.verbose)?;
             }
-            file.sync()?;
-            drop(file);
-
-            // Step 2: Apply CopyMirrorMerge (reads from pre_cmm_target, writes to output)
-            if cli.verbose {
-                println!("Applying copy-mirror-merge:");
-            }
-            apply_copy_mirror_merge(
-                &pre_cmm_target,
-                &output,
-                cmm_axis,
-                cmm_tolerance,
-                &vector_config,
-                Some(perf_config.to_exodus_config()),
-                cli.verbose,
-            )?;
-        } else {
-            // No pre-CMM ops, apply CMM directly from input to output
-            if cli.verbose {
-                println!("Applying copy-mirror-merge:");
-            }
-            apply_copy_mirror_merge(
-                input,
-                &output,
-                cmm_axis,
-                cmm_tolerance,
-                &vector_config,
-                Some(perf_config.to_exodus_config()),
-                cli.verbose,
-            )?;
         }
 
-        // Step 3: Apply post-CMM operations (if any)
+        // Step 3: Apply CopyMirrorMerge in memory
+        if cli.verbose {
+            println!("Applying copy-mirror-merge:");
+        }
+        let mut mesh_data = copy_mirror_merge(
+            &mesh_data,
+            cmm_axis,
+            cmm_tolerance,
+            &vector_config,
+            cli.verbose,
+        )?;
+
+        // Step 4: Apply post-CMM operations in memory
         if !post_cmm_ops.is_empty() {
-            let mut file = ExodusFile::append(&output)?;
             if cli.verbose {
-                println!("Applying post-merge transformations:");
+                println!("Applying post-merge transformations in memory:");
             }
             for op in &post_cmm_ops {
-                apply_simple_operation(&mut file, op, cli.verbose)?;
+                apply_operation_to_mesh_data(&mut mesh_data, op, cli.verbose)?;
             }
-            file.sync()?;
         }
 
-        // Apply time normalization if requested
+        // Step 5: Apply time normalization in memory if requested
         if cli.zero_time {
-            let mut file = ExodusFile::append(&output)?;
             if cli.verbose {
                 println!("Normalizing time values:");
             }
-            normalize_time(&mut file, cli.verbose)?;
-            file.sync()?;
+            normalize_time_mesh_data(&mut mesh_data, cli.verbose);
         }
+
+        // Step 6: Write output mesh (single write operation)
+        if cli.verbose {
+            println!("Writing output mesh...");
+        }
+        write_mesh_data(
+            &output,
+            &mesh_data,
+            Some(perf_config.to_exodus_config()),
+            cli.verbose,
+        )?;
     } else {
         // Simple path: no CopyMirrorMerge
         // Use in-place mode when possible to avoid expensive file copy
