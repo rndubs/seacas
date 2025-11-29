@@ -62,7 +62,10 @@ fn test_dry_run_mode() {
     assert!(stdout.contains("No output file will be written in dry-run mode."));
 
     // Verify that the output file was NOT created
-    assert!(!output.exists(), "Output file should not exist in dry-run mode");
+    assert!(
+        !output.exists(),
+        "Output file should not exist in dry-run mode"
+    );
 }
 
 // ========================================================================
@@ -1436,4 +1439,3 @@ fn test_auto_in_place_same_paths() {
     let (x_bounds, _, _) = read_coord_bounds(&input).unwrap();
     assert!((x_bounds[0] - 10.0).abs() < TOLERANCE);
 }
-
