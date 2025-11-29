@@ -565,28 +565,21 @@ The `AppendBuilder` provides a fluent interface for adding sets to existing file
 from exodus import AppendBuilder, NodeSetBuilder, SideSetBuilder
 
 # Add multiple sets to an existing file
-(
-    AppendBuilder.open("mesh.exo")
-    .add_node_set(
-        NodeSetBuilder(10)
-        .nodes([1, 2, 3, 4])
-        .name("inlet")
-        .build()
-    )
-    .add_node_set(
-        NodeSetBuilder(11)
-        .nodes([5, 6, 7, 8])
-        .name("outlet")
-        .build()
-    )
-    .add_side_set(
-        SideSetBuilder(20)
-        .sides([(1, 1), (1, 2)])
-        .name("wall")
-        .build()
-    )
-    .apply()  # Apply all changes at once
-)
+builder = AppendBuilder.open("mesh.exo")
+
+# Add node sets
+inlet = NodeSetBuilder(10).nodes([1, 2, 3, 4]).name("inlet").build()
+builder.add_node_set(inlet)
+
+outlet = NodeSetBuilder(11).nodes([5, 6, 7, 8]).name("outlet").build()
+builder.add_node_set(outlet)
+
+# Add a side set
+wall = SideSetBuilder(20).sides([(1, 1), (1, 2)]).name("wall").build()
+builder.add_side_set(wall)
+
+# Apply all changes at once
+builder.apply()
 ```
 
 **Important**: When using `AppendBuilder`, ensure the target file was created with sufficient capacity for node sets and side sets. This is done by setting `num_node_sets` and `num_side_sets` in `InitParams` when creating the file:

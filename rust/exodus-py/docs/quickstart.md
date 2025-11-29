@@ -317,28 +317,11 @@ with ExodusWriter.create("/tmp/quickstart_sets.exo", CreateOptions(mode=CreateMo
     writer.put_coords(x=[0.0, 1.0, 1.0, 0.0], y=[0.0, 0.0, 1.0, 1.0])
 
 # Add sets using the fluent builder API
-(
-    AppendBuilder.open("/tmp/quickstart_sets.exo")
-    .add_node_set(
-        NodeSetBuilder(10)
-        .nodes([1, 2])
-        .name("bottom")
-        .build()
-    )
-    .add_node_set(
-        NodeSetBuilder(20)
-        .nodes([3, 4])
-        .name("top")
-        .build()
-    )
-    .add_side_set(
-        SideSetBuilder(100)
-        .sides([(1, 1)])  # Element 1, side 1
-        .name("left_edge")
-        .build()
-    )
-    .apply()
-)
+builder = AppendBuilder.open("/tmp/quickstart_sets.exo")
+builder.add_node_set(NodeSetBuilder(10).nodes([1, 2]).name("bottom").build())
+builder.add_node_set(NodeSetBuilder(20).nodes([3, 4]).name("top").build())
+builder.add_side_set(SideSetBuilder(100).sides([(1, 1)]).name("left_edge").build())
+builder.apply()
 
 # Verify the sets were added
 with ExodusReader.open("/tmp/quickstart_sets.exo") as reader:
