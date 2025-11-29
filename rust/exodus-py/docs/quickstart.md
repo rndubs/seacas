@@ -292,6 +292,62 @@ for step in range(10):
 writer.close()
 ```
 
+## Adding Sets with Builder API
+
+exodus-py provides a fluent builder API for adding node sets and side sets to files:
+
+```python
+from exodus import (
+    AppendBuilder, NodeSetBuilder, SideSetBuilder,
+    ExodusWriter, ExodusReader, InitParams, CreateOptions, CreateMode
+)
+
+# First, create a mesh with reserved space for sets
+with ExodusWriter.create("/tmp/quickstart_sets.exo", CreateOptions(mode=CreateMode.Clobber)) as writer:
+    params = InitParams(
+        title="Mesh with Sets",
+        num_dim=2,
+        num_nodes=4,
+        num_elems=1,
+        num_elem_blocks=1,
+        num_node_sets=2,  # Reserve space for node sets
+        num_side_sets=1,  # Reserve space for side sets
+    )
+    writer.put_init_params(params)
+    writer.put_coords(x=[0.0, 1.0, 1.0, 0.0], y=[0.0, 0.0, 1.0, 1.0])
+
+# Add sets using the fluent builder API
+(
+    AppendBuilder.open("/tmp/quickstart_sets.exo")
+    .add_node_set(
+        NodeSetBuilder(10)
+        .nodes([1, 2])
+        .name("bottom")
+        .build()
+    )
+    .add_node_set(
+        NodeSetBuilder(20)
+        .nodes([3, 4])
+        .name("top")
+        .build()
+    )
+    .add_side_set(
+        SideSetBuilder(100)
+        .sides([(1, 1)])  # Element 1, side 1
+        .name("left_edge")
+        .build()
+    )
+    .apply()
+)
+
+# Verify the sets were added
+with ExodusReader.open("/tmp/quickstart_sets.exo") as reader:
+    node_set_ids = reader.get_node_set_ids()
+    side_set_ids = reader.get_side_set_ids()
+    print(f"Node sets: {node_set_ids}")  # [10, 20]
+    print(f"Side sets: {side_set_ids}")  # [100]
+```
+
 ## Key Concepts
 
 ### Entity Types

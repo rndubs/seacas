@@ -507,6 +507,107 @@ Side numbering depends on element topology. Generally:
 - For quads: 1=bottom, 2=right, 3=top, 4=left
 - For hexes: 1-6 for faces
 
+### Using Builder API for Sets
+
+exodus-py provides a fluent builder API for creating node sets and side sets. This offers a more ergonomic way to construct sets with optional properties.
+
+#### NodeSetBuilder
+
+Create node sets with a fluent interface:
+
+```python
+from exodus import NodeSetBuilder
+
+# Create a node set with all properties
+node_set = (
+    NodeSetBuilder(10)           # Set ID
+    .nodes([1, 2, 3, 4])         # Node IDs (1-based)
+    .name("inlet")               # Optional name
+    .dist_factors([1.0, 1.0, 1.0, 1.0])  # Optional distribution factors
+    .build()
+)
+
+# Minimal node set (just ID and nodes)
+simple_set = NodeSetBuilder(20).nodes([5, 6, 7]).build()
+```
+
+#### SideSetBuilder
+
+Create side sets with a fluent interface:
+
+```python
+from exodus import SideSetBuilder
+
+# Create side set using tuples of (element_id, side_number)
+side_set = (
+    SideSetBuilder(100)          # Set ID
+    .sides([(1, 1), (1, 2), (2, 3)])  # (element, side) tuples
+    .name("wall")                # Optional name
+    .build()
+)
+
+# Alternative: specify elements and sides separately
+side_set2 = (
+    SideSetBuilder(101)
+    .elements_and_sides(
+        [1, 1, 2],    # Element IDs
+        [1, 2, 3]     # Side numbers
+    )
+    .build()
+)
+```
+
+#### AppendBuilder
+
+The `AppendBuilder` provides a fluent interface for adding sets to existing files:
+
+```python
+from exodus import AppendBuilder, NodeSetBuilder, SideSetBuilder
+
+# Add multiple sets to an existing file
+(
+    AppendBuilder.open("mesh.exo")
+    .add_node_set(
+        NodeSetBuilder(10)
+        .nodes([1, 2, 3, 4])
+        .name("inlet")
+        .build()
+    )
+    .add_node_set(
+        NodeSetBuilder(11)
+        .nodes([5, 6, 7, 8])
+        .name("outlet")
+        .build()
+    )
+    .add_side_set(
+        SideSetBuilder(20)
+        .sides([(1, 1), (1, 2)])
+        .name("wall")
+        .build()
+    )
+    .apply()  # Apply all changes at once
+)
+```
+
+**Important**: When using `AppendBuilder`, ensure the target file was created with sufficient capacity for node sets and side sets. This is done by setting `num_node_sets` and `num_side_sets` in `InitParams` when creating the file:
+
+```python
+from exodus import ExodusWriter, InitParams, CreateOptions, CreateMode
+
+with ExodusWriter.create("mesh.exo", CreateOptions(mode=CreateMode.Clobber)) as writer:
+    params = InitParams(
+        title="Mesh with Sets",
+        num_dim=3,
+        num_nodes=100,
+        num_elems=50,
+        num_elem_blocks=1,
+        num_node_sets=5,   # Reserve space for 5 node sets
+        num_side_sets=3,   # Reserve space for 3 side sets
+    )
+    writer.put_init_params(params)
+    # ... write mesh data ...
+```
+
 ### Converting NodeSets to SideSets
 
 exodus-py provides convenient methods to automatically convert nodesets (collections of nodes) into sidesets (collections of element faces). This conversion:
