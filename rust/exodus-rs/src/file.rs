@@ -495,8 +495,13 @@ impl ExodusFile<mode::Append> {
         // with the generic mode.
 
         // Read and convert the nodeset (uses read operations)
+        // SAFETY: The Append mode guarantees both read and write access to the file.
+        // The underlying nc_file is opened in read-write mode (via netcdf::append).
+        // This cast temporarily reinterprets self as ExodusFile<mode::Read> to access
+        // read-only methods. Since we only use an immutable reference and don't mutate
+        // any state, this preserves all safety invariants. The PhantomData marker is
+        // zero-sized and doesn't affect memory layout or aliasing rules.
         let sideset = crate::sideset_utils::convert_nodeset_to_sideset(
-            // Safe cast since Append mode supports reads
             unsafe { &*(self as *const _ as *const ExodusFile<mode::Read>) },
             nodeset_id,
             new_sideset_id,
@@ -510,7 +515,12 @@ impl ExodusFile<mode::Append> {
             num_dist_factors: 0,
         };
 
-        // Safe cast since Append mode supports writes
+        // SAFETY: The Append mode guarantees both read and write access to the file.
+        // The underlying nc_file is opened in read-write mode (via netcdf::append).
+        // This cast temporarily reinterprets self as ExodusFile<mode::Write> to access
+        // write methods. We have exclusive mutable access to self (&mut self), ensuring
+        // no aliasing violations. The PhantomData marker is zero-sized and doesn't affect
+        // memory layout or safety.
         let writer = unsafe { &mut *(self as *mut _ as *mut ExodusFile<mode::Write>) };
         writer.put_set(&set)?;
         writer.put_side_set(new_sideset_id, &sideset.elements, &sideset.sides, None)?;
@@ -543,6 +553,10 @@ impl ExodusFile<mode::Append> {
     /// ```
     pub fn create_sideset_from_nodeset_auto(&mut self, nodeset_id: i64) -> Result<i64> {
         // Get the next available sideset ID
+        // SAFETY: The Append mode guarantees both read and write access to the file.
+        // This cast temporarily reinterprets self as ExodusFile<mode::Read> to query
+        // existing sideset IDs. We only use an immutable reference for reading metadata,
+        // which is safe since Append mode supports all read operations.
         let reader = unsafe { &*(self as *const _ as *const ExodusFile<mode::Read>) };
         let existing_ids = reader.set_ids(crate::EntityType::SideSet)?;
         let new_id = existing_ids.iter().max().map(|&id| id + 1).unwrap_or(1);
@@ -586,6 +600,10 @@ impl ExodusFile<mode::Append> {
     /// ```
     pub fn create_sideset_from_nodeset_by_name(&mut self, nodeset_name: &str) -> Result<i64> {
         // Find the nodeset ID by name
+        // SAFETY: The Append mode guarantees both read and write access to the file.
+        // This cast temporarily reinterprets self as ExodusFile<mode::Read> to query
+        // nodeset names and IDs. We only use an immutable reference for reading metadata,
+        // which is safe since Append mode supports all read operations.
         let reader = unsafe { &*(self as *const _ as *const ExodusFile<mode::Read>) };
         let names = reader.names(crate::EntityType::NodeSet)?;
         let ids = reader.set_ids(crate::EntityType::NodeSet)?;
@@ -645,11 +663,18 @@ impl ExodusFile<mode::Append> {
         let sideset_id = self.create_sideset_from_nodeset_auto(nodeset_id)?;
 
         // Find the index of the new sideset (it's the last one)
+        // SAFETY: The Append mode guarantees both read and write access to the file.
+        // This cast temporarily reinterprets self as ExodusFile<mode::Read> to query
+        // sideset IDs for determining the index of the newly created sideset.
         let reader = unsafe { &*(self as *const _ as *const ExodusFile<mode::Read>) };
         let ss_ids = reader.set_ids(crate::EntityType::SideSet)?;
         let ss_index = ss_ids.len().saturating_sub(1);
 
         // Set the name
+        // SAFETY: The Append mode guarantees both read and write access to the file.
+        // This cast temporarily reinterprets self as ExodusFile<mode::Write> to write
+        // the sideset name. We have exclusive mutable access to self (&mut self),
+        // ensuring no aliasing violations.
         let writer = unsafe { &mut *(self as *mut _ as *mut ExodusFile<mode::Write>) };
         writer.put_name(crate::EntityType::SideSet, ss_index, sideset_name)?;
 
@@ -664,6 +689,9 @@ impl ExodusFile<mode::Append> {
         name: &str,
     ) -> Result<()> {
         // Find the index of the sideset
+        // SAFETY: The Append mode guarantees both read and write access to the file.
+        // This cast temporarily reinterprets self as ExodusFile<mode::Read> to query
+        // sideset IDs for finding the index of the target sideset.
         let reader = unsafe { &*(self as *const _ as *const ExodusFile<mode::Read>) };
         let ss_ids = reader.set_ids(crate::EntityType::SideSet)?;
         let ss_index = ss_ids
@@ -674,6 +702,10 @@ impl ExodusFile<mode::Append> {
             })?;
 
         // Set the name
+        // SAFETY: The Append mode guarantees both read and write access to the file.
+        // This cast temporarily reinterprets self as ExodusFile<mode::Write> to write
+        // the sideset name. We have exclusive mutable access to self (&mut self),
+        // ensuring no aliasing violations.
         let writer = unsafe { &mut *(self as *mut _ as *mut ExodusFile<mode::Write>) };
         writer.put_name(crate::EntityType::SideSet, ss_index, name)?;
 
