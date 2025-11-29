@@ -108,7 +108,7 @@ pub mod transformations;
 
 // Re-exports for convenience
 pub use attribute::AttributeData;
-pub use builder::{BlockBuilder, MeshBuilder};
+pub use builder::{AppendBuilder, BlockBuilder, MeshBuilder, NodeSetBuilder, SideSetBuilder};
 pub use coord::{CoordValue, Coordinates};
 pub use error::{EntityId, ExodusError, Result};
 pub use file::ExodusFile;

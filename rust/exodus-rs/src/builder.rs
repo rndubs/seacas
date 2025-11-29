@@ -352,6 +352,365 @@ impl BlockBuilder {
     }
 }
 
+/// Builder for node sets
+///
+/// # Example
+///
+/// ```rust,ignore
+/// let node_set = NodeSetBuilder::new(1)
+///     .nodes(vec![1, 2, 3, 4])
+///     .name("boundary_nodes")
+///     .dist_factors(vec![1.0, 1.0, 1.0, 1.0])
+///     .build();
+/// ```
+#[derive(Debug, Clone)]
+pub struct NodeSetBuilder {
+    id: i64,
+    nodes: Vec<i64>,
+    name: Option<String>,
+    dist_factors: Option<Vec<f64>>,
+}
+
+impl NodeSetBuilder {
+    /// Create a new node set builder
+    ///
+    /// # Arguments
+    ///
+    /// * `id` - Node set ID (must be unique)
+    pub fn new(id: i64) -> Self {
+        Self {
+            id,
+            nodes: Vec::new(),
+            name: None,
+            dist_factors: None,
+        }
+    }
+
+    /// Set the node IDs in this set
+    ///
+    /// Node IDs are 1-based (first node is ID 1, not 0).
+    pub fn nodes(mut self, nodes: Vec<i64>) -> Self {
+        self.nodes = nodes;
+        self
+    }
+
+    /// Set the name of this node set
+    pub fn name(mut self, name: impl Into<String>) -> Self {
+        self.name = Some(name.into());
+        self
+    }
+
+    /// Set distribution factors (one per node)
+    pub fn dist_factors(mut self, factors: Vec<f64>) -> Self {
+        self.dist_factors = Some(factors);
+        self
+    }
+
+    /// Build the node set (consumes the builder)
+    pub fn build(self) -> Self {
+        self
+    }
+}
+
+/// Builder for side sets
+///
+/// # Example
+///
+/// ```rust,ignore
+/// let side_set = SideSetBuilder::new(1)
+///     .sides(vec![(1, 1), (1, 2), (2, 1)])  // (element_id, side_number)
+///     .name("pressure_surface")
+///     .build();
+/// ```
+#[derive(Debug, Clone)]
+pub struct SideSetBuilder {
+    id: i64,
+    elements: Vec<i64>,
+    sides: Vec<i64>,
+    name: Option<String>,
+    dist_factors: Option<Vec<f64>>,
+}
+
+impl SideSetBuilder {
+    /// Create a new side set builder
+    ///
+    /// # Arguments
+    ///
+    /// * `id` - Side set ID (must be unique)
+    pub fn new(id: i64) -> Self {
+        Self {
+            id,
+            elements: Vec::new(),
+            sides: Vec::new(),
+            name: None,
+            dist_factors: None,
+        }
+    }
+
+    /// Set the element-side pairs in this set
+    ///
+    /// # Arguments
+    ///
+    /// * `pairs` - Vector of (element_id, side_number) tuples
+    pub fn sides(mut self, pairs: Vec<(i64, i64)>) -> Self {
+        self.elements = pairs.iter().map(|(e, _)| *e).collect();
+        self.sides = pairs.iter().map(|(_, s)| *s).collect();
+        self
+    }
+
+    /// Set elements and sides as separate arrays
+    ///
+    /// # Arguments
+    ///
+    /// * `elements` - Element IDs
+    /// * `sides` - Side numbers (must have same length as elements)
+    pub fn elements_and_sides(mut self, elements: Vec<i64>, sides: Vec<i64>) -> Self {
+        self.elements = elements;
+        self.sides = sides;
+        self
+    }
+
+    /// Set the name of this side set
+    pub fn name(mut self, name: impl Into<String>) -> Self {
+        self.name = Some(name.into());
+        self
+    }
+
+    /// Set distribution factors
+    pub fn dist_factors(mut self, factors: Vec<f64>) -> Self {
+        self.dist_factors = Some(factors);
+        self
+    }
+
+    /// Build the side set (consumes the builder)
+    pub fn build(self) -> Self {
+        self
+    }
+}
+
+/// Builder for appending data to existing Exodus files
+///
+/// This builder provides a fluent API for modifying existing Exodus files,
+/// allowing you to add new blocks, sets, and variables without dealing with
+/// low-level file operations.
+///
+/// # Example
+///
+/// ```rust,ignore
+/// use exodus_rs::{AppendBuilder, NodeSetBuilder, SideSetBuilder};
+///
+/// AppendBuilder::open("mesh.exo")?
+///     .add_node_set(
+///         NodeSetBuilder::new(10)
+///             .nodes(vec![1, 2, 3, 4])
+///             .name("inlet")
+///             .build()
+///     )
+///     .add_side_set(
+///         SideSetBuilder::new(20)
+///             .sides(vec![(1, 1), (1, 2)])
+///             .name("wall")
+///             .build()
+///     )
+///     .convert_nodeset_to_sideset(10, "inlet_surface")
+///     .apply()?;
+/// ```
+#[derive(Debug)]
+pub struct AppendBuilder {
+    file: ExodusFile<mode::Append>,
+    node_sets: Vec<NodeSetBuilder>,
+    side_sets: Vec<SideSetBuilder>,
+    nodeset_conversions: Vec<(i64, Option<String>)>,
+}
+
+impl AppendBuilder {
+    /// Open an existing file for appending
+    ///
+    /// # Arguments
+    ///
+    /// * `path` - Path to the existing Exodus file
+    ///
+    /// # Example
+    ///
+    /// ```rust,ignore
+    /// let builder = AppendBuilder::open("mesh.exo")?;
+    /// ```
+    pub fn open<P: AsRef<Path>>(path: P) -> Result<Self> {
+        let file = ExodusFile::<mode::Append>::append(path)?;
+        Ok(Self {
+            file,
+            node_sets: Vec::new(),
+            side_sets: Vec::new(),
+            nodeset_conversions: Vec::new(),
+        })
+    }
+
+    /// Add a node set to the file
+    ///
+    /// # Example
+    ///
+    /// ```rust,ignore
+    /// builder.add_node_set(
+    ///     NodeSetBuilder::new(1)
+    ///         .nodes(vec![1, 2, 3])
+    ///         .name("boundary")
+    ///         .build()
+    /// )
+    /// ```
+    pub fn add_node_set(mut self, node_set: NodeSetBuilder) -> Self {
+        self.node_sets.push(node_set);
+        self
+    }
+
+    /// Add a side set to the file
+    ///
+    /// # Example
+    ///
+    /// ```rust,ignore
+    /// builder.add_side_set(
+    ///     SideSetBuilder::new(1)
+    ///         .sides(vec![(1, 1), (1, 2)])
+    ///         .name("surface")
+    ///         .build()
+    /// )
+    /// ```
+    pub fn add_side_set(mut self, side_set: SideSetBuilder) -> Self {
+        self.side_sets.push(side_set);
+        self
+    }
+
+    /// Convert a node set to a side set
+    ///
+    /// This creates a side set from all boundary faces that have all their
+    /// nodes in the specified node set.
+    ///
+    /// # Arguments
+    ///
+    /// * `nodeset_id` - ID of the node set to convert
+    /// * `sideset_name` - Optional name for the new side set
+    ///
+    /// # Example
+    ///
+    /// ```rust,ignore
+    /// builder.convert_nodeset_to_sideset(10, "inlet_surface")
+    /// ```
+    pub fn convert_nodeset_to_sideset(
+        mut self,
+        nodeset_id: i64,
+        sideset_name: impl Into<String>,
+    ) -> Self {
+        self.nodeset_conversions
+            .push((nodeset_id, Some(sideset_name.into())));
+        self
+    }
+
+    /// Convert a node set to a side set with auto-generated name
+    ///
+    /// # Arguments
+    ///
+    /// * `nodeset_id` - ID of the node set to convert
+    pub fn convert_nodeset_to_sideset_auto(mut self, nodeset_id: i64) -> Self {
+        self.nodeset_conversions.push((nodeset_id, None));
+        self
+    }
+
+    /// Apply all pending changes to the file
+    ///
+    /// This method writes all accumulated changes (node sets, side sets,
+    /// conversions) to the file.
+    ///
+    /// # Returns
+    ///
+    /// The modified `ExodusFile<mode::Append>` on success
+    ///
+    /// # Example
+    ///
+    /// ```rust,ignore
+    /// let file = builder.apply()?;
+    /// // File is now modified and can be used for further operations
+    /// ```
+    pub fn apply(mut self) -> Result<ExodusFile<mode::Append>> {
+        // Take ownership of the vectors to avoid borrow issues
+        let node_sets = std::mem::take(&mut self.node_sets);
+        let side_sets = std::mem::take(&mut self.side_sets);
+        let conversions = std::mem::take(&mut self.nodeset_conversions);
+
+        // Write node sets
+        for ns in &node_sets {
+            self.write_node_set(ns)?;
+        }
+
+        // Write side sets
+        for ss in &side_sets {
+            self.write_side_set(ss)?;
+        }
+
+        // Perform nodeset-to-sideset conversions
+        for (nodeset_id, sideset_name) in conversions {
+            match sideset_name {
+                Some(name) => {
+                    self.file
+                        .create_sideset_from_nodeset_named(nodeset_id, &name)?;
+                }
+                None => {
+                    self.file.create_sideset_from_nodeset_auto(nodeset_id)?;
+                }
+            }
+        }
+
+        // Sync to ensure all data is written
+        self.file.sync()?;
+
+        Ok(self.file)
+    }
+
+    /// Write a node set to the file
+    fn write_node_set(&mut self, ns: &NodeSetBuilder) -> Result<()> {
+        // Cast to Write mode to access put_node_set
+        // SAFETY: The Append mode guarantees both read and write access to the file.
+        // This cast temporarily reinterprets self.file as ExodusFile<mode::Write> to access
+        // write methods. We have exclusive mutable access to self.file (&mut self),
+        // ensuring no aliasing violations. The PhantomData marker is zero-sized and
+        // doesn't affect memory layout or safety.
+        let writer = unsafe { &mut *(&mut self.file as *mut _ as *mut ExodusFile<mode::Write>) };
+        writer.put_node_set(ns.id, &ns.nodes, ns.dist_factors.as_deref())?;
+
+        // Set name if provided
+        if let Some(ref name) = ns.name {
+            // Get the index of the node set we just added
+            let ids = self.file.set_ids(EntityType::NodeSet)?;
+            if let Some(index) = ids.iter().position(|&id| id == ns.id) {
+                writer.put_name(EntityType::NodeSet, index, name)?;
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Write a side set to the file
+    fn write_side_set(&mut self, ss: &SideSetBuilder) -> Result<()> {
+        // Cast to Write mode to access put_side_set
+        // SAFETY: The Append mode guarantees both read and write access to the file.
+        // This cast temporarily reinterprets self.file as ExodusFile<mode::Write> to access
+        // write methods. We have exclusive mutable access to self.file (&mut self),
+        // ensuring no aliasing violations. The PhantomData marker is zero-sized and
+        // doesn't affect memory layout or safety.
+        let writer = unsafe { &mut *(&mut self.file as *mut _ as *mut ExodusFile<mode::Write>) };
+        writer.put_side_set(ss.id, &ss.elements, &ss.sides, ss.dist_factors.as_deref())?;
+
+        // Set name if provided
+        if let Some(ref name) = ss.name {
+            // Get the index of the side set we just added
+            let ids = self.file.set_ids(EntityType::SideSet)?;
+            if let Some(index) = ids.iter().position(|&id| id == ss.id) {
+                writer.put_name(EntityType::SideSet, index, name)?;
+            }
+        }
+
+        Ok(())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -459,5 +818,129 @@ mod tests {
         assert_eq!(BlockBuilder::nodes_for_topology("TRI3"), 3);
         assert_eq!(BlockBuilder::nodes_for_topology("WEDGE6"), 6);
         assert_eq!(BlockBuilder::nodes_for_topology("PYRAMID5"), 5);
+    }
+
+    #[test]
+    fn test_node_set_builder() {
+        let ns = NodeSetBuilder::new(10)
+            .nodes(vec![1, 2, 3, 4])
+            .name("boundary")
+            .dist_factors(vec![1.0, 1.0, 1.0, 1.0])
+            .build();
+
+        assert_eq!(ns.id, 10);
+        assert_eq!(ns.nodes, vec![1, 2, 3, 4]);
+        assert_eq!(ns.name, Some("boundary".to_string()));
+        assert_eq!(ns.dist_factors, Some(vec![1.0, 1.0, 1.0, 1.0]));
+    }
+
+    #[test]
+    fn test_side_set_builder() {
+        let ss = SideSetBuilder::new(20)
+            .sides(vec![(1, 1), (1, 2), (2, 3)])
+            .name("surface")
+            .build();
+
+        assert_eq!(ss.id, 20);
+        assert_eq!(ss.elements, vec![1, 1, 2]);
+        assert_eq!(ss.sides, vec![1, 2, 3]);
+        assert_eq!(ss.name, Some("surface".to_string()));
+    }
+
+    #[test]
+    fn test_side_set_builder_separate_arrays() {
+        let ss = SideSetBuilder::new(30)
+            .elements_and_sides(vec![1, 2, 3], vec![4, 5, 6])
+            .build();
+
+        assert_eq!(ss.id, 30);
+        assert_eq!(ss.elements, vec![1, 2, 3]);
+        assert_eq!(ss.sides, vec![4, 5, 6]);
+    }
+
+    #[test]
+    fn test_append_builder_add_node_set() {
+        use crate::types::InitParams;
+
+        let tmp = NamedTempFile::new().unwrap();
+
+        // First create a mesh with proper initialization including node set capacity
+        {
+            let mut file = ExodusFile::<mode::Write>::create(
+                tmp.path(),
+                CreateOptions {
+                    mode: CreateMode::Clobber,
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+
+            let params = InitParams {
+                title: "Test Mesh".to_string(),
+                num_dim: 2,
+                num_nodes: 4,
+                num_elems: 1,
+                num_elem_blocks: 1,
+                num_node_sets: 1, // Reserve space for node sets
+                ..Default::default()
+            };
+            file.init(&params).unwrap();
+            file.put_coords(&[0.0, 1.0, 1.0, 0.0], Some(&[0.0, 0.0, 1.0, 1.0]), None)
+                .unwrap();
+        }
+
+        // Then add a node set using AppendBuilder
+        let file = AppendBuilder::open(tmp.path())
+            .unwrap()
+            .add_node_set(NodeSetBuilder::new(10).nodes(vec![1, 2]).build())
+            .apply()
+            .unwrap();
+
+        // Verify the node set was added
+        let ids = file.set_ids(EntityType::NodeSet).unwrap();
+        assert!(ids.contains(&10));
+    }
+
+    #[test]
+    fn test_append_builder_add_side_set() {
+        use crate::types::InitParams;
+
+        let tmp = NamedTempFile::new().unwrap();
+
+        // First create a mesh with proper initialization including side set capacity
+        {
+            let mut file = ExodusFile::<mode::Write>::create(
+                tmp.path(),
+                CreateOptions {
+                    mode: CreateMode::Clobber,
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+
+            let params = InitParams {
+                title: "Test Mesh".to_string(),
+                num_dim: 2,
+                num_nodes: 4,
+                num_elems: 1,
+                num_elem_blocks: 1,
+                num_side_sets: 1, // Reserve space for side sets
+                ..Default::default()
+            };
+            file.init(&params).unwrap();
+            file.put_coords(&[0.0, 1.0, 1.0, 0.0], Some(&[0.0, 0.0, 1.0, 1.0]), None)
+                .unwrap();
+        }
+
+        // Then add a side set using AppendBuilder
+        let file = AppendBuilder::open(tmp.path())
+            .unwrap()
+            .add_side_set(SideSetBuilder::new(20).sides(vec![(1, 1), (1, 2)]).build())
+            .apply()
+            .unwrap();
+
+        // Verify the side set was added
+        let ids = file.set_ids(EntityType::SideSet).unwrap();
+        assert!(ids.contains(&20));
     }
 }
